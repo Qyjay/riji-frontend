@@ -235,7 +235,7 @@ riji-frontend/
 
 ## 🔌 后端对接
 
-本项目配套 API 接口文档：[`API-SPEC.md`](../API-SPEC.md)（52 个接口的完整规范）。
+本项目配套 API 接口文档：[`API-SPEC.md`](./API-SPEC.md)（52 个接口的完整规范）。
 
 ### 快速对接步骤
 
