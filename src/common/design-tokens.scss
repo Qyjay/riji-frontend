@@ -1,0 +1,53 @@
+// ══════════════════════════════════════════════════════════════════
+// Design Tokens — Doodle 手绘风格设计系统
+// ══════════════════════════════════════════════════════════════════
+
+// ── 主色 ──────────────────────────────────────────────────────────
+$primary:         #E8855A;
+$primary-light:   #F2B49B;
+$primary-bg:      #FDF8F3;
+
+// ── 文字色 ────────────────────────────────────────────────────────
+$text-title:      #2C1F14;
+$text-body:       #4A3628;
+$text-secondary:  #8A7668;
+$text-hint:       #AE9D92;
+
+// ── 模块色 ────────────────────────────────────────────────────────
+$color-diary:     #E8855A;   // 暖杏橙
+$color-study:     #6BA87B;   // 森林绿
+$color-social:    #6B8EB4;   // 天空蓝
+$color-growth:    #C8A86B;   // 琥珀金
+$color-fortune:   #D4728A;   // 玫瑰粉
+$color-novel:     #9B72C8;   // 薰衣紫
+$color-ai:        #5AACE8;   // 科技蓝
+$color-todo:      #C87290;   // 樱花粉
+
+// ── 圆角 ──────────────────────────────────────────────────────────
+$radius-sm:   16rpx;
+$radius-md:   28rpx;
+$radius-lg:   40rpx;
+$radius-card: 32rpx;
+
+// ── 间距（8pt 网格） ─────────────────────────────────────────────
+$space-xs:    8rpx;
+$space-sm:    16rpx;
+$space-md:    32rpx;
+$space-lg:    48rpx;
+$space-xl:    64rpx;
+
+// ── 功能入口配色表 ────────────────────────────────────────────────
+$feature-colors: (
+  'pomodoro':     (#FFF8F0, #F2B49B, #E8855A),
+  'match':        (#F0F8FF, #B4CCE8, #6B8EB4),
+  'photo':        (#F0FFF5, #9BC8A8, #6BA87B),
+  'fortune':      (#FFF5F8, #E8A0B4, #D4728A),
+  'growth':       (#FFF8EE, #E8C49B, #C8A86B),
+  'novel':        (#F8F0FF, #C4A8E8, #9B72C8),
+  'comic':        (#EEFFF5, #9BC8A8, #5CA06E),
+  'todo':         (#FFF0F5, #E8B4C4, #C87290),
+  'achievements': (#FFF8EE, #E8C49B, #C8A86B),
+  'ai-resume':    (#F0F8FF, #B4CCE8, #5AACE8),
+  'bgm':          (#F8F0FF, #C4A8E8, #9B72C8),
+  'share':        (#FFF5F8, #E8A0B4, #D4728A),
+);

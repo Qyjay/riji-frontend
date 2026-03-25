@@ -1,0 +1,71 @@
+// ══════════════════════════════════════════════════════════════════
+// Doodle 手绘风格工具类
+// ══════════════════════════════════════════════════════════════════
+
+@import './design-tokens.scss';
+
+// ── 手绘不规则圆角（固定变体，每角不同） ─────────────────────────
+.doodle-box    { border-radius: 28rpx 36rpx 24rpx 40rpx; }
+.doodle-box-v2 { border-radius: 32rpx 24rpx 36rpx 28rpx; }
+.doodle-box-v3 { border-radius: 24rpx 32rpx 28rpx 36rpx; }
+.doodle-box-v4 { border-radius: 36rpx 28rpx 32rpx 24rpx; }
+
+// ── 手绘边框 ─────────────────────────────────────────────────────
+.hand-border {
+  border: 3rpx solid rgba($primary, 0.3);
+  box-shadow: 2px 3px 0 rgba($primary, 0.08);
+}
+
+// ── 日记卡片 ─────────────────────────────────────────────────────
+.diary-card-style {
+  background: #FFFFFF;
+  border-radius: 28rpx 36rpx 24rpx 40rpx;
+  padding: 32rpx;
+  box-shadow: 2px 3px 0 rgba(232, 133, 90, 0.08);
+  border: 1px solid rgba(232, 133, 90, 0.10);
+  transition: transform 0.3s ease;
+  &:active { transform: scale(0.98); }
+}
+
+// ── AI 洞察卡（虚线边框） ─────────────────────────────────────────
+.ai-insight-card-style {
+  background: linear-gradient(135deg, #FFF8F0, #FFF0E6);
+  border: 3rpx dashed rgba(232, 133, 90, 0.3);
+  border-radius: 32rpx 24rpx 36rpx 28rpx;
+  padding: 32rpx;
+}
+
+// ── 功能入口盒子 ─────────────────────────────────────────────────
+.func-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 104rpx;
+  height: 104rpx;
+  transition: transform 0.15s ease;
+  &:active { transform: scale(0.9); }
+}
+
+// ── 手绘按钮 ─────────────────────────────────────────────────────
+.doodle-btn {
+  border-radius: 24rpx 32rpx 28rpx 20rpx;
+  border: 3rpx solid rgba($primary, 0.3);
+  box-shadow: 2px 3px 0 rgba($primary, 0.1);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  &:active {
+    transform: scale(0.96) translateY(2rpx);
+    box-shadow: 0 0 0 rgba($primary, 0);
+  }
+}
+
+// ── 功能色板 ─────────────────────────────────────────────────────
+// 用于功能网格每项的背景/边框/图标色
+.func-color-diary     { background: #FFF8F0; border-color: #F2B49B; }
+.func-color-study     { background: #F0FFF5; border-color: #9BC8A8; }
+.func-color-social    { background: #F0F8FF; border-color: #B4CCE8; }
+.func-color-growth    { background: #FFF8EE; border-color: #E8C49B; }
+.func-color-fortune   { background: #FFF5F8; border-color: #E8A0B4; }
+.func-color-novel     { background: #F8F0FF; border-color: #C4A8E8; }
+.func-color-ai        { background: #F0F8FF; border-color: #B4CCE8; }
+.func-color-todo      { background: #FFF0F5; border-color: #E8B4C4; }
+.func-color-comic     { background: #EEFFF5; border-color: #9BC8A8; }

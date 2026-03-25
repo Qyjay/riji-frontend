@@ -1,0 +1,131 @@
+// ══════════════════════════════════════════════════════════════════
+// 手绘风格规范 v1.2  —  Design System §11
+// 作者：Iris 🎨 | 实现：BB 🔮
+// ══════════════════════════════════════════════════════════════════
+
+// ── §11.2 手写字体 ──────────────────────────────────────────────
+@import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+
+@font-face {
+  font-family: 'ZcoolKuaiLe';
+  src: url('https://fonts.gstatic.com/s/zcoolkuaile/v19/tssqApdaRQokwFjFJjvM6h2WpozzoXhC2g.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+// 手写字体工具类
+.font-handwrite {
+  font-family: 'ZcoolKuaiLe', 'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', 'PingFang SC', sans-serif !important;
+  letter-spacing: 2rpx;
+}
+
+// ── §11.1 纸张纹理背景 ──────────────────────────────────────────
+// UniApp 中通过根 view class 应用（不支持 page 伪元素）
+.page-root {
+  min-height: 100vh;
+  background-color: #FDF8F3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 400rpx 400rpx;
+}
+
+// ── §11.3.1 手绘波浪下划线（Section 标题下方） ──────────────────
+.section-title-underline {
+  position: relative;
+  display: inline-block;
+
+  &::after {
+    content: '';
+    display: block;
+    width: 80%;
+    height: 12rpx;
+    margin-top: 4rpx;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12'%3E%3Cpath d='M2 8 Q15 2 28 8 Q41 14 54 8 Q67 2 80 8 Q93 14 106 8 Q113 4 118 7' stroke='%23E8855A' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+}
+
+// ── §11.3.2 手绘星星（CSS 版，用于伪元素装饰） ──────────────────
+// 小星星（background-image data URI）
+%star-small-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12'%3E%3Cpath d='M6 1.5 L7 4.5 L10.5 5 L8 7 L9 10.5 L6 8.5 L3 10.5 L4 7 L1.5 5 L5 4.5 Z' stroke='%23E8855A' stroke-width='1.2' fill='%23FFF0E8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+// ── §11.3.7 手绘分隔线 ──────────────────────────────────────────
+.divider-handdrawn {
+  width: 100%;
+  height: 16rpx;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 16' preserveAspectRatio='none'%3E%3Cpath d='M4 8 Q40 5 80 8.5 Q120 12 160 7.5 Q200 4 240 8.5 Q280 12 316 8' stroke='%23E8E3DE' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  margin: 24rpx 0;
+  border: none;
+  display: block;
+}
+
+// ── §11.4.2 日记卡片左侧手绘竖线 ──────────────────────────────
+.diary-card-handdrawn {
+  position: relative;
+  // 移除普通 border-left
+  border-left: none !important;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 12rpx;
+    bottom: 12rpx;
+    width: 6rpx;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 100' preserveAspectRatio='none'%3E%3Cpath d='M3 2 Q4 20 2.5 38 Q1 56 3.5 74 Q5 88 3 98' stroke='%23E8855A' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    border-radius: 3rpx;
+  }
+}
+
+// ── §11.6.3 情绪选择：手绘圈圈动画 ──────────────────────────────
+@keyframes circle-draw {
+  0% {
+    stroke-dashoffset: 163;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes emotion-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+// 情绪选中圈圈 SVG 动画 class
+.emotion-circle-svg {
+  position: absolute;
+  top: -10rpx;
+  left: -10rpx;
+  width: 100rpx;
+  height: 100rpx;
+  pointer-events: none;
+
+  circle {
+    stroke-dasharray: 163;
+    stroke-dashoffset: 163;
+    animation: circle-draw 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    transform-origin: center;
+  }
+}
+
+.emotion-pop {
+  animation: emotion-pop 0.4s ease;
+}

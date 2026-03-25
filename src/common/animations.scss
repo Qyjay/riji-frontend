@@ -1,0 +1,122 @@
+// ══════════════════════════════════════════════════════════════════
+// 动画系统 — Doodle 手绘风格
+// ══════════════════════════════════════════════════════════════════
+
+// ── 页面进入 ──────────────────────────────────────────────────────
+@keyframes slideUp {
+  from { transform: translateY(48rpx); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.page-enter {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+// ── 淡入向上 ─────────────────────────────────────────────────────
+@keyframes fadeInUp {
+  from { transform: translateY(24rpx); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+// ── Stagger 列表渐入 ──────────────────────────────────────────────
+.stagger-item {
+  opacity: 0;
+  transform: translateY(24rpx);
+  animation: fadeInUp 0.4s ease forwards;
+}
+.stagger-item:nth-child(1)  { animation-delay: 0.05s; }
+.stagger-item:nth-child(2)  { animation-delay: 0.10s; }
+.stagger-item:nth-child(3)  { animation-delay: 0.15s; }
+.stagger-item:nth-child(4)  { animation-delay: 0.20s; }
+.stagger-item:nth-child(5)  { animation-delay: 0.25s; }
+.stagger-item:nth-child(6)  { animation-delay: 0.30s; }
+.stagger-item:nth-child(7)  { animation-delay: 0.35s; }
+.stagger-item:nth-child(8)  { animation-delay: 0.40s; }
+.stagger-item:nth-child(9)  { animation-delay: 0.45s; }
+.stagger-item:nth-child(10) { animation-delay: 0.50s; }
+.stagger-item:nth-child(11) { animation-delay: 0.55s; }
+.stagger-item:nth-child(12) { animation-delay: 0.60s; }
+
+// ── 按钮点击反馈 ─────────────────────────────────────────────────
+.press-feedback {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  &:active {
+    transform: scale(0.95);
+    box-shadow: none !important;
+  }
+}
+
+// ── 骨架屏 Shimmer ────────────────────────────────────────────────
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #F0E8E0 25%, #F8F0E8 50%, #F0E8E0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+// ── 卡片悬浮 ─────────────────────────────────────────────────────
+.card-hover {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  &:hover {
+    transform: translateY(-4rpx);
+    box-shadow: 0 8px 24px rgba(44, 31, 20, 0.1);
+  }
+}
+
+// ── SVG 描线动画 ──────────────────────────────────────────────────
+@keyframes drawLine {
+  to { stroke-dashoffset: 0; }
+}
+
+.draw-in {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawLine 0.8s ease forwards;
+}
+
+// ── 脉冲动画（写按钮） ───────────────────────────────────────────
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(232, 133, 90, 0.45); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 10px rgba(232, 133, 90, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(232, 133, 90, 0); }
+}
+
+.pulse-btn {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+// ── 弹跳 pop ────────────────────────────────────────────────────
+@keyframes pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.2); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.pop-in {
+  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+// ── 浮动装饰 ─────────────────────────────────────────────────────
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-12rpx); }
+}
+
+.float-anim {
+  animation: float 3s ease-in-out infinite;
+}
+
+// ── 旋转加载 ─────────────────────────────────────────────────────
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.spin-anim {
+  animation: spin 1s linear infinite;
+}

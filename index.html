@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      var coverSupport = 'CSS' in window && typeof CSS.supports === 'function' && (CSS.supports('top: env(a)') ||
+        CSS.supports('top: constant(a)'))
+      document.write(
+        '<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
+        (coverSupport ? ', viewport-fit=cover' : '') + '" />')
+    </script>
+    <title></title>
+    <!--preload-links-->
+    <!--app-context-->
+  </head>
+  <body>
+    <div id="app"><!--app-html--></div>
+    <script type="module" src="/src/main.ts"></script>
+    <style>
+      /* H5 开发预览：桌面浏览器自动显示手机外壳 */
+      @media (min-width: 500px) {
+        body {
+          display: flex !important;
+          justify-content: center !important;
+          align-items: flex-start !important;
+          padding-top: 40px !important;
+          background: #f0ebe4 !important;
+          min-height: 100vh !important;
+          overflow: auto !important;
+        }
+        #app {
+          width: 390px !important;
+          height: 844px !important;
+          border-radius: 40px !important;
+          overflow: hidden !important;
+          box-shadow: 
+            0 0 0 12px #1a1a1a,
+            0 0 0 14px #333,
+            0 20px 60px rgba(0,0,0,0.3) !important;
+          position: relative !important;
+          flex-shrink: 0 !important;
+        }
+        /* 状态栏模拟 */
+        #app::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 120px;
+          height: 28px;
+          background: #1a1a1a;
+          border-radius: 0 0 16px 16px;
+          z-index: 9999;
+        }
+      }
+    </style>
+  </body>
+</html>
