@@ -21,6 +21,14 @@
               <text class="action-card-name">随记</text>
               <text class="action-card-desc">写点什么</text>
             </view>
+            <!-- 发帖 -->
+            <view class="action-card press-feedback" @click="choosePost">
+              <view class="action-card-icon post-icon-wrap">
+                <DoodleIcon name="share" color="#FFFFFF" :size="52" :filtered="false" />
+              </view>
+              <text class="action-card-name">发帖</text>
+              <text class="action-card-desc">发到广场</text>
+            </view>
           </view>
           <view class="action-panel-cancel press-feedback" @click="closeActionSheet">
             <text class="cancel-text">取消</text>
@@ -101,6 +109,9 @@ const HIDE_ROUTES = [
   'pages/study/todo',
   'pages/fortune/index',
   'pages/chat/index',
+  'pages/plaza/post',
+  'pages/plaza/detail',
+  'pages/profile/avatar-memory',
 ]
 
 onShow(() => {
@@ -166,6 +177,11 @@ function chooseQuickCapture() {
 function chooseQuickWrite() {
   closeActionSheet()
   uni.navigateTo({ url: '/pages/write/index' })
+}
+
+function choosePost() {
+  closeActionSheet()
+  uni.navigateTo({ url: '/pages/plaza/post' })
 }
 </script>
 
@@ -322,6 +338,11 @@ function chooseQuickWrite() {
 .write-icon-wrap {
   background: linear-gradient(135deg, #6B8EB4, #8BAED4);
   box-shadow: 0 4rpx 16rpx rgba(107, 142, 180, 0.35);
+}
+
+.post-icon-wrap {
+  background: linear-gradient(135deg, #5BBF8E, #7DD4A8);
+  box-shadow: 0 4rpx 16rpx rgba(91, 191, 142, 0.35);
 }
 
 .action-card-name {

@@ -145,6 +145,7 @@ const expPercent = computed(() => Math.round((currentXP.value / nextLevelXP.valu
 const expHint = computed(() => `再写 ${nextLevelXP.value - currentXP.value} XP 升至 Lv.${profile.value.level + 1} 🌟`)
 
 const menuItems = [
+  { key: 'avatar',  iconName: 'robot',    iconColor: '#E8855A', name: '我的分身',   iconBg: 'rgba(232, 133, 90, 0.12)', path: '/pages/profile/avatar-memory' },
   { key: 'skill',   iconName: 'sparkle',  iconColor: '#5BBF8E', name: '技能树',     iconBg: 'rgba(91, 175, 133, 0.12)', path: '' },
   { key: 'report',  iconName: 'book',     iconColor: '#6B8EC4', name: '学期报告',   iconBg: 'rgba(123, 184, 212, 0.12)', path: '/pages/novel/index' },
   { key: 'about',   iconName: 'settings', iconColor: '#E8C44E', name: '关于 App',   iconBg: 'rgba(230, 184, 112, 0.12)', path: '/pages/settings/about' },
