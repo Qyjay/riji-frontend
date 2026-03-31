@@ -28,7 +28,7 @@
     </view>
 
     <!-- 正文预览（3行截断） -->
-    <text v-if="diary.content" class="content-text">{{ diary.content }}</text>
+    <text v-if="diary.content" class="content-text" :style="{ fontFamily: diaryFontFamily }">{{ contentPreview }}</text>
 
     <!-- 标签组 + 分享 -->
     <view class="tags-row">
@@ -51,6 +51,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useSettingsStore } from '@/stores/settings'
 import type { Diary } from '@/services/api/diary'
 
 const props = defineProps<{
@@ -80,6 +81,24 @@ const displayImages = computed(() => {
 const overflowCount = computed(() => {
   const total = props.diary.images?.length ?? 0
   return total > maxShow ? total - maxShow : 0
+})
+
+// 字体 — 和日记详情页保持一致
+const settingsStore = useSettingsStore()
+const fontFamilyMap: Record<string, string> = {
+  handwrite: "'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', sans-serif",
+  chenyu: "'ChenYuluoyan', 'STXingkai', serif",
+  nailao: "'XiaoKeNaiLao', 'PingFang SC', sans-serif",
+  songti: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+  kaiti: "'STKaiti', 'KaiTi', serif",
+  default: "'PingFang SC', 'Helvetica Neue', sans-serif",
+}
+const diaryFontFamily = computed(() => fontFamilyMap[settingsStore.diaryFont] ?? fontFamilyMap.handwrite)
+
+// 预览文本：去掉空行，合并为连续文本
+const contentPreview = computed(() => {
+  const raw = props.diary.content ?? ''
+  return raw.split(/\n+/).map(s => s.trim()).filter(Boolean).join(' ')
 })
 
 const gridClass = computed(() => {
