@@ -29,24 +29,6 @@
           <text class="emotion-time">{{ formatDateTime(diary.createdAt) }}</text>
         </view>
 
-        <!-- 照片轮播 -->
-        <view v-if="diary.images && diary.images.length > 0" class="photo-swiper-wrap">
-          <swiper
-            class="photo-swiper"
-            :indicator-dots="diary.images.length > 1"
-            :autoplay="false"
-            :current="currentSwiper"
-            @change="onSwiperChange"
-          >
-            <swiper-item v-for="(img, i) in diary.images" :key="i">
-              <image class="swiper-img" :src="img" mode="aspectFill" />
-            </swiper-item>
-          </swiper>
-          <view v-if="diary.images.length > 1" class="swiper-indicators">
-            <text class="swiper-indicator-text">{{ currentSwiper + 1 }} / {{ diary.images.length }}</text>
-          </view>
-        </view>
-
         <!-- 编辑按钮 -->
         <view v-if="canEdit && !isEditing" class="edit-hint-row">
           <view class="edit-hint-btn press-feedback" @click="startEdit">
@@ -55,10 +37,35 @@
           </view>
         </view>
 
-        <!-- 正文（只读/编辑） -->
-        <view class="content-section">
-          <text v-if="!isEditing" class="diary-content">{{ diary.content }}</text>
-          <view v-else class="edit-section">
+        <!-- 字体切换 -->
+        <view class="font-switch-row">
+          <text class="font-switch-label">字体</text>
+          <view class="font-options">
+            <view
+              v-for="f in fontOptions"
+              :key="f.key"
+              class="font-option press-feedback"
+              :class="{ 'font-option-active': currentFont === f.key }"
+              @click="switchFont(f.key)"
+            >
+              <text class="font-option-text" :style="{ fontFamily: f.family }">{{ f.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- ── 图文混排正文 ── -->
+        <view v-if="!isEditing" class="content-section" :style="{ fontFamily: currentFontFamily }">
+          <template v-for="(block, bi) in contentBlocks" :key="bi">
+            <text v-if="block.type === 'text'" class="diary-content">{{ block.text }}</text>
+            <view v-else-if="block.type === 'image'" class="inline-photo-wrap">
+              <image class="inline-photo" :src="block.src" mode="widthFix" />
+            </view>
+          </template>
+        </view>
+
+        <!-- 编辑模式 -->
+        <view v-else class="content-section">
+          <view class="edit-section">
             <textarea
               v-model="editContent"
               class="edit-textarea"
@@ -99,7 +106,7 @@
             <view class="emotion-chart">
               <view v-for="(point, i) in emotionTrend" :key="i" class="chart-col">
                 <view class="chart-bar-wrap">
-                  <view class="chart-bar" :style="{ height: (point.score * 80) + 'rpx' }" />
+                  <view class="chart-bar" :style="{ height: normalizedBarHeight(point.score) + 'rpx' }" />
                 </view>
                 <text class="chart-time">{{ point.hour }}时</text>
                 <text class="chart-emoji-icon">{{ getEmotionEmoji(point.label) }}</text>
@@ -133,35 +140,20 @@
             <view class="header-line" />
           </view>
           <view class="tools-grid">
-            <view class="tool-item" @click="handleTool('comic')">
-              <DoodleIcon name="palette" :size="48" color="#E8855A" class="tool-icon" />
-              <text class="tool-label">生成</text>
-              <text class="tool-name">漫画</text>
+            <view class="tool-item" @click="handleTool('share')">
+              <DoodleIcon name="share" :size="48" color="#5BBF8E" class="tool-icon" />
+              <text class="tool-label">分享</text>
+              <text class="tool-name">卡片</text>
             </view>
             <view class="tool-item" @click="handleTool('novel')">
               <DoodleIcon name="pen" :size="48" color="#6B8EC4" class="tool-icon" />
               <text class="tool-label">生成</text>
               <text class="tool-name">小说</text>
             </view>
-            <view class="tool-item" @click="handleTool('share')">
-              <DoodleIcon name="share" :size="48" color="#5BBF8E" class="tool-icon" />
-              <text class="tool-label">分享</text>
-              <text class="tool-name">卡片</text>
-            </view>
             <view class="tool-item" @click="handleTool('style')">
               <DoodleIcon name="wand" :size="48" color="#C8A86B" class="tool-icon" />
               <text class="tool-label">切换</text>
               <text class="tool-name">文风</text>
-            </view>
-            <view class="tool-item" @click="handleTool('tts')">
-              <DoodleIcon name="music" :size="48" color="#AE9D92" class="tool-icon" />
-              <text class="tool-label">有声</text>
-              <text class="tool-name">朗读</text>
-            </view>
-            <view class="tool-item" @click="handleTool('capsule')">
-              <DoodleIcon name="calendar" :size="48" color="#D4645C" class="tool-icon" />
-              <text class="tool-label">时光</text>
-              <text class="tool-name">胶囊</text>
             </view>
           </view>
         </view>
@@ -185,7 +177,6 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 
 const diary = ref<Diary | null>(null)
 const loading = ref(true)
-const currentSwiper = ref(0)
 const statusBarHeight = ref(20)
 const scrollHeight = ref(600)
 
@@ -196,6 +187,75 @@ const editSaving = ref(false)
 
 // 情绪趋势
 const emotionTrend = ref<Array<{ hour: number; label: string; score: number }>>([])
+
+// 字体系统
+const fontOptions = [
+  { key: 'handwrite', label: '手写', family: "'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', sans-serif" },
+  { key: 'songti', label: '宋体', family: "'Noto Serif SC', 'STSong', 'SimSun', serif" },
+  { key: 'kaiti', label: '楷体', family: "'STKaiti', 'KaiTi', 'AR PL UKai CN', serif" },
+  { key: 'default', label: '默认', family: "'PingFang SC', 'Helvetica Neue', sans-serif" },
+]
+
+const currentFont = ref('handwrite')
+
+const currentFontFamily = computed(() => {
+  const f = fontOptions.find(o => o.key === currentFont.value)
+  return f?.family ?? fontOptions[0].family
+})
+
+function switchFont(key: string) {
+  currentFont.value = key
+  uni.setStorageSync('diary_font', key)
+}
+
+// 图文混排：将 content 按段落分割，在段落间插入图片
+interface ContentBlock {
+  type: 'text' | 'image'
+  text?: string
+  src?: string
+}
+
+const contentBlocks = computed<ContentBlock[]>(() => {
+  if (!diary.value) return []
+  const content = diary.value.content || ''
+  const images = diary.value.images || []
+
+  if (images.length === 0) {
+    return [{ type: 'text', text: content }]
+  }
+
+  // 按段落分割文本
+  const paragraphs = content.split(/\n\n|\n/).filter(p => p.trim())
+  const blocks: ContentBlock[] = []
+
+  if (paragraphs.length === 0) {
+    // 没有文字，只展示图片
+    images.forEach(src => blocks.push({ type: 'image', src }))
+    return blocks
+  }
+
+  // 将图片均匀穿插在段落间
+  const imgInterval = Math.max(1, Math.ceil(paragraphs.length / (images.length + 1)))
+  let imgIdx = 0
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    blocks.push({ type: 'text', text: paragraphs[i] })
+
+    // 每隔 imgInterval 段插入一张图
+    if (imgIdx < images.length && (i + 1) % imgInterval === 0) {
+      blocks.push({ type: 'image', src: images[imgIdx] })
+      imgIdx++
+    }
+  }
+
+  // 剩余图片追加到末尾
+  while (imgIdx < images.length) {
+    blocks.push({ type: 'image', src: images[imgIdx] })
+    imgIdx++
+  }
+
+  return blocks
+})
 
 const aiComments = [
   '又去吃酸菜鱼了！这已经是本周第3次了哦😄 要不要试试二食堂新出的麻辣烫？',
@@ -242,14 +302,28 @@ function getEmotionEmoji(label: string): string {
   const map: Record<string, string> = {
     '开心': '😊', '幸福': '🥰', '平静': '😌', '疲惫': '😴',
     '满足': '😎', '难过': '😢', '烦躁': '😤', '兴奋': '🤩',
+    '焦虑': '😰', '专注': '🧐', '沮丧': '😞', '温暖': '🥰',
   }
   return map[label] ?? '😊'
+}
+
+/** 将 score 归一化到 0~80rpx 范围 */
+function normalizedBarHeight(score: number): number {
+  // score 范围 0~100，映射到 8~80rpx
+  const clamped = Math.max(0, Math.min(100, score))
+  return Math.round(8 + (clamped / 100) * 72)
 }
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
   scrollHeight.value = info.windowHeight - statusBarHeight.value - 44
+
+  // 读取保存的字体偏好
+  const savedFont = uni.getStorageSync('diary_font')
+  if (savedFont && fontOptions.some(f => f.key === savedFont)) {
+    currentFont.value = savedFont
+  }
 
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
@@ -315,9 +389,7 @@ async function handleGenerateDerivative(type: 'comic' | 'novel' | 'share_card') 
     uni.hideLoading()
     const labels: Record<string, string> = { comic: '漫画', novel: '小说', share_card: '分享卡片' }
     uni.showToast({ title: `${labels[type]}生成成功 ✨`, icon: 'success' })
-    if (type === 'comic') {
-      uni.navigateTo({ url: `/pages/diary/comic?id=${diary.value.id}` })
-    } else if (type === 'share_card') {
+    if (type === 'share_card') {
       uni.navigateTo({ url: `/pages/diary/share-card?id=${diary.value.id}` })
     }
   } catch {
@@ -341,17 +413,10 @@ function showMoreMenu() {
   })
 }
 
-function onSwiperChange(e: any) {
-  currentSwiper.value = e.detail.current
-}
-
 function handleTool(type: string) {
   if (!diary.value) return
-  const id = diary.value.id
 
-  if (type === 'comic') {
-    handleGenerateDerivative('comic')
-  } else if (type === 'share') {
+  if (type === 'share') {
     handleGenerateDerivative('share_card')
   } else if (type === 'novel') {
     handleGenerateDerivative('novel')
@@ -363,17 +428,13 @@ function handleTool(type: string) {
         uni.showToast({ title: `已切换为 ${styles[res.tapIndex]} 风格`, icon: 'none' })
       }
     })
-  } else if (type === 'tts') {
-    uni.showToast({ title: '有声朗读功能开发中', icon: 'none' })
-  } else if (type === 'bgm') {
-    uni.showToast({ title: 'BGM 生成功能开发中', icon: 'none' })
-  } else if (type === 'capsule') {
-    uni.showToast({ title: '时光胶囊功能开发中', icon: 'none' })
   }
 }
 </script>
 
 <style lang="scss" scoped>
+@import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Serif+SC:wght@400;700&display=swap');
+
 .page {
   background: #FDF8F3;
 }
@@ -438,64 +499,16 @@ function handleTool(type: string) {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  padding: 20rpx 24rpx 0;
+  padding: 20rpx 32rpx 0;
 }
 
-.emotion-emoji {
-  font-size: 40rpx;
-}
-
-.emotion-label {
-  font-size: 30rpx;
-  color: #4A3628;
-  font-weight: 500;
-}
-
-.emotion-time {
-  font-size: 28rpx;
-  color: #AE9D92;
-  margin-left: auto;
-}
-
-/* ── 照片轮播 ── */
-.photo-swiper-wrap {
-  margin: 16rpx 24rpx 0;
-  position: relative;
-  border-radius: 16rpx;
-  overflow: hidden;
-}
-
-.photo-swiper {
-  width: 100%;
-  height: 400rpx;
-}
-
-.swiper-img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.swiper-indicators {
-  position: absolute;
-  bottom: 16rpx;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-}
-
-.swiper-indicator-text {
-  font-size: 24rpx;
-  color: #FFFFFF;
-  background: rgba(0, 0, 0, 0.35);
-  border-radius: 19998rpx;
-  padding: 4rpx 16rpx;
-}
+.emotion-emoji { font-size: 40rpx; }
+.emotion-label { font-size: 30rpx; color: #4A3628; font-weight: 500; }
+.emotion-time { font-size: 28rpx; color: #AE9D92; margin-left: auto; }
 
 /* ── 编辑提示 ── */
 .edit-hint-row {
-  padding: 12rpx 24rpx 0;
+  padding: 12rpx 32rpx 0;
   display: flex;
   justify-content: flex-end;
 }
@@ -514,6 +527,68 @@ function handleTool(type: string) {
   font-size: 24rpx;
   color: #E8855A;
   font-weight: 500;
+}
+
+/* ── 字体切换 ── */
+.font-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx 32rpx 0;
+}
+
+.font-switch-label {
+  font-size: 24rpx;
+  color: #AE9D92;
+  flex-shrink: 0;
+}
+
+.font-options {
+  display: flex;
+  gap: 8rpx;
+  flex-wrap: wrap;
+}
+
+.font-option {
+  padding: 6rpx 16rpx;
+  border-radius: 12rpx;
+  background: #F5F0EB;
+  &:active { opacity: 0.7; }
+}
+
+.font-option-active {
+  background: #E8855A;
+  .font-option-text { color: #FFFFFF; }
+}
+
+.font-option-text {
+  font-size: 24rpx;
+  color: #4A3628;
+}
+
+/* ── 图文混排正文 ── */
+.content-section {
+  padding: 20rpx 32rpx 0;
+}
+
+.diary-content {
+  font-size: 32rpx;
+  color: #4A3628;
+  line-height: 2;
+  display: block;
+  margin-bottom: 16rpx;
+}
+
+.inline-photo-wrap {
+  margin: 16rpx 0;
+  border-radius: 16rpx 20rpx 14rpx 18rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+}
+
+.inline-photo {
+  width: 100%;
+  display: block;
 }
 
 /* 编辑区 */
@@ -549,31 +624,41 @@ function handleTool(type: string) {
   &:active { opacity: 0.8; }
 }
 
-.edit-cancel-text {
-  font-size: 28rpx;
-  color: #4A3628;
-}
+.edit-cancel-text { font-size: 28rpx; color: #4A3628; }
 
 .edit-save {
   padding: 14rpx 28rpx;
   background: linear-gradient(135deg, #E8855A, #F0A882);
   border-radius: 16rpx;
   &:active { opacity: 0.85; }
-
-  &.saving {
-    background: #D4C4B8;
-  }
+  &.saving { background: #D4C4B8; }
 }
 
-.edit-save-text {
-  font-size: 28rpx;
-  color: #FFFFFF;
-  font-weight: 600;
+.edit-save-text { font-size: 28rpx; color: #FFFFFF; font-weight: 600; }
+
+/* ── 位置天气 ── */
+.meta-row { padding: 12rpx 32rpx 0; }
+.meta-text { font-size: 26rpx; color: #AE9D92; }
+
+/* ── 标签 ── */
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  padding: 12rpx 32rpx 0;
 }
+
+.tag-chip {
+  background: #FDF0E8;
+  border-radius: 20rpx;
+  padding: 4rpx 16rpx;
+}
+
+.tag-text { font-size: 24rpx; color: #E8855A; }
 
 /* ── 情绪趋势 ── */
 .emotion-trend-section {
-  padding: 24rpx 24rpx 0;
+  padding: 24rpx 32rpx 0;
 }
 
 .emotion-trend-card {
@@ -609,70 +694,14 @@ function handleTool(type: string) {
   background: linear-gradient(to top, #E8855A, #F2B49B);
   border-radius: 4rpx 4rpx 0 0;
   min-height: 8rpx;
+  max-height: 80rpx;
 }
 
-.chart-time {
-  font-size: 18rpx;
-  color: #AE9D92;
-  white-space: nowrap;
-}
+.chart-time { font-size: 18rpx; color: #AE9D92; white-space: nowrap; }
+.chart-emoji-icon { font-size: 24rpx; }
+.dominant-info { font-size: 26rpx; color: #4A3628; font-weight: 500; }
 
-.chart-emoji-icon {
-  font-size: 24rpx;
-}
-
-.dominant-info {
-  font-size: 26rpx;
-  color: #4A3628;
-  font-weight: 500;
-}
-
-/* ── 正文 ── */
-.content-section {
-  padding: 20rpx 24rpx 0;
-}
-
-.diary-content {
-  font-size: 32rpx;
-  color: #4A3628;
-  line-height: 1.8;
-  display: block;
-}
-
-/* ── 位置天气 ── */
-.meta-row {
-  padding: 12rpx 24rpx 0;
-}
-
-.meta-text {
-  font-size: 26rpx;
-  color: #AE9D92;
-}
-
-/* ── 标签 ── */
-.tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  padding: 12rpx 24rpx 0;
-}
-
-.tag-chip {
-  background: #FDF0E8;
-  border-radius: 20rpx;
-  padding: 4rpx 16rpx;
-}
-
-.tag-text {
-  font-size: 24rpx;
-  color: #E8855A;
-}
-
-/* ── AI 评论 ── */
-.ai-comment-section {
-  padding: 24rpx 24rpx 0;
-}
-
+/* ── Section Header ── */
 .section-header {
   display: flex;
   align-items: center;
@@ -684,11 +713,7 @@ function handleTool(type: string) {
   flex: 1;
   height: 1rpx;
   background: repeating-linear-gradient(
-    to right,
-    transparent 0,
-    transparent 6rpx,
-    #D4C4B8 6rpx,
-    #D4C4B8 12rpx
+    to right, transparent 0, transparent 6rpx, #D4C4B8 6rpx, #D4C4B8 12rpx
   );
 }
 
@@ -699,6 +724,9 @@ function handleTool(type: string) {
   padding: 0 4rpx;
 }
 
+/* ── AI 评论 ── */
+.ai-comment-section { padding: 24rpx 32rpx 0; }
+
 .ai-comment-card {
   background: #F5F0EB;
   border-radius: 16rpx;
@@ -707,35 +735,13 @@ function handleTool(type: string) {
   gap: 12rpx;
 }
 
-.ai-avatar-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.ai-comment-body {
-  flex: 1;
-}
-
-.ai-label {
-  font-size: 26rpx;
-  color: #4A3628;
-  font-weight: 600;
-  display: block;
-  margin-bottom: 4rpx;
-}
-
-.ai-comment-text {
-  font-size: 28rpx;
-  color: #4A3628;
-  line-height: 1.7;
-  display: block;
-}
+.ai-avatar-icon { display: flex; align-items: center; flex-shrink: 0; }
+.ai-comment-body { flex: 1; }
+.ai-label { font-size: 26rpx; color: #4A3628; font-weight: 600; display: block; margin-bottom: 4rpx; }
+.ai-comment-text { font-size: 28rpx; color: #4A3628; line-height: 1.7; display: block; }
 
 /* ── 创作工具 ── */
-.tools-section {
-  padding: 24rpx 24rpx 0;
-}
+.tools-section { padding: 24rpx 32rpx 0; }
 
 .tools-grid {
   display: grid;
@@ -757,44 +763,23 @@ function handleTool(type: string) {
   &:active { transform: scale(0.96); }
 }
 
-.tool-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-label {
-  font-size: 26rpx;
-  color: #4A3628;
-  font-weight: 500;
-}
-
-.tool-name {
-  font-size: 24rpx;
-  color: #AE9D92;
-}
+.tool-icon { display: flex; align-items: center; justify-content: center; }
+.tool-label { font-size: 26rpx; color: #4A3628; font-weight: 500; }
+.tool-name { font-size: 24rpx; color: #AE9D92; }
 
 /* ── 加载/错误 ── */
-.loading-state,
-.error-state {
+.loading-state, .error-state {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 400rpx;
 }
 
-.loading-text {
-  font-size: 28rpx;
-  color: #AE9D92;
-}
-
-.error-text {
-  font-size: 28rpx;
-  color: #AE9D92;
-}
+.loading-text, .error-text { font-size: 28rpx; color: #AE9D92; }
 
 /* ── 底部留白 ── */
-.bottom-spacer {
-  height: 40rpx;
-}
+.bottom-spacer { height: 60rpx; }
+
+/* ── 通用 ── */
+.press-feedback { &:active { opacity: 0.75; } }
 </style>

@@ -401,16 +401,8 @@ function onTagClick(tag: string) {
 }
 
 function onActionClick(payload: { action: string; diaryId: string }) {
-  const map: Record<string, string> = {
-    comic: '/pages/diary/comic',
-    share: '/pages/diary/share-card',
-    bgm: '',
-    tts: '',
-  }
-  if (payload.action === 'bgm' || payload.action === 'tts') {
-    uni.showToast({ title: `${payload.action === 'bgm' ? 'BGM' : '有声朗读'}功能开发中`, icon: 'none' })
-  } else {
-    uni.navigateTo({ url: `${map[payload.action]}?id=${payload.diaryId}` })
+  if (payload.action === 'share') {
+    uni.navigateTo({ url: `/pages/diary/share-card?id=${payload.diaryId}` })
   }
 }
 </script>
