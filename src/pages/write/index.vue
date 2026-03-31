@@ -27,6 +27,7 @@
           :placeholder-style="'color: #AE9D92; font-size: 30rpx; line-height: 1.7;'"
           :auto-height="true"
           maxlength="500"
+          :focus="true"
         />
         <view class="char-count-row">
           <text class="char-count">{{ textInput.length }}/500</text>
@@ -111,32 +112,10 @@
       <view class="bottom-spacer" />
     </scroll-view>
 
-    <!-- ── 语音录制浮层 ── -->
-    <view v-if="showVoiceOverlay" class="voice-overlay" @click.stop>
-      <view class="voice-overlay-inner">
-        <view class="voice-wave">
-          <view
-            v-for="i in 5"
-            :key="i"
-            class="voice-bar"
-            :class="{ 'voice-bar-active': isRecording }"
-            :style="{ animationDelay: (i * 0.1) + 's' }"
-          />
-        </view>
-        <text class="voice-status-text">{{ isRecording ? '录音中，点击停止...' : '准备中...' }}</text>
-        <view class="voice-btns">
-          <view class="voice-cancel-btn press-feedback" @click="cancelVoice">
-            <text class="voice-cancel-text">取消</text>
-          </view>
-          <view
-            class="voice-record-btn"
-            :class="{ recording: isRecording }"
-            @click="toggleRecord"
-          >
-            <text class="voice-record-icon">🎤</text>
-          </view>
-        </view>
-      </view>
+    <!-- 录音中提示条 -->
+    <view v-if="isRecording" class="recording-bar">
+      <view class="recording-bar-dot" />
+      <text class="recording-bar-text">录音中，松开结束...</text>
     </view>
 
     <!-- ── 底部工具栏 ── -->
@@ -147,10 +126,17 @@
         <text class="toolbar-btn-label">拍照</text>
       </view>
 
-      <!-- 🎤 语音 -->
-      <view class="toolbar-btn press-feedback" @click="openVoice">
+      <!-- 🎤 按住说话 -->
+      <view
+        class="toolbar-btn press-feedback"
+        :class="{ 'toolbar-btn--recording': isRecording }"
+        @touchstart.prevent="startRecording"
+        @touchend.prevent="stopRecording"
+        @mousedown.prevent="startRecording"
+        @mouseup.prevent="stopRecording"
+      >
         <text class="toolbar-btn-icon">🎤</text>
-        <text class="toolbar-btn-label">语音</text>
+        <text class="toolbar-btn-label">{{ isRecording ? '松开结束' : '按住说话' }}</text>
       </view>
 
       <!-- ✓ 保存 -->
@@ -185,9 +171,29 @@ const todayMaterials = ref<RawMaterial[]>([])
 const loadingMaterials = ref(false)
 const saving = ref(false)
 
-// 语音
-const showVoiceOverlay = ref(false)
+// 语音 — 按住说话
 const isRecording = ref(false)
+
+function startRecording() {
+  isRecording.value = true
+}
+
+function stopRecording() {
+  if (!isRecording.value) return
+  isRecording.value = false
+
+  // H5 mock：模拟语音转文字
+  uni.showLoading({ title: '转文字中...', mask: true })
+  setTimeout(() => {
+    uni.hideLoading()
+    const transcription = '刚才录了一段语音...'
+    if (textInput.value && !textInput.value.endsWith('\n')) {
+      textInput.value += '\n'
+    }
+    textInput.value += transcription
+    uni.showToast({ title: '语音已转文字', icon: 'none' })
+  }, 800)
+}
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -255,46 +261,6 @@ function pickPhoto() {
 
 function removePhoto(idx: number) {
   photos.value.splice(idx, 1)
-}
-
-// ── 语音 ──
-function openVoice() {
-  showVoiceOverlay.value = true
-  // H5 mock: auto-start after short delay
-  setTimeout(() => {
-    isRecording.value = true
-  }, 300)
-}
-
-function toggleRecord() {
-  if (isRecording.value) {
-    // 停止录音 → mock 转文字
-    stopAndTranscribe()
-  } else {
-    isRecording.value = true
-  }
-}
-
-function cancelVoice() {
-  isRecording.value = false
-  showVoiceOverlay.value = false
-}
-
-async function stopAndTranscribe() {
-  isRecording.value = false
-  uni.showLoading({ title: '转文字中...', mask: true })
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  uni.hideLoading()
-
-  const transcription = '刚才录了一段语音...'
-  // 追加到 textarea
-  if (textInput.value && !textInput.value.endsWith('\n')) {
-    textInput.value += '\n'
-  }
-  textInput.value += transcription
-
-  showVoiceOverlay.value = false
-  uni.showToast({ title: '语音已转文字', icon: 'none' })
 }
 
 // ── 保存 ──
@@ -632,94 +598,37 @@ function handleBack() {
   height: 40rpx;
 }
 
-/* ── 语音浮层 ── */
-.voice-overlay {
+/* ── 录音中提示条 ── */
+.recording-bar {
   position: fixed;
-  inset: 0;
-  background: rgba(44, 31, 20, 0.6);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-}
-
-.voice-overlay-inner {
-  width: 100%;
-  background: #FDF8F3;
-  border-radius: 32rpx 32rpx 0 0;
-  padding: 48rpx 32rpx 60rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 32rpx;
-}
-
-.voice-wave {
+  bottom: 140rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(44, 31, 20, 0.85);
+  padding: 16rpx 32rpx;
+  border-radius: 32rpx;
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  height: 60rpx;
+  gap: 12rpx;
+  z-index: 60;
 }
 
-.voice-bar {
-  width: 8rpx;
-  height: 20rpx;
-  background: #D4C4B8;
-  border-radius: 4rpx;
-  transition: height 0.2s;
-
-  &.voice-bar-active {
-    background: #E8855A;
-    animation: voiceBarAnim 0.6s ease-in-out infinite alternate;
-  }
-}
-
-@keyframes voiceBarAnim {
-  from { height: 12rpx; }
-  to   { height: 52rpx; }
-}
-
-.voice-status-text {
-  font-size: 30rpx;
-  color: #4A3628;
-}
-
-.voice-btns {
-  display: flex;
-  align-items: center;
-  gap: 40rpx;
-}
-
-.voice-cancel-btn {
-  padding: 16rpx 36rpx;
-  border-radius: 20rpx;
-  background: #F0EAE4;
-  &:active { opacity: 0.8; }
-}
-
-.voice-cancel-text {
-  font-size: 28rpx;
-  color: #4A3628;
-}
-
-.voice-record-btn {
-  width: 140rpx;
-  height: 140rpx;
+.recording-bar-dot {
+  width: 14rpx;
+  height: 14rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #E8855A, #F0A882);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8rpx 24rpx rgba(232, 133, 90, 0.3);
-  &:active { opacity: 0.85; }
-
-  &.recording {
-    background: #D4645C;
-    box-shadow: 0 0 0 16rpx rgba(212, 100, 92, 0.18);
-  }
+  background: #D4645C;
+  animation: recBlink 0.8s infinite;
 }
 
-.voice-record-icon {
-  font-size: 64rpx;
+@keyframes recBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.recording-bar-text {
+  font-size: 26rpx;
+  color: #FFFFFF;
 }
 
 /* ── 底部工具栏 ── */
@@ -746,7 +655,15 @@ function handleBack() {
   padding: 12rpx 20rpx;
   border-radius: 16rpx;
   background: #F5F0EB;
+  transition: all 0.15s;
   &:active { opacity: 0.75; transform: scale(0.95); }
+}
+
+.toolbar-btn--recording {
+  background: #E8855A;
+  box-shadow: 0 0 0 6rpx rgba(232, 133, 90, 0.2);
+  .toolbar-btn-icon { filter: brightness(1.2); }
+  .toolbar-btn-label { color: #FFFFFF; }
 }
 
 .toolbar-btn-icon {

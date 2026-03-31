@@ -179,6 +179,24 @@
           </view>
         </view>
 
+        <!-- ── 开发者选项 ── -->
+        <view class="card dev-card">
+          <text class="card-title">── 开发者选项 ──</text>
+
+          <view class="row">
+            <view class="row-label-wrap">
+              <text class="row-label">Mock 模式</text>
+              <text class="row-hint">开启后使用本地模拟数据，无需后端</text>
+            </view>
+            <switch
+              class="row-switch"
+              :checked="mockMode"
+              color="#9B59B6"
+              @change="onMockToggle"
+            />
+          </view>
+        </view>
+
         <!-- 退出登录 -->
         <view class="logout-wrap">
           <view class="logout-btn" @click="onLogout">
@@ -225,6 +243,7 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import { USE_MOCK, setMockMode } from '@/services/config'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -377,6 +396,19 @@ function onPrivacyPolicy() {
 }
 function onOpenSource() {
   uni.showToast({ title: '即将跳转到开源许可', icon: 'none' })
+}
+
+// ── 开发者选项 ──
+const mockMode = ref(USE_MOCK)
+
+function onMockToggle(e: any) {
+  const val = e.detail.value as boolean
+  mockMode.value = val
+  setMockMode(val)
+  uni.showToast({
+    title: val ? 'Mock 模式已开启' : 'Mock 模式已关闭',
+    icon: 'none',
+  })
 }
 
 // ── 退出登录 ──
@@ -585,5 +617,22 @@ function onLogout() {
 
 .bottom-safe {
   height: 40rpx;
+}
+
+/* 开发者选项 */
+.dev-card {
+  border: 2rpx dashed rgba(155, 89, 182, 0.3);
+}
+
+.row-label-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-hint {
+  font-size: 22rpx;
+  color: #AE9D92;
+  margin-top: 4rpx;
 }
 </style>

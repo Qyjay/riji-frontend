@@ -1,38 +1,28 @@
 <template>
   <view v-if="visible" class="tabbar-wrapper">
-    <!-- ActionSheet -->
+    <!-- 双路径选择面板 -->
       <view v-if="showActionSheet" class="action-sheet-overlay" @click="closeActionSheet">
-        <view class="action-sheet-panel doodle-box" @click.stop>
-          <view class="action-sheet-header">
-            <text class="action-sheet-title font-handwrite">选择记录方式</text>
-          </view>
-          <view class="action-sheet-options">
-            <view class="action-option press-feedback" @click="chooseMode('photo')">
-              <view class="action-icon-wrap func-color-study doodle-box-v3">
-                <DoodleIcon name="camera" color="#6BA87B" :size="44" />
+        <view class="action-panel" @click.stop>
+          <text class="action-panel-title">记录此刻</text>
+          <view class="action-dual">
+            <!-- 快拍 -->
+            <view class="action-card press-feedback" @click="chooseQuickCapture">
+              <view class="action-card-icon camera-icon-wrap">
+                <DoodleIcon name="camera" color="#FFFFFF" :size="52" :filtered="false" />
               </view>
-              <text class="action-label">拍照记录</text>
+              <text class="action-card-name">快拍</text>
+              <text class="action-card-desc">拍下此刻 + 说两句</text>
             </view>
-            <view class="action-option press-feedback" @click="chooseMode('album')">
-              <view class="action-icon-wrap func-color-social doodle-box-v2">
-                <DoodleIcon name="palette" color="#6B8EB4" :size="44" />
+            <!-- 随记 -->
+            <view class="action-card press-feedback" @click="chooseQuickWrite">
+              <view class="action-card-icon write-icon-wrap">
+                <DoodleIcon name="pen" color="#FFFFFF" :size="52" :filtered="false" />
               </view>
-              <text class="action-label">从相册选择</text>
-            </view>
-            <view class="action-option press-feedback" @click="chooseMode('text')">
-              <view class="action-icon-wrap func-color-diary doodle-box">
-                <DoodleIcon name="pen" color="#E8855A" :size="44" />
-              </view>
-              <text class="action-label">文字记录</text>
-            </view>
-            <view class="action-option press-feedback" @click="chooseMode('voice')">
-              <view class="action-icon-wrap func-color-novel doodle-box-v4">
-                <DoodleIcon name="voice" color="#9B72C8" :size="44" />
-              </view>
-              <text class="action-label">语音记录</text>
+              <text class="action-card-name">随记</text>
+              <text class="action-card-desc">写点什么</text>
             </view>
           </view>
-          <view class="action-sheet-cancel press-feedback" @click="closeActionSheet">
+          <view class="action-panel-cancel press-feedback" @click="closeActionSheet">
             <text class="cancel-text">取消</text>
           </view>
         </view>
@@ -64,8 +54,7 @@
               :color="activeIndex === index ? '#E8855A' : '#AE9D92'"
               :size="44"
             />
-            <!-- 选中小圆点 -->
-            <view v-if="activeIndex === index" class="active-dot" />
+
           </view>
           <text
             class="tabbar-label"
@@ -155,15 +144,28 @@ function closeActionSheet() {
   showActionSheet.value = false
 }
 
-function chooseMode(mode: string) {
+function chooseQuickCapture() {
   closeActionSheet()
-  const modeMap: Record<string, string> = {
-    photo: 'photo',
-    album: 'album',
-    text: 'text',
-    voice: 'voice',
-  }
-  uni.navigateTo({ url: `/pages/write/index?mode=${modeMap[mode] ?? 'text'}` })
+  // 直接打开相机，拍完跳转快拍页
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['camera', 'album'],
+    success: (res) => {
+      const photoPath = res.tempFilePaths[0]
+      uni.navigateTo({ url: `/pages/write/quick-capture?photo=${encodeURIComponent(photoPath)}` })
+    },
+    fail: () => {
+      // H5 fallback: mock photo
+      const mockUrl = `https://picsum.photos/seed/${Date.now()}/800/600`
+      uni.navigateTo({ url: `/pages/write/quick-capture?photo=${encodeURIComponent(mockUrl)}` })
+    },
+  })
+}
+
+function chooseQuickWrite() {
+  closeActionSheet()
+  uni.navigateTo({ url: '/pages/write/index' })
 }
 </script>
 
@@ -219,15 +221,6 @@ function chooseMode(mode: string) {
   position: relative;
 }
 
-.active-dot {
-  position: absolute;
-  bottom: -8rpx;
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 50% 60% 40% 55%;  /* 手绘感不完美圆 */
-  background: #E8855A;
-}
-
 .tabbar-label {
   font-size: 22rpx;
   color: #AE9D92;
@@ -265,7 +258,7 @@ function chooseMode(mode: string) {
   animation: none;
 }
 
-/* ActionSheet */
+/* ActionSheet — 双路径面板 */
 .action-sheet-overlay {
   position: fixed;
   inset: 0;
@@ -276,74 +269,84 @@ function chooseMode(mode: string) {
   justify-content: center;
 }
 
-.action-sheet-panel {
+.action-panel {
   width: 100%;
-  background: #FFFFFF;
-  border-radius: 24rpx 24rpx 0 0 !important;
+  background: #FDF8F3;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 32rpx 32rpx 0;
   padding-bottom: env(safe-area-inset-bottom);
-  overflow: hidden;
 }
 
-.action-sheet-header {
-  padding: 28rpx 0 20rpx;
-  display: flex;
-  justify-content: center;
-}
-
-.action-sheet-title {
+.action-panel-title {
+  display: block;
   font-size: 30rpx;
   color: #2C1F14;
-  font-weight: 600;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 28rpx;
 }
 
-.action-sheet-options {
+.action-dual {
+  display: flex;
+  gap: 20rpx;
+}
+
+.action-card {
+  flex: 1;
+  background: #FFFFFF;
+  border-radius: 24rpx 28rpx 20rpx 26rpx;
+  padding: 32rpx 20rpx;
   display: flex;
   flex-direction: column;
-  padding: 0 24rpx;
-  gap: 4rpx;
-}
-
-.action-option {
-  display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 20rpx 16rpx;
-  border-radius: 16rpx;
-  transition: background 0.15s;
+  gap: 12rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+  border: 2rpx solid rgba(232, 133, 90, 0.1);
+  &:active { transform: scale(0.96); }
 }
 
-.action-option:active {
-  background: rgba(232, 133, 90, 0.08);
-}
-
-.action-icon-wrap {
-  width: 88rpx;
-  height: 88rpx;
+.action-card-icon {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50% 55% 45% 52%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-width: 1.5px;
-  border-style: solid;
-  flex-shrink: 0;
 }
 
-.action-label {
+.camera-icon-wrap {
+  background: linear-gradient(135deg, #E8855A, #F0A882);
+  box-shadow: 0 4rpx 16rpx rgba(232, 133, 90, 0.35);
+}
+
+.write-icon-wrap {
+  background: linear-gradient(135deg, #6B8EB4, #8BAED4);
+  box-shadow: 0 4rpx 16rpx rgba(107, 142, 180, 0.35);
+}
+
+.action-card-name {
   font-size: 32rpx;
   color: #2C1F14;
-  font-weight: 500;
+  font-weight: 700;
 }
 
-.action-sheet-cancel {
-  margin: 16rpx 24rpx 0;
-  padding: 28rpx 0;
-  background: #F5F0EB;
+.action-card-desc {
+  font-size: 24rpx;
+  color: #AE9D92;
+}
+
+.action-panel-cancel {
+  margin: 20rpx 0 24rpx;
+  padding: 24rpx 0;
+  background: #F0EAE4;
   border-radius: 16rpx;
   display: flex;
   justify-content: center;
+  &:active { opacity: 0.75; }
 }
 
 .cancel-text {
-  font-size: 32rpx;
+  font-size: 30rpx;
   color: #4A3628;
   font-weight: 500;
 }
