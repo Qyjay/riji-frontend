@@ -393,7 +393,7 @@ function goWrite() {
 }
 
 function onSearch() {
-  uni.showToast({ title: '搜索功能开发中', icon: 'none' })
+  uni.navigateTo({ url: '/pages/search/index' })
 }
 
 function onTagClick(tag: string) {

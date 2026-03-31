@@ -518,3 +518,61 @@ export function getTodaySummary(date: string): {
     diary_status: todayDiary?.status ?? null,
   }
 }
+
+export interface SearchQuery {
+  keyword?: string
+  dateRange?: [string, string]
+  emotions?: string[]
+  tags?: string[]
+  weathers?: string[]
+}
+
+export function searchDiaries(query: SearchQuery): Diary[] {
+  let results = [...mockDiaries]
+
+  // 关键词匹配 title + content + location（不区分大小写）
+  if (query.keyword && query.keyword.trim()) {
+    const kw = query.keyword.toLowerCase()
+    results = results.filter(d => {
+      const title = (d.title || '').toLowerCase()
+      const content = (d.content || '').toLowerCase()
+      const location = (d.location || '').toLowerCase()
+      return title.includes(kw) || content.includes(kw) || location.includes(kw)
+    })
+  }
+
+  // 日期范围筛选（AND）
+  if (query.dateRange && (query.dateRange[0] || query.dateRange[1])) {
+    const start = query.dateRange[0] || '1900-01-01'
+    const end = query.dateRange[1] || '2099-12-31'
+    results = results.filter(d => {
+      return d.date >= start && d.date <= end
+    })
+  }
+
+  // 情绪筛选（OR）
+  if (query.emotions && query.emotions.length > 0) {
+    results = results.filter(d => {
+      const label = d.emotion?.label || d.emotionSummary?.dominant || ''
+      return query.emotions!.includes(label)
+    })
+  }
+
+  // 标签筛选（OR）
+  if (query.tags && query.tags.length > 0) {
+    results = results.filter(d => {
+      return (d.tags || []).some(t => query.tags!.includes(t))
+    })
+  }
+
+  // 天气筛选（OR）
+  if (query.weathers && query.weathers.length > 0) {
+    results = results.filter(d => {
+      const weather = d.weather || ''
+      return query.weathers!.some(w => weather.includes(w))
+    })
+  }
+
+  // 结果按 createdAt 倒序
+  return results.sort((a, b) => b.createdAt - a.createdAt)
+}

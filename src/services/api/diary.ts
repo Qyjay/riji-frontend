@@ -99,3 +99,16 @@ export async function getTodaySummary(date: string): Promise<TodaySummary> {
   if (USE_MOCK) return mock.getTodaySummary(date)
   return request<TodaySummary>({ url: `/diaries/today-summary?date=${date}` })
 }
+
+export interface SearchQuery {
+  keyword?: string
+  dateRange?: [string, string]
+  emotions?: string[]
+  tags?: string[]
+  weathers?: string[]
+}
+
+export async function searchDiaries(query: SearchQuery): Promise<Diary[]> {
+  if (USE_MOCK) return mock.searchDiaries(query)
+  return request<Diary[]>({ url: '/diaries/search', method: 'POST', data: query })
+}
