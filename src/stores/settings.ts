@@ -14,12 +14,13 @@ export const useSettingsStore = defineStore('settings', () => {
   const diaryPrivacy = ref<'private' | 'friends' | 'public'>('private')
   const fontSize = ref<'small' | 'medium' | 'large'>('medium')
   const language = ref('zh-CN')
+  const diaryFont = ref<'handwrite' | 'songti' | 'kaiti' | 'default'>('handwrite')
 
   function updateSetting(key: string, value: unknown) {
     const map: Record<string, { value: unknown }> = {
       theme, notifications, diaryReminder, reminderTime,
       pomodoroReminder, buddyNotify, diaryEncrypt, appLock,
-      diaryPrivacy, fontSize, language,
+      diaryPrivacy, fontSize, language, diaryFont,
     }
     if (map[key]) map[key].value = value
   }
@@ -36,12 +37,13 @@ export const useSettingsStore = defineStore('settings', () => {
     diaryPrivacy.value = 'private'
     fontSize.value = 'medium'
     language.value = 'zh-CN'
+    diaryFont.value = 'handwrite'
   }
 
   return {
     theme, notifications, diaryReminder, reminderTime,
     pomodoroReminder, buddyNotify, diaryEncrypt, appLock,
-    diaryPrivacy, fontSize, language,
+    diaryPrivacy, fontSize, language, diaryFont,
     updateSetting, resetAll,
   }
 }, {

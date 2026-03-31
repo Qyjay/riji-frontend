@@ -37,22 +37,6 @@
           </view>
         </view>
 
-        <!-- 字体切换 -->
-        <view class="font-switch-row">
-          <text class="font-switch-label">字体</text>
-          <view class="font-options">
-            <view
-              v-for="f in fontOptions"
-              :key="f.key"
-              class="font-option press-feedback"
-              :class="{ 'font-option-active': currentFont === f.key }"
-              @click="switchFont(f.key)"
-            >
-              <text class="font-option-text" :style="{ fontFamily: f.family }">{{ f.label }}</text>
-            </view>
-          </view>
-        </view>
-
         <!-- ── 图文混排正文 ── -->
         <view v-if="!isEditing" class="content-section" :style="{ fontFamily: currentFontFamily }">
           <template v-for="(block, bi) in contentBlocks" :key="bi">
@@ -174,6 +158,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend } from '@/services/api/diary'
 import type { Diary } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import { useSettingsStore } from '@/stores/settings'
 
 const diary = ref<Diary | null>(null)
 const loading = ref(true)
@@ -188,25 +173,19 @@ const editSaving = ref(false)
 // 情绪趋势
 const emotionTrend = ref<Array<{ hour: number; label: string; score: number }>>([])
 
-// 字体系统
-const fontOptions = [
-  { key: 'handwrite', label: '手写', family: "'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', sans-serif" },
-  { key: 'songti', label: '宋体', family: "'Noto Serif SC', 'STSong', 'SimSun', serif" },
-  { key: 'kaiti', label: '楷体', family: "'STKaiti', 'KaiTi', 'AR PL UKai CN', serif" },
-  { key: 'default', label: '默认', family: "'PingFang SC', 'Helvetica Neue', sans-serif" },
-]
+// 字体 — 从设置 store 读取
+const settingsStore = useSettingsStore()
 
-const currentFont = ref('handwrite')
+const fontFamilyMap: Record<string, string> = {
+  handwrite: "'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', sans-serif",
+  songti: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+  kaiti: "'STKaiti', 'KaiTi', 'AR PL UKai CN', serif",
+  default: "'PingFang SC', 'Helvetica Neue', sans-serif",
+}
 
 const currentFontFamily = computed(() => {
-  const f = fontOptions.find(o => o.key === currentFont.value)
-  return f?.family ?? fontOptions[0].family
+  return fontFamilyMap[settingsStore.diaryFont] ?? fontFamilyMap.handwrite
 })
-
-function switchFont(key: string) {
-  currentFont.value = key
-  uni.setStorageSync('diary_font', key)
-}
 
 // 图文混排：将 content 按段落分割，在段落间插入图片
 interface ContentBlock {
@@ -318,12 +297,6 @@ onMounted(async () => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
   scrollHeight.value = info.windowHeight - statusBarHeight.value - 44
-
-  // 读取保存的字体偏好
-  const savedFont = uni.getStorageSync('diary_font')
-  if (savedFont && fontOptions.some(f => f.key === savedFont)) {
-    currentFont.value = savedFont
-  }
 
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
@@ -527,43 +500,6 @@ function handleTool(type: string) {
   font-size: 24rpx;
   color: #E8855A;
   font-weight: 500;
-}
-
-/* ── 字体切换 ── */
-.font-switch-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  padding: 16rpx 32rpx 0;
-}
-
-.font-switch-label {
-  font-size: 24rpx;
-  color: #AE9D92;
-  flex-shrink: 0;
-}
-
-.font-options {
-  display: flex;
-  gap: 8rpx;
-  flex-wrap: wrap;
-}
-
-.font-option {
-  padding: 6rpx 16rpx;
-  border-radius: 12rpx;
-  background: #F5F0EB;
-  &:active { opacity: 0.7; }
-}
-
-.font-option-active {
-  background: #E8855A;
-  .font-option-text { color: #FFFFFF; }
-}
-
-.font-option-text {
-  font-size: 24rpx;
-  color: #4A3628;
 }
 
 /* ── 图文混排正文 ── */

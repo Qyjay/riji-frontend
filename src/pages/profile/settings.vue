@@ -149,6 +149,13 @@
               <text class="row-value">{{ fontOptions[appearance.fontIndex] }}▼</text>
             </view>
           </view>
+
+          <view class="row row-border" @click="showDiaryFontPicker">
+            <text class="row-label">日记字体</text>
+            <view class="row-right">
+              <text class="row-value">{{ diaryFontLabel }}▼</text>
+            </view>
+          </view>
         </view>
 
         <!-- ── 关于 ── -->
@@ -241,9 +248,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, computed } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { USE_MOCK, setMockMode } from '@/services/config'
+import { useSettingsStore } from '@/stores/settings'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -382,6 +390,31 @@ function onThemePickerChange(e: any) {
 function onFontPickerChange(e: any) {
   appearance.fontIndex = e.detail.value
   fontPickerVisible.value = false
+}
+
+// ── 日记字体 ──
+const settingsStore = useSettingsStore()
+
+const diaryFontOptions = [
+  { key: 'handwrite', label: '手写体' },
+  { key: 'songti', label: '宋体' },
+  { key: 'kaiti', label: '楷体' },
+  { key: 'default', label: '默认' },
+]
+
+const diaryFontLabel = computed(() => {
+  const f = diaryFontOptions.find(o => o.key === settingsStore.diaryFont)
+  return f?.label ?? '手写体'
+})
+
+function showDiaryFontPicker() {
+  uni.showActionSheet({
+    itemList: diaryFontOptions.map(o => o.label),
+    success: (res) => {
+      settingsStore.diaryFont = diaryFontOptions[res.tapIndex].key as any
+      uni.showToast({ title: `已切换为「${diaryFontOptions[res.tapIndex].label}」`, icon: 'none' })
+    },
+  })
 }
 
 // ── 关于 ──
