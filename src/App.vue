@@ -16,6 +16,24 @@
 @import './common/doodle.scss';
 
 /* 全局字体 & 重置 */
+
+/* 自定义字体注册 */
+@font-face {
+  font-family: 'ChenYuluoyan';
+  src: url('./static/fonts/ChenYuluoyan-Thin.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'XiaoKeNaiLao';
+  src: url('./static/fonts/XiaoKeNaiLao.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 page {
   background-color: #FDF8F3;
   font-family: "PingFang SC", "Noto Sans SC", -apple-system, sans-serif;

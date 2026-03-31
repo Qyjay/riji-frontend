@@ -156,6 +156,23 @@
               <text class="row-value">{{ diaryFontLabel }}▼</text>
             </view>
           </view>
+
+          <!-- 字体预览选择面板 -->
+          <view v-if="diaryFontPanelVisible" class="font-preview-panel">
+            <view
+              v-for="f in diaryFontOptions"
+              :key="f.key"
+              class="font-preview-item press-feedback"
+              :class="{ 'font-preview-active': settingsStore.diaryFont === f.key }"
+              @click="pickDiaryFont(f.key)"
+            >
+              <view class="font-preview-left">
+                <text class="font-preview-name">{{ f.label }}</text>
+                <text class="font-preview-sample" :style="{ fontFamily: f.family }">日迹，让每一天都值得被记住</text>
+              </view>
+              <text v-if="settingsStore.diaryFont === f.key" class="font-preview-check">✓</text>
+            </view>
+          </view>
         </view>
 
         <!-- ── 关于 ── -->
@@ -394,27 +411,29 @@ function onFontPickerChange(e: any) {
 
 // ── 日记字体 ──
 const settingsStore = useSettingsStore()
+const diaryFontPanelVisible = ref(false)
 
 const diaryFontOptions = [
-  { key: 'handwrite', label: '手写体' },
-  { key: 'songti', label: '宋体' },
-  { key: 'kaiti', label: '楷体' },
-  { key: 'default', label: '默认' },
+  { key: 'handwrite', label: '站酷快乐体', family: "'ZCOOL KuaiLe', 'STXingkai', sans-serif" },
+  { key: 'chenyu', label: '辰宇落雁体', family: "'ChenYuluoyan', 'STXingkai', serif" },
+  { key: 'nailao', label: '小可奶酪体', family: "'XiaoKeNaiLao', 'PingFang SC', sans-serif" },
+  { key: 'songti', label: '宋体', family: "'Noto Serif SC', 'STSong', 'SimSun', serif" },
+  { key: 'kaiti', label: '楷体', family: "'STKaiti', 'KaiTi', serif" },
+  { key: 'default', label: '默认', family: "'PingFang SC', 'Helvetica Neue', sans-serif" },
 ]
 
 const diaryFontLabel = computed(() => {
   const f = diaryFontOptions.find(o => o.key === settingsStore.diaryFont)
-  return f?.label ?? '手写体'
+  return f?.label ?? '站酷快乐体'
 })
 
 function showDiaryFontPicker() {
-  uni.showActionSheet({
-    itemList: diaryFontOptions.map(o => o.label),
-    success: (res) => {
-      settingsStore.diaryFont = diaryFontOptions[res.tapIndex].key as any
-      uni.showToast({ title: `已切换为「${diaryFontOptions[res.tapIndex].label}」`, icon: 'none' })
-    },
-  })
+  diaryFontPanelVisible.value = !diaryFontPanelVisible.value
+}
+
+function pickDiaryFont(key: string) {
+  settingsStore.diaryFont = key as any
+  uni.showToast({ title: `已切换为「${diaryFontOptions.find(o => o.key === key)?.label}」`, icon: 'none' })
 }
 
 // ── 关于 ──
@@ -667,5 +686,52 @@ function onLogout() {
   font-size: 22rpx;
   color: #AE9D92;
   margin-top: 4rpx;
+}
+
+/* 字体预览面板 */
+.font-preview-panel {
+  padding: 0 0 16rpx;
+  border-top: 1rpx solid rgba(174, 157, 146, 0.15);
+}
+
+.font-preview-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 8rpx;
+  border-bottom: 1rpx solid rgba(174, 157, 146, 0.08);
+  &:last-child { border-bottom: none; }
+  &:active { background: rgba(232, 133, 90, 0.04); }
+}
+
+.font-preview-active {
+  background: rgba(232, 133, 90, 0.06);
+}
+
+.font-preview-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.font-preview-name {
+  font-size: 26rpx;
+  color: #2C1F14;
+  font-weight: 500;
+}
+
+.font-preview-sample {
+  font-size: 30rpx;
+  color: #4A3628;
+  line-height: 1.6;
+}
+
+.font-preview-check {
+  font-size: 32rpx;
+  color: #E8855A;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-left: 16rpx;
 }
 </style>

@@ -14,7 +14,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const diaryPrivacy = ref<'private' | 'friends' | 'public'>('private')
   const fontSize = ref<'small' | 'medium' | 'large'>('medium')
   const language = ref('zh-CN')
-  const diaryFont = ref<'handwrite' | 'songti' | 'kaiti' | 'default'>('handwrite')
+  const diaryFont = ref<'handwrite' | 'chenyu' | 'nailao' | 'songti' | 'kaiti' | 'default'>('handwrite')
 
   function updateSetting(key: string, value: unknown) {
     const map: Record<string, { value: unknown }> = {
