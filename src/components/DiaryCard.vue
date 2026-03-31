@@ -30,26 +30,20 @@
     <!-- 正文预览（3行截断） -->
     <text v-if="diary.content" class="content-text">{{ diary.content }}</text>
 
-    <!-- 标签组 -->
-    <view v-if="diary.tags && diary.tags.length > 0" class="tags-row">
-      <view
-        v-for="tag in diary.tags"
-        :key="tag"
-        class="tag-chip"
-        @click.stop="emit('tagClick', tag)"
-      >
-        <text class="tag-text">#{{ tag }}</text>
+    <!-- 标签组 + 分享 -->
+    <view class="tags-row">
+      <view class="tags-left">
+        <view
+          v-for="tag in (diary.tags || [])"
+          :key="tag"
+          class="tag-chip"
+          @click.stop="emit('tagClick', tag)"
+        >
+          <text class="tag-text">#{{ tag }}</text>
+        </view>
       </view>
-    </view>
-
-    <!-- 虚线分隔 -->
-    <view class="divider" />
-
-    <!-- 操作栏：只保留分享 -->
-    <view class="actions-row">
-      <view class="action-item active" @click.stop="emit('actionClick', { action: 'share', diaryId: diary.id })">
-        <text class="action-icon">📤</text>
-        <text class="action-text">分享</text>
+      <view class="share-btn press-feedback" @click.stop="emit('actionClick', { action: 'share', diaryId: diary.id })">
+        <text class="share-icon">📤</text>
       </view>
     </view>
   </view>
@@ -252,12 +246,19 @@ function handleMore() {
   margin-bottom: 12rpx;
 }
 
-/* 标签 */
+/* 标签 + 分享 */
 .tags-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8rpx;
+}
+
+.tags-left {
   display: flex;
   flex-wrap: wrap;
   gap: 8rpx;
-  margin-bottom: 12rpx;
+  flex: 1;
 }
 
 .tag-chip {
@@ -272,48 +273,13 @@ function handleMore() {
   color: #E8855A;
 }
 
-/* 虚线分隔 */
-.divider {
-  height: 1rpx;
-  background: repeating-linear-gradient(
-    to right,
-    #D4C4B8 0,
-    #D4C4B8 6rpx,
-    transparent 6rpx,
-    transparent 12rpx
-  );
-  margin: 12rpx 0;
+.share-btn {
+  flex-shrink: 0;
+  padding: 4rpx 8rpx;
+  &:active { opacity: 0.6; }
 }
 
-/* 操作栏 */
-.actions-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.action-item {
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-  padding: 4rpx 12rpx;
-  border-radius: 8rpx;
-  opacity: 0.45;
-  transition: opacity 0.15s;
-
-  &.active {
-    opacity: 1;
-  }
-
-  &:active { opacity: 0.7; }
-}
-
-.action-icon {
-  font-size: 26rpx;
-}
-
-.action-text {
-  font-size: 26rpx;
-  color: #AE9D92;
+.share-icon {
+  font-size: 28rpx;
 }
 </style>
