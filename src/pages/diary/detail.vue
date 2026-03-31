@@ -178,7 +178,7 @@ const settingsStore = useSettingsStore()
 
 const fontFamilyMap: Record<string, string> = {
   handwrite: "'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', sans-serif",
-  chenyu: "'ChenYuluoyan', 'STXingkai', serif",
+  zhaizaijia: "'ZhaiZaiJia', 'PingFang SC', sans-serif",
   nailao: "'XiaoKeNaiLao', 'PingFang SC', sans-serif",
   songti: "'Noto Serif SC', 'STSong', 'SimSun', serif",
   kaiti: "'STKaiti', 'KaiTi', 'AR PL UKai CN', serif",

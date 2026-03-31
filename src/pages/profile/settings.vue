@@ -415,7 +415,7 @@ const diaryFontPanelVisible = ref(false)
 
 const diaryFontOptions = [
   { key: 'handwrite', label: '站酷快乐体', family: "'ZCOOL KuaiLe', 'STXingkai', sans-serif" },
-  { key: 'chenyu', label: '辰宇落雁体', family: "'ChenYuluoyan', 'STXingkai', serif" },
+  { key: 'zhaizaijia', label: '宅在家粉條甜', family: "'ZhaiZaiJia', 'PingFang SC', sans-serif" },
   { key: 'nailao', label: '小可奶酪体', family: "'XiaoKeNaiLao', 'PingFang SC', sans-serif" },
   { key: 'songti', label: '宋体', family: "'Noto Serif SC', 'STSong', 'SimSun', serif" },
   { key: 'kaiti', label: '楷体', family: "'STKaiti', 'KaiTi', serif" },

@@ -19,8 +19,8 @@
 
 /* 自定义字体注册 */
 @font-face {
-  font-family: 'ChenYuluoyan';
-  src: url('./static/fonts/ChenYuluoyan-Thin.ttf') format('truetype');
+  font-family: 'ZhaiZaiJia';
+  src: url('./static/fonts/ZhaiZaiJia.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
