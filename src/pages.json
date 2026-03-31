@@ -169,6 +169,24 @@
       }
     },
     {
+      "path": "pages/plaza/post",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/plaza/detail",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/profile/avatar-memory",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/search/index",
       "style": {
         "navigationStyle": "custom"
