@@ -219,6 +219,33 @@
               @change="onMockToggle"
             />
           </view>
+
+          <view class="row row-border">
+            <view class="row-label-wrap">
+              <text class="row-label">后端地址</text>
+              <text class="row-hint">关闭 Mock 后生效，同局域网填同学电脑 IP</text>
+            </view>
+          </view>
+          <view class="api-url-wrap">
+            <input
+              v-model="apiBaseUrl"
+              class="api-url-input"
+              :placeholder="defaultApiUrl"
+              placeholder-class="api-url-placeholder"
+            />
+            <view class="api-url-actions">
+              <view class="api-url-btn api-url-btn--save" @click="saveApiUrl">
+                <text class="api-url-btn-text">保存</text>
+              </view>
+              <view class="api-url-btn api-url-btn--reset" @click="resetApiUrl">
+                <text class="api-url-btn-text api-url-btn-text--reset">重置</text>
+              </view>
+              <view class="api-url-btn api-url-btn--test" @click="testApiUrl">
+                <text class="api-url-btn-text api-url-btn-text--test">测试</text>
+              </view>
+            </view>
+            <text class="api-url-current">当前：{{ currentApiUrl }}</text>
+          </view>
         </view>
 
         <!-- 退出登录 -->
@@ -267,7 +294,7 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
-import { USE_MOCK, setMockMode } from '@/services/config'
+import { USE_MOCK, setMockMode, API_BASE_URL, setApiBaseUrl, getDefaultApiBaseUrl } from '@/services/config'
 import { useSettingsStore } from '@/stores/settings'
 
 const navPlaceholderHeight = ref(64)
@@ -452,6 +479,17 @@ function onOpenSource() {
 
 // ── 开发者选项 ──
 const mockMode = ref(USE_MOCK)
+const apiBaseUrl = ref('')
+const defaultApiUrl = getDefaultApiBaseUrl()
+const currentApiUrl = ref(API_BASE_URL)
+
+// 初始化时读取已保存的地址
+onMounted(() => {
+  // 如果当前地址不是默认地址，显示在输入框中
+  if (API_BASE_URL !== defaultApiUrl) {
+    apiBaseUrl.value = API_BASE_URL
+  }
+})
 
 function onMockToggle(e: any) {
   const val = e.detail.value as boolean
@@ -460,6 +498,46 @@ function onMockToggle(e: any) {
   uni.showToast({
     title: val ? 'Mock 模式已开启' : 'Mock 模式已关闭',
     icon: 'none',
+  })
+}
+
+function saveApiUrl() {
+  const url = apiBaseUrl.value.trim()
+  if (url && !url.startsWith('http')) {
+    uni.showToast({ title: '地址必须以 http:// 或 https:// 开头', icon: 'none' })
+    return
+  }
+  setApiBaseUrl(url)
+  currentApiUrl.value = API_BASE_URL
+  uni.showToast({ title: url ? '后端地址已保存' : '已恢复默认地址', icon: 'success' })
+}
+
+function resetApiUrl() {
+  apiBaseUrl.value = ''
+  setApiBaseUrl('')
+  currentApiUrl.value = API_BASE_URL
+  uni.showToast({ title: '已恢复默认地址', icon: 'success' })
+}
+
+async function testApiUrl() {
+  const testUrl = apiBaseUrl.value.trim() || defaultApiUrl
+  uni.showLoading({ title: '测试连接中...' })
+  uni.request({
+    url: `${testUrl.replace(/\/+$/, '')}/auth/health`,
+    method: 'GET',
+    timeout: 5000,
+    success(res) {
+      uni.hideLoading()
+      if (res.statusCode >= 200 && res.statusCode < 500) {
+        uni.showToast({ title: `✅ 连接成功 (${res.statusCode})`, icon: 'none' })
+      } else {
+        uni.showToast({ title: `⚠️ HTTP ${res.statusCode}`, icon: 'none' })
+      }
+    },
+    fail(err) {
+      uni.hideLoading()
+      uni.showToast({ title: '❌ 无法连接，检查地址和网络', icon: 'none', duration: 3000 })
+    },
   })
 }
 
@@ -686,6 +764,81 @@ function onLogout() {
   font-size: 22rpx;
   color: #AE9D92;
   margin-top: 4rpx;
+}
+
+/* 后端地址输入 */
+.api-url-wrap {
+  padding: 0 0 24rpx;
+  border-top: 1rpx solid rgba(174, 157, 146, 0.1);
+}
+
+.api-url-input {
+  width: 100%;
+  height: 72rpx;
+  font-size: 26rpx;
+  color: #2C1F14;
+  background: #FDF8F3;
+  border: 2rpx solid #EAE0D6;
+  border-radius: 12rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  margin-top: 16rpx;
+}
+
+.api-url-placeholder {
+  color: #D4C4B8;
+  font-size: 26rpx;
+}
+
+.api-url-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.api-url-btn {
+  flex: 1;
+  height: 60rpx;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:active { opacity: 0.8; }
+}
+
+.api-url-btn--save {
+  background: #9B59B6;
+}
+
+.api-url-btn--reset {
+  background: #F5F0EB;
+  border: 1rpx solid #EAE0D6;
+}
+
+.api-url-btn--test {
+  background: #5BBF8E;
+}
+
+.api-url-btn-text {
+  font-size: 26rpx;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+.api-url-btn-text--reset {
+  color: #4A3628;
+}
+
+.api-url-btn-text--test {
+  color: #FFFFFF;
+}
+
+.api-url-current {
+  display: block;
+  font-size: 22rpx;
+  color: #AE9D92;
+  margin-top: 12rpx;
+  word-break: break-all;
 }
 
 /* 字体预览面板 */
