@@ -29,7 +29,12 @@
           <view class="author-row">
             <image :src="post.authorAvatar" class="avatar" mode="aspectFill" />
             <view class="author-info">
-              <text class="author-name">{{ post.authorName }}</text>
+              <view class="author-name-row">
+                <text class="author-name">{{ post.authorName }}</text>
+                <view v-if="post.isFromAgent" class="agent-post-badge">
+                  <text class="agent-post-badge-text">🤖 分身代发</text>
+                </view>
+              </view>
               <text class="author-meta">{{ post.authorSchool }} · {{ post.authorMajor }}</text>
               <text class="post-time">{{ formatTime(post.createdAt) }}</text>
             </view>
@@ -364,6 +369,28 @@ function gridClass(count: number): string {
   font-size: 30rpx;
   font-weight: 600;
   color: #2C1F14;
+}
+
+.author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.agent-post-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4rpx 14rpx;
+  border-radius: 14rpx;
+  background: rgba(232, 133, 90, 0.12);
+  flex-shrink: 0;
+}
+
+.agent-post-badge-text {
+  font-size: 22rpx;
+  color: #E8855A;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .author-meta {

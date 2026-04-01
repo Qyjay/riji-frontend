@@ -112,7 +112,12 @@
             <view class="post-author-row">
               <image class="post-avatar" :src="item.authorAvatar" mode="aspectFill" />
               <view class="post-author-info">
-                <text class="post-author-name">{{ item.authorName }}</text>
+                <view class="post-author-name-row">
+                  <text class="post-author-name">{{ item.authorName }}</text>
+                  <view v-if="item.isFromAgent" class="agent-post-badge">
+                    <text class="agent-post-badge-text">🤖 分身代发</text>
+                  </view>
+                </view>
                 <text class="post-author-meta">{{ item.authorSchool }} · {{ formatTime(item.createdAt) }}</text>
               </view>
               <!-- 类型标签 -->
@@ -548,12 +553,34 @@ function formatTime(ts: number) {
   flex: 1;
 }
 
+.post-author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 4rpx;
+}
+
 .post-author-name {
   display: block;
   font-size: 28rpx;
   font-weight: 600;
   color: #2C1F14;
-  margin-bottom: 4rpx;
+}
+
+.agent-post-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2rpx 12rpx;
+  border-radius: 12rpx;
+  background: rgba(232, 133, 90, 0.12);
+  flex-shrink: 0;
+}
+
+.agent-post-badge-text {
+  font-size: 20rpx;
+  color: #E8855A;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .post-author-meta {
