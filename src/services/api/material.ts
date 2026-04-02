@@ -1,4 +1,4 @@
-import { USE_MOCK } from '../config'
+import { USE_MOCK, API_BASE_URL } from '../config'
 import { request } from '../request'
 import * as mock from '../mock/material'
 
@@ -66,5 +66,21 @@ export async function polishText(id: string, style: string): Promise<{ polished:
 
 export async function uploadVoice(filePath: string): Promise<{ url: string; transcription: string }> {
   if (USE_MOCK) return mock.uploadVoice(filePath)
-  return request<{ url: string; transcription: string }>({ url: '/materials/voice', method: 'POST', data: { filePath } })
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('token')
+    uni.uploadFile({
+      url: `${API_BASE_URL}/materials/voice`,
+      filePath,
+      name: 'file',
+      header: token ? { Authorization: `Bearer ${token}` } : {},
+      success: (res) => {
+        try {
+          const parsed = JSON.parse(res.data)
+          if (parsed.code === 0) resolve(parsed.data)
+          else reject(new Error(parsed.message || '上传失败'))
+        } catch { reject(new Error('解析响应失败')) }
+      },
+      fail: () => reject(new Error('上传失败')),
+    })
+  })
 }
