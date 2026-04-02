@@ -41,6 +41,7 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
       method: options.method || 'GET',
       data: options.data,
       header,
+      timeout: 10000,
       success(res) {
         // HTTP 401 → 清除 token，跳转登录页
         if (res.statusCode === 401) {

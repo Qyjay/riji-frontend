@@ -205,13 +205,16 @@ async function loadPost(id: string) {
     const [postData, commentsData, matches] = await Promise.all([
       getPostDetail(id),
       getPostComments(id),
-      getAgentMatches(),
+      getAgentMatches().catch(() => [] as AgentMatch[]),
     ])
     post.value = postData
     comments.value = commentsData
     // 查找与当前帖子匹配的分身对话
     const match = matches.find(m => m.postId === id)
     agentMatch.value = match ?? null
+  } catch (e) {
+    console.error('loadPost failed', e)
+    uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     loading.value = false
   }
