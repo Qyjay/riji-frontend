@@ -157,21 +157,51 @@ function closeActionSheet() {
 
 function chooseQuickCapture() {
   closeActionSheet()
-  // 直接打开相机，拍完跳转快拍页
-  uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: ['camera', 'album'],
-    success: (res) => {
-      const photoPath = res.tempFilePaths[0]
-      uni.navigateTo({ url: `/pages/write/quick-capture?photo=${encodeURIComponent(photoPath)}` })
-    },
-    fail: () => {
-      // H5 fallback: mock photo
-      const mockUrl = `https://picsum.photos/seed/${Date.now()}/800/600`
-      uni.navigateTo({ url: `/pages/write/quick-capture?photo=${encodeURIComponent(mockUrl)}` })
-    },
-  })
+  // 直接打开相机拍照，支持连续拍摄
+  const photos: string[] = []
+
+  function takeOne() {
+    uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['camera'],
+      success: (res) => {
+        photos.push(...res.tempFilePaths)
+        // 拍完一张后询问是否继续
+        if (photos.length >= 9) {
+          // 已达上限，直接跳转
+          goToCapturePage(photos)
+          return
+        }
+        uni.showModal({
+          title: `已拍 ${photos.length} 张`,
+          content: '继续拍照？',
+          confirmText: '继续拍',
+          cancelText: '完成',
+          success: (modal) => {
+            if (modal.confirm) {
+              takeOne()
+            } else {
+              goToCapturePage(photos)
+            }
+          },
+        })
+      },
+      fail: () => {
+        // 用户取消拍照
+        if (photos.length > 0) {
+          goToCapturePage(photos)
+        }
+      },
+    })
+  }
+
+  function goToCapturePage(imgs: string[]) {
+    const encoded = encodeURIComponent(JSON.stringify(imgs))
+    uni.navigateTo({ url: `/pages/write/quick-capture?photos=${encoded}` })
+  }
+
+  takeOne()
 }
 
 function chooseQuickWrite() {

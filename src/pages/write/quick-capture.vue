@@ -12,9 +12,19 @@
 
     <view class="content" :style="{ height: contentHeight + 'px' }">
       <!-- 照片预览 -->
-      <view class="photo-wrap">
-        <image class="photo-preview" :src="photoUrl" mode="aspectFill" />
+      <view v-if="photos.length === 1" class="photo-wrap">
+        <image class="photo-preview" :src="photos[0]" mode="aspectFill" />
       </view>
+      <scroll-view v-else-if="photos.length > 1" class="photo-scroll" scroll-x>
+        <view class="photo-list">
+          <view v-for="(photo, idx) in photos" :key="idx" class="photo-item">
+            <image class="photo-thumb-multi" :src="photo" mode="aspectFill" />
+            <view class="photo-remove" @click="removePhoto(idx)">
+              <text class="photo-remove-icon">×</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
 
       <!-- 输入区 -->
       <view class="input-card">
@@ -68,7 +78,7 @@ import { createMaterial, extractEmotion } from '@/services/api/material'
 
 const navPlaceholderHeight = ref(64)
 const contentHeight = ref(600)
-const photoUrl = ref('')
+const photos = ref<string[]>([])
 const caption = ref('')
 const saving = ref(false)
 const isRecording = ref(false)
@@ -76,8 +86,15 @@ const isRecording = ref(false)
 const today = new Date().toISOString().slice(0, 10)
 
 onLoad((query: Record<string, string> | undefined) => {
-  if (query?.photo) {
-    photoUrl.value = decodeURIComponent(query.photo)
+  // 兼容新格式（多张 JSON）和旧格式（单张）
+  if (query?.photos) {
+    try {
+      photos.value = JSON.parse(decodeURIComponent(query.photos))
+    } catch {
+      photos.value = [decodeURIComponent(query.photos)]
+    }
+  } else if (query?.photo) {
+    photos.value = [decodeURIComponent(query.photo)]
   }
 })
 
@@ -113,16 +130,25 @@ function stopRecording() {
   }, 800)
 }
 
+// ── 删除照片 ──
+function removePhoto(idx: number) {
+  photos.value.splice(idx, 1)
+  if (photos.value.length === 0) {
+    uni.navigateBack()
+  }
+}
+
 // ── 保存 ──
 async function handleSave() {
-  if (saving.value) return
+  if (saving.value || photos.value.length === 0) return
   saving.value = true
 
   try {
+    // 为每张照片创建一条素材
     const mat = await createMaterial({
       type: 'image',
       content: caption.value.trim() || undefined,
-      mediaUrl: photoUrl.value,
+      mediaUrl: photos.value[0],
       date: today,
     })
 
@@ -177,6 +203,54 @@ function handleBack() {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* 多张照片横滑 */
+.photo-scroll {
+  height: 360rpx;
+  margin-bottom: 24rpx;
+  white-space: nowrap;
+}
+
+.photo-list {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 8rpx;
+}
+
+.photo-item {
+  position: relative;
+  flex-shrink: 0;
+  width: 320rpx;
+  height: 340rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.1);
+}
+
+.photo-thumb-multi {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-remove-icon {
+  color: #FFFFFF;
+  font-size: 28rpx;
+  line-height: 1;
 }
 
 /* 输入区 */
