@@ -80,7 +80,7 @@
             <view class="tl-content">
               <text class="tl-time">{{ formatMatTime(mat.createdAt) }}</text>
               <text class="tl-type-icon">{{ matTypeIcon(mat.type) }}</text>
-              <text class="tl-text" :class="{ 'tl-text-clamp': mat.content.length > 20 }">{{ mat.content || '图片素材' }}</text>
+              <text class="tl-text" :class="{ 'tl-text-clamp': (mat.content || '').length > 20 }">{{ mat.content || '图片素材' }}</text>
               <text v-if="mat.emotion" class="tl-emotion">{{ mat.emotion.emoji }}</text>
             </view>
           </view>
