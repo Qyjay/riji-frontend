@@ -30,7 +30,7 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '南开大学东食堂' },
     emotion: { label: '开心', score: 0.88, emoji: '😊' },
     tags: ['美食', '幸福'],
-    date: '2026-03-25',
+    date: new Date().toISOString().split('T')[0],
     createdAt: now - 3600000,
   },
   {
@@ -43,7 +43,7 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '南开大学图书馆五楼' },
     emotion: { label: '平静', score: 0.72, emoji: '😌' },
     tags: ['风景', '学习'],
-    date: '2026-03-25',
+    date: new Date().toISOString().split('T')[0],
     createdAt: now - 7200000,
   },
   {
@@ -56,8 +56,8 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '宿舍' },
     emotion: { label: '激动', score: 0.91, emoji: '🎉' },
     tags: ['学习', '成就'],
-    date: '2026-03-24',
-    createdAt: now - day - 1800000,
+    date: new Date().toISOString().split('T')[0],
+    createdAt: now - 1800000,
   },
   {
     id: 'mat4',
@@ -69,8 +69,8 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '天津大学旁甜品店', lat: 39.1082, lng: 117.1593 },
     emotion: { label: '幸福', score: 0.85, emoji: '🥰' },
     tags: ['美食', '社交'],
-    date: '2026-03-24',
-    createdAt: now - day - 3600000,
+    date: new Date().toISOString().split('T')[0],
+    createdAt: now - 5400000,
   },
 ]
 

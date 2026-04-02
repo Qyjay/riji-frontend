@@ -4,7 +4,6 @@
     <CustomNavBar title="广场">
       <template #right>
         <view class="nav-right-icons">
-          <text class="nav-icon" @click="go('/pages/plaza/search')">🔍</text>
           <text class="nav-icon" @click="go('/pages/messages/notifications')">🔔</text>
         </view>
       </template>
@@ -18,6 +17,9 @@
       class="main-scroll"
       scroll-y
       :style="{ height: scrollHeight + 'px' }"
+      :refresher-enabled="true"
+      :refresher-triggered="refreshing"
+      @refresherrefresh="onRefresh"
       @scrolltolower="loadMore"
     >
       <!-- ② 频道 Tab 栏 -->
@@ -45,7 +47,48 @@
         <text class="avatar-status-arrow">›</text>
       </view>
 
-      <!-- ④ 信息流 -->
+      <!-- ③.5 搜索栏 -->
+      <view class="search-bar">
+        <view class="search-input-wrap">
+          <text class="search-icon">🔍</text>
+          <input
+            v-model="searchKeyword"
+            class="search-input"
+            placeholder="搜索帖子..."
+            placeholder-class="search-placeholder"
+            confirm-type="search"
+            @confirm="doSearch"
+            @input="onSearchInput"
+          />
+          <text v-if="searchKeyword" class="search-clear" @click="clearSearch">×</text>
+        </view>
+      </view>
+
+      <!-- ④ 工具箱折叠区（移至搜索栏下方） -->
+      <view class="toolbox-wrap">
+        <view class="toolbox-header" @click="toolboxExpanded = !toolboxExpanded">
+          <text class="toolbox-header-text">📦 工具箱</text>
+          <text class="toolbox-toggle">{{ toolboxExpanded ? '收起▲' : '展开▼' }}</text>
+        </view>
+        <view v-if="toolboxExpanded" class="toolbox-grid">
+          <view
+            v-for="item in toolboxItems"
+            :key="item.key"
+            class="toolbox-item"
+            @click="handleToolClick(item.key, item.toast)"
+          >
+            <view class="toolbox-icon-box" :style="{ borderColor: item.borderColor }">
+              <DoodleIcon :name="item.iconName" :color="item.iconColor" :size="52" />
+            </view>
+            <text class="toolbox-item-name">{{ item.name }}</text>
+            <view v-if="item.toast" class="toolbox-badge">
+              <text class="toolbox-badge-text">{{ item.toast }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- ⑤ 信息流 -->
       <view class="feed-list">
         <block v-for="(item, idx) in feedList" :key="item.id">
           <!-- 分身推荐卡片 -->
@@ -172,30 +215,6 @@
           <text class="feed-loading-text">没有更多了</text>
         </view>
 
-        <!-- ⑤ 工具箱折叠区 -->
-        <view class="toolbox-wrap">
-          <view class="toolbox-header" @click="toolboxExpanded = !toolboxExpanded">
-            <text class="toolbox-header-text">📦 工具箱</text>
-            <text class="toolbox-toggle">{{ toolboxExpanded ? '收起▲' : '展开▼' }}</text>
-          </view>
-          <view v-if="toolboxExpanded" class="toolbox-grid">
-            <view
-              v-for="(item, idx) in toolboxItems"
-              :key="item.key"
-              class="toolbox-item"
-              @click="handleToolClick(item.key, item.toast)"
-            >
-              <view class="toolbox-icon-box" :style="{ borderColor: item.borderColor }">
-                <DoodleIcon :name="item.iconName" :color="item.iconColor" :size="52" />
-              </view>
-              <text class="toolbox-item-name">{{ item.name }}</text>
-              <view v-if="item.toast" class="toolbox-badge">
-                <text class="toolbox-badge-text">{{ item.toast }}</text>
-              </view>
-            </view>
-          </view>
-        </view>
-
         <!-- 底部安全间距 -->
         <view class="bottom-spacer" />
       </view>
@@ -252,6 +271,43 @@ async function switchChannel(key: string) {
   await loadPosts()
 }
 
+// ── 搜索 ────────────────────────────────────────────────────────
+const searchKeyword = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+function onSearchInput() {
+  // 防抖：300ms 后自动搜索
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    doSearch()
+  }, 300)
+}
+
+function doSearch() {
+  page.value = 1
+  posts.value = []
+  noMore.value = false
+  loadPosts()
+}
+
+function clearSearch() {
+  searchKeyword.value = ''
+  doSearch()
+}
+
+// ── 下拉刷新 ────────────────────────────────────────────────────
+const refreshing = ref(false)
+
+async function onRefresh() {
+  refreshing.value = true
+  page.value = 1
+  posts.value = []
+  matches.value = []
+  noMore.value = false
+  await Promise.all([loadPosts(), loadAvatarStatus()])
+  refreshing.value = false
+}
+
 // ── 分身状态条 ──────────────────────────────────────────────────
 const avatarStatus = ref<AvatarStatus | null>(null)
 const avatarStatusText = computed(() => {
@@ -299,8 +355,8 @@ async function loadPosts() {
   loading.value = true
   try {
     const [postsRes, matchesRes] = await Promise.all([
-      getPlazaPosts(activeChannel.value || undefined, page.value),
-      page.value === 1 ? getAgentMatches() : Promise.resolve(null),
+      getPlazaPosts(activeChannel.value || undefined, page.value, 10, searchKeyword.value || undefined),
+      page.value === 1 && !searchKeyword.value ? getAgentMatches() : Promise.resolve(null),
     ])
     if (postsRes.items.length === 0) {
       noMore.value = true
@@ -516,6 +572,48 @@ function formatTime(ts: number) {
   font-size: 32rpx;
   color: #AE9D92;
   font-weight: 700;
+}
+
+/* ── ③.5 搜索栏 ──────────────────────────────────────────────── */
+.search-bar {
+  margin: 0 24rpx 16rpx;
+}
+
+.search-input-wrap {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  padding: 0 24rpx;
+  height: 72rpx;
+  border: 1px solid #E8DDD4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.search-icon {
+  font-size: 30rpx;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: #2C1F14;
+  height: 72rpx;
+}
+
+.search-placeholder {
+  color: #AE9D92;
+  font-size: 28rpx;
+}
+
+.search-clear {
+  font-size: 36rpx;
+  color: #AE9D92;
+  padding: 0 8rpx;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 /* ── ④ 信息流 ────────────────────────────────────────────────── */
@@ -858,7 +956,7 @@ function formatTime(ts: number) {
 .toolbox-wrap {
   background: #FFFFFF;
   border-radius: 20rpx;
-  margin-bottom: 20rpx;
+  margin: 0 24rpx 16rpx;
   overflow: hidden;
   border: 1px solid rgba(232, 133, 90, 0.08);
   box-shadow: 0 2px 8px rgba(44, 31, 20, 0.04);

@@ -382,12 +382,23 @@ export function getPlazaPosts(
   channel?: string,
   page = 1,
   pageSize = 10,
+  keyword?: string,
 ): { items: PlazaPost[]; total: number } {
   let list = [...mockPosts]
   if (channel && channel !== 'recommend') {
     const typeMap: Record<string, string> = { buddy: 'buddy', help: 'help', share: 'share', dating: 'dating' }
     const t = typeMap[channel]
     if (t) list = list.filter(p => p.type === t)
+  }
+  // 关键词搜索：匹配 content / tags / authorName / location
+  if (keyword && keyword.trim()) {
+    const q = keyword.trim().toLowerCase()
+    list = list.filter(p =>
+      p.content.toLowerCase().includes(q)
+      || p.authorName.toLowerCase().includes(q)
+      || (p.location && p.location.toLowerCase().includes(q))
+      || (p.tags && p.tags.some(t => t.toLowerCase().includes(q)))
+    )
   }
   list.sort((a, b) => b.createdAt - a.createdAt)
   const start = (page - 1) * pageSize

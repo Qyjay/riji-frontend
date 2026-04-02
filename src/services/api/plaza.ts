@@ -64,10 +64,12 @@ export async function getPlazaPosts(
   channel?: string,
   page = 1,
   pageSize = 10,
+  keyword?: string,
 ): Promise<{ items: PlazaPost[]; total: number }> {
-  if (USE_MOCK) return mock.getPlazaPosts(channel, page, pageSize)
+  if (USE_MOCK) return mock.getPlazaPosts(channel, page, pageSize, keyword)
   const params = new URLSearchParams()
   if (channel) params.set('channel', channel)
+  if (keyword) params.set('q', keyword)
   params.set('page', String(page))
   params.set('page_size', String(pageSize))
   const res = await request<{ items: PlazaPost[]; total: number }>({ url: `/plaza/posts?${params}` })

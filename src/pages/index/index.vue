@@ -42,7 +42,7 @@
       </view>
 
       <!-- ── 那年今日 ── -->
-      <view v-if="todayHistory.length > 0" class="memory-card stagger-item press-feedback">
+      <view v-if="todayHistory.length > 0" class="memory-card stagger-item press-feedback" @click="goDetail(todayHistory[0].diary.id)">
         <view class="memory-header">
           <text class="memory-icon">📅</text>
           <text class="memory-title">{{ todayHistory[0].yearsAgo }}年前的今天</text>

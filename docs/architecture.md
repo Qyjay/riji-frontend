@@ -62,7 +62,7 @@ scripts/
 
 主要路由：
 - `pages/index/index` — 首页（TabBar 第1项）
-- `pages/discover/index` — 发现（TabBar 第2项）
+- `pages/discover/index` — 广场 / 发现（TabBar 第2项，含帖子信息流 + 页内搜索 + 下拉刷新 + 工具箱）
 - `pages/write/index` — 素材收集（TabBar 中间浮动按钮）
 - `pages/messages/index` — 消息（TabBar 第4项）
 - `pages/profile/index` — 我的（TabBar 第5项）
