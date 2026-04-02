@@ -229,9 +229,8 @@ async function handleRegister() {
 }
 
 .field-input {
-  height: 88rpx;
-  line-height: 88rpx;
-  padding: 0 24rpx;
+  height: 96rpx;
+  padding: 24rpx;
   font-size: 32rpx;
   color: #2C1F14;
   border-bottom: 1px solid #EAE0D6;

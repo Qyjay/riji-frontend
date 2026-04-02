@@ -3,7 +3,7 @@
     <!-- 顶部：情绪 + 时间 + 更多 -->
     <view class="card-top">
       <view class="top-left">
-        <text class="emotion-emoji">{{ diary.emotion.emoji }}</text>
+        <text class="emotion-emoji">{{ diary.emotion?.emoji || '📝' }}</text>
         <text class="time-text">{{ formatTime(diary.createdAt) }}</text>
       </view>
       <view class="more-btn" @click.stop="handleMore">
