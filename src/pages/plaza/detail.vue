@@ -162,6 +162,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import {
   getPostDetail,
@@ -175,20 +176,21 @@ import type { PlazaPost, PlazaComment, AgentMatch } from '@/services/api/plaza'
 // 导航栏高度
 const navBarHeight = ref(64)
 const safeBottom = ref(0)
+const postId = ref('')
+
+onLoad((options: any) => {
+  postId.value = options?.id || ''
+})
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
   navBarHeight.value = (info.statusBarHeight ?? 20) + 44
   safeBottom.value = info.safeAreaInsets?.bottom ?? 0
 
-  // 获取页面参数
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  const options = currentPage?.options ?? {}
-  const id = options.id as string | undefined
-
-  if (id) {
-    await loadPost(id)
+  if (postId.value) {
+    await loadPost(postId.value)
+  } else {
+    loading.value = false
   }
 })
 
