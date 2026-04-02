@@ -5,9 +5,11 @@ const DEFAULT_API_BASE_URL = 'http://localhost:8000/api'
 
 function _readMock(): boolean {
   try {
-    return uni.getStorageSync('dev_mock_mode') === true
+    const saved = uni.getStorageSync('dev_mock_mode')
+    // 未设置过时默认开启 mock
+    return saved === undefined || saved === null || saved === '' ? true : saved === true
   } catch {
-    return false
+    return true
   }
 }
 
