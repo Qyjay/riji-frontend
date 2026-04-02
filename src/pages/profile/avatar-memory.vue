@@ -1039,7 +1039,7 @@ $need-bg: #FFFDF9;
 
 // ── 添加记忆 ─────────────────────────────────────────────────────────
 .add-memory-card {
-  border: 2px dashed #D4B8A8;
+  border: 1px dashed #D4B8A8;
   background: transparent;
   display: flex;
   justify-content: center;
@@ -1288,7 +1288,7 @@ $need-bg: #FFFDF9;
   width: 36rpx;
   height: 36rpx;
   border-radius: 8rpx;
-  border: 2px solid #D4B8A8;
+  border: 1px solid #D4B8A8;
   display: flex;
   align-items: center;
   justify-content: center;

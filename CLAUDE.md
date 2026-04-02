@@ -29,9 +29,9 @@ UniApp + Vue 3 + TypeScript 跨平台应用，AI 生活日记伙伴。
 ```
 src/
   pages/          # 页面
-  components/     # 公共组件（CustomNavBar, DoodleIcon, TabBar, SideDrawer）
+  components/     # 公共组件（CustomNavBar, DoodleIcon, TabBar, SideDrawer, ChatDetailSheet）
   common/         # 公共样式（animations.scss, design-tokens.scss, doodle.scss）
-  services/api/   # API 服务层
+  services/api/   # API 服务层（ai, auth, chat, diary, material, social, study, user, anniversary, plaza, avatar）
   static/         # 静态资源
 scripts/          # 测试脚本
 ```

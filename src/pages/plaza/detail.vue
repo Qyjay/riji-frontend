@@ -340,7 +340,7 @@ function gridClass(count: number): string {
 /* 帖子正文区 */
 .post-section {
   padding: 32rpx;
-  border-bottom: 8px solid #F0E8E0;
+  border-bottom: 1px solid #F0E8E0;
 }
 
 .author-row {
@@ -355,7 +355,7 @@ function gridClass(count: number): string {
   height: 88rpx;
   border-radius: 50%;
   flex-shrink: 0;
-  border: 2px solid #E8DDD4;
+  border: 1px solid #E8DDD4;
 }
 
 .author-info {
@@ -500,7 +500,7 @@ function gridClass(count: number): string {
 /* 分区通用 */
 .section {
   padding: 24rpx 32rpx;
-  border-bottom: 8px solid #F0E8E0;
+  border-bottom: 1px solid #F0E8E0;
 }
 
 .section-header {

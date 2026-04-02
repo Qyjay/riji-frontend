@@ -5,6 +5,22 @@ const day = 86400000
 
 const mockMaterials: RawMaterial[] = [
   {
+    id: 'mock-chat-1',
+    userId: 'user1',
+    type: 'chat' as const,
+    content: '下午和小李骑车去了海河边，阳光很好，聊了很多暑假计划',
+    mediaUrl: '',
+    thumbnailUrl: '',
+    location: {},
+    emotion: { label: '开心', score: 0.88, emoji: '😊' },
+    tags: ['骑行', '户外'],
+    date: new Date().toISOString().split('T')[0],
+    createdAt: Date.now() - 7200000,
+    chatSessionId: 'mock-session-1',
+    startTime: Date.now() - 7200000,
+    endTime: Date.now() - 6480000,
+  },
+  {
     id: 'mat1',
     userId: 'user1',
     type: 'text',

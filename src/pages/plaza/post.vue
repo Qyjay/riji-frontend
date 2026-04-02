@@ -338,7 +338,7 @@ async function handlePublish() {
   width: 160rpx;
   height: 160rpx;
   border-radius: 12rpx;
-  border: 2px dashed #C8B8AE;
+  border: 1px dashed #C8B8AE;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -431,7 +431,7 @@ async function handlePublish() {
   width: 36rpx;
   height: 36rpx;
   border-radius: 8rpx;
-  border: 2px solid #C8B8AE;
+  border: 1px solid #C8B8AE;
   display: flex;
   align-items: center;
   justify-content: center;

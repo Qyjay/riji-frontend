@@ -40,6 +40,7 @@ src/
     TabBar.vue
     SideDrawer.vue
     DiaryCard.vue
+    ChatDetailSheet.vue
   common/           # 公共样式
     animations.scss
     design-tokens.scss
@@ -77,7 +78,7 @@ scripts/
 export * from './api/diary'   // or mock/diary
 ```
 
-API 模块：`ai`, `diary`, `social`, `study`, `user`, `anniversary`, `material`, `auth`
+API 模块：`ai`, `chat`, `diary`, `social`, `study`, `user`, `anniversary`, `material`, `auth`
 
 ## 设计系统
 

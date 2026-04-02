@@ -203,6 +203,61 @@
           </view>
         </view>
 
+        <!-- ── 对话素材 ── -->
+        <view class="card">
+          <text class="card-title">── 对话素材 ──</text>
+
+          <!-- 总开关 -->
+          <view class="row">
+            <text class="row-label">对话自动记录为素材</text>
+            <switch
+              class="row-switch"
+              :checked="chatSettings.enabled"
+              color="#7C6FE3"
+              @change="chatSettings.enabled = $event.detail.value; saveChatSettings()"
+            />
+          </view>
+          <view class="row-hint-wrap">
+            <text class="row-hint-text">开启后，与 AI 伙伴的对话会自动整理为素材，参与每日日记生成</text>
+          </view>
+
+          <!-- 静默阈值 -->
+          <view class="row row-border" @click="showSilenceThresholdPicker">
+            <text class="row-label">静默间隔</text>
+            <view class="row-right">
+              <text class="row-value">{{ chatSettings.silenceThreshold }} 分钟 ▼</text>
+            </view>
+          </view>
+          <view class="row-hint-wrap">
+            <text class="row-hint-text">超过此时间未发消息，自动将前段对话整理为素材</text>
+          </view>
+
+          <!-- 最少轮数 -->
+          <view class="row row-border" @click="showMinRoundsPicker">
+            <text class="row-label">最少对话轮数</text>
+            <view class="row-right">
+              <text class="row-value">{{ chatSettings.minRounds }} 轮 ▼</text>
+            </view>
+          </view>
+          <view class="row-hint-wrap">
+            <text class="row-hint-text">对话不足此轮数时不生成素材</text>
+          </view>
+
+          <!-- toast 开关 -->
+          <view class="row row-border">
+            <text class="row-label">生成时提示</text>
+            <switch
+              class="row-switch"
+              :checked="chatSettings.toast"
+              color="#7C6FE3"
+              @change="chatSettings.toast = $event.detail.value; saveChatSettings()"
+            />
+          </view>
+          <view class="row-hint-wrap">
+            <text class="row-hint-text">素材生成时显示「已记录为今日素材 ✓」提示</text>
+          </view>
+        </view>
+
         <!-- ── 开发者选项 ── -->
         <view class="card dev-card">
           <text class="card-title">── 开发者选项 ──</text>
@@ -296,6 +351,7 @@ import { reactive, ref, onMounted, computed } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { USE_MOCK, setMockMode, API_BASE_URL, setApiBaseUrl, getDefaultApiBaseUrl } from '@/services/config'
 import { useSettingsStore } from '@/stores/settings'
+import { getSettings, updateSettings } from '@/services/api/user'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -461,6 +517,62 @@ function showDiaryFontPicker() {
 function pickDiaryFont(key: string) {
   settingsStore.diaryFont = key as any
   uni.showToast({ title: `已切换为「${diaryFontOptions.find(o => o.key === key)?.label}」`, icon: 'none' })
+}
+
+// ── 对话素材设置 ──
+const chatSettings = reactive({
+  enabled: true,
+  silenceThreshold: 30,
+  minRounds: 3,
+  toast: true,
+})
+
+// 初始化加载 chat 设置
+onMounted(async () => {
+  try {
+    const settingsData = await getSettings() as any
+    chatSettings.enabled = settingsData.chatMaterialEnabled ?? true
+    chatSettings.silenceThreshold = settingsData.chatSilenceThreshold ?? 30
+    chatSettings.minRounds = settingsData.chatMinRounds ?? 3
+    chatSettings.toast = settingsData.chatMaterialToast ?? true
+  } catch {
+    // 使用默认值
+  }
+})
+
+async function saveChatSettings() {
+  try {
+    await updateSettings({
+      chat_material_enabled: chatSettings.enabled,
+      chat_silence_threshold: chatSettings.silenceThreshold,
+      chat_material_toast: chatSettings.toast,
+      chat_min_rounds: chatSettings.minRounds,
+    } as any)
+  } catch (e) {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  }
+}
+
+const silenceOptions = [15, 20, 30, 45, 60, 90, 120]
+function showSilenceThresholdPicker() {
+  uni.showActionSheet({
+    itemList: silenceOptions.map(v => `${v} 分钟`),
+    success: (res) => {
+      chatSettings.silenceThreshold = silenceOptions[res.tapIndex]
+      saveChatSettings()
+    },
+  })
+}
+
+const roundOptions = [1, 2, 3, 5, 8, 10, 15, 20]
+function showMinRoundsPicker() {
+  uni.showActionSheet({
+    itemList: roundOptions.map(v => `${v} 轮`),
+    success: (res) => {
+      chatSettings.minRounds = roundOptions[res.tapIndex]
+      saveChatSettings()
+    },
+  })
 }
 
 // ── 关于 ──
@@ -764,6 +876,16 @@ function onLogout() {
   font-size: 22rpx;
   color: #AE9D92;
   margin-top: 4rpx;
+}
+
+.row-hint-wrap {
+  padding: 0 0 16rpx;
+}
+
+.row-hint-text {
+  font-size: 22rpx;
+  color: #AE9D92;
+  line-height: 1.5;
 }
 
 /* 后端地址输入 */

@@ -5,7 +5,7 @@ import * as mock from '../mock/material'
 export interface RawMaterial {
   id: string
   userId: string
-  type: 'image' | 'voice' | 'text'
+  type: 'image' | 'voice' | 'text' | 'chat'
   content: string
   mediaUrl: string
   thumbnailUrl: string
@@ -14,6 +14,10 @@ export interface RawMaterial {
   tags: string[]
   date: string  // "2026-03-25"
   createdAt: number
+  // chat 专属字段
+  chatSessionId?: string
+  startTime?: number
+  endTime?: number
 }
 
 export interface PolishRequest {

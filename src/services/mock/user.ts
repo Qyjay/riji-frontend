@@ -90,13 +90,22 @@ export function getAchievements(): Achievement[] {
   ]
 }
 
-export function getSettings(): Settings {
+export function getSettings(): Settings & {
+  chatMaterialEnabled: boolean
+  chatSilenceThreshold: number
+  chatMaterialToast: boolean
+  chatMinRounds: number
+} {
   return {
     theme: 'light',
     notifications: true,
     autoBGM: false,
     diaryPrivacy: 'private',
     language: 'zh-CN',
+    chatMaterialEnabled: true,
+    chatSilenceThreshold: 30,
+    chatMaterialToast: true,
+    chatMinRounds: 3,
   }
 }
 

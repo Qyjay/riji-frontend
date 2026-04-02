@@ -118,12 +118,14 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
+import { onUnload } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { getUserProfile } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
 import { chat, getChatHistory } from '@/services/api/ai'
 import type { ChatMessage } from '@/services/api/ai'
+import { closeSession } from '@/services/api/chat'
 
 const quickActions = [
   { iconName: 'pen',     iconColor: '#E8855A', label: '记录素材', path: '/pages/write/index' },
@@ -160,6 +162,22 @@ async function scrollToBottom() {
     scrollIntoId.value = isStreaming.value ? 'streaming-msg' : `msg-${lastIdx}`
   }, 50)
 }
+
+// 页面卸载时，主动关闭对话段
+onUnload(async () => {
+  try {
+    const result = await closeSession()
+    if (result.materialGenerated) {
+      uni.showToast({
+        title: '已记录为今日素材 ✓',
+        icon: 'none',
+        duration: 1500,
+      })
+    }
+  } catch (e) {
+    // 静默失败
+  }
+})
 
 async function handleSend() {
   const text = inputText.value.trim()

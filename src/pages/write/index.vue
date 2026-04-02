@@ -87,20 +87,44 @@
           :key="item.id"
           class="today-item"
         >
-          <view class="item-header">
-            <text class="item-time">{{ formatTime(item.createdAt) }}</text>
-            <text class="item-type-icon">{{ typeIcon(item.type) }}</text>
-            <text v-if="item.emotion && item.emotion.emoji" class="item-emotion-emoji">{{ item.emotion.emoji }}</text>
-          </view>
-          <view class="item-body">
-            <image
-              v-if="item.type === 'image' && (item.mediaUrl || item.content)"
-              class="item-image"
-              :src="item.mediaUrl || item.content"
-              mode="aspectFill"
-            />
-            <text v-else class="item-text">{{ item.content }}</text>
-          </view>
+          <!-- 💬 对话素材卡片 -->
+          <template v-if="item.type === 'chat'">
+            <view class="chat-material" @click="openChatDetail(item)">
+              <view class="chat-left">
+                <view class="chat-indicator" />
+                <text class="chat-time">{{ formatTimeRange(item.startTime, item.endTime) }}</text>
+              </view>
+              <view class="chat-body">
+                <view class="chat-header-row">
+                  <text class="chat-icon">💬</text>
+                  <text class="chat-title">{{ getChatTitle(item) }}</text>
+                  <text v-if="item.emotion?.emoji" class="chat-mood-emoji">{{ item.emotion.emoji }}</text>
+                </view>
+                <text class="chat-summary">{{ item.content }}</text>
+                <view class="chat-expand-row">
+                  <text class="chat-expand-text">展开对话 ›</text>
+                </view>
+              </view>
+            </view>
+          </template>
+
+          <!-- 原有素材卡片 -->
+          <template v-else>
+            <view class="item-header">
+              <text class="item-time">{{ formatTime(item.createdAt) }}</text>
+              <text class="item-type-icon">{{ typeIcon(item.type) }}</text>
+              <text v-if="item.emotion && item.emotion.emoji" class="item-emotion-emoji">{{ item.emotion.emoji }}</text>
+            </view>
+            <view class="item-body">
+              <image
+                v-if="item.type === 'image' && (item.mediaUrl || item.content)"
+                class="item-image"
+                :src="item.mediaUrl || item.content"
+                mode="aspectFill"
+              />
+              <text v-else class="item-text">{{ item.content }}</text>
+            </view>
+          </template>
         </view>
 
         <view v-if="!loadingMaterials && todayMaterials.length === 0" class="empty-today">
@@ -148,6 +172,13 @@
         <text class="toolbar-save-text">{{ saving ? '保存中...' : '✓ 保存' }}</text>
       </view>
     </view>
+    <!-- ── 对话详情 Bottom Sheet ── -->
+    <ChatDetailSheet
+      :visible="chatDetailVisible"
+      :session="chatDetailData?.session ?? null"
+      :messages="chatDetailData?.messages ?? []"
+      @close="chatDetailVisible = false"
+    />
   </view>
 </template>
 
@@ -157,6 +188,8 @@ import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { createMaterial, getMaterials, extractEmotion } from '@/services/api/material'
 import type { RawMaterial } from '@/services/api/material'
+import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
+import ChatDetailSheet from '@/components/ChatDetailSheet.vue'
 
 // ── 布局 ──
 const navPlaceholderHeight = ref(64)
@@ -315,6 +348,36 @@ async function handleSave() {
   }
 }
 
+// ── 对话素材 ──
+const chatDetailVisible = ref(false)
+const chatDetailData = ref<SessionMessagesResult | null>(null)
+
+function formatTimeRange(start?: number, end?: number): string {
+  if (!start) return ''
+  const fmt = (ts: number) => {
+    const d = new Date(ts)
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+  }
+  if (!end) return fmt(start)
+  return `${fmt(start)} ~ ${fmt(end)}`
+}
+
+function getChatTitle(mat: RawMaterial): string {
+  const firstSentence = mat.content?.split(/[。！？\n]/)?.[0] || '对话记录'
+  return firstSentence.length > 15 ? firstSentence.slice(0, 15) + '...' : firstSentence
+}
+
+async function openChatDetail(mat: RawMaterial) {
+  if (!mat.chatSessionId) return
+  try {
+    const data = await getSessionMessages(mat.chatSessionId)
+    chatDetailData.value = data
+    chatDetailVisible.value = true
+  } catch (e) {
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
+}
+
 // ── 工具函数 ──
 function formatTime(ts: number): string {
   const d = new Date(ts)
@@ -326,6 +389,7 @@ function formatTime(ts: number): string {
 function typeIcon(type: string): string {
   if (type === 'image') return '📷'
   if (type === 'voice') return '🎤'
+  if (type === 'chat') return '💬'
   return '📝'
 }
 
@@ -580,6 +644,81 @@ function handleBack() {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ── 对话素材卡片 ── */
+.chat-material {
+  display: flex;
+  gap: 16rpx;
+}
+
+.chat-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding-top: 4rpx;
+}
+
+.chat-indicator {
+  width: 6rpx;
+  min-height: 60rpx;
+  flex: 1;
+  background: #7C6FE3;
+  border-radius: 3rpx;
+}
+
+.chat-time {
+  font-size: 20rpx;
+  color: #AE9D92;
+  white-space: nowrap;
+}
+
+.chat-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.chat-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.chat-icon {
+  font-size: 28rpx;
+}
+
+.chat-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2C1F14;
+  flex: 1;
+}
+
+.chat-mood-emoji {
+  font-size: 24rpx;
+}
+
+.chat-summary {
+  font-size: 26rpx;
+  color: #4A3628;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+}
+
+.chat-expand-row {
+  margin-top: 4rpx;
+}
+
+.chat-expand-text {
+  font-size: 24rpx;
+  color: #7C6FE3;
 }
 
 .empty-today {

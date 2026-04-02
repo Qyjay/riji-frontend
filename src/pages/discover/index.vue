@@ -680,7 +680,7 @@ function formatTime(ts: number) {
 }
 
 .match-card-left-bar {
-  width: 3px;
+  width: 6rpx;
   background: #E8855A;
   flex-shrink: 0;
 }
