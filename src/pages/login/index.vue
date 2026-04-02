@@ -17,12 +17,16 @@
       <!-- 登录 -->
       <view v-if="mode === 'login'" class="form">
         <view class="field">
-          <text class="field-label">用户名</text>
-          <input class="field-input" v-model="loginForm.username" placeholder="请输入用户名" placeholder-class="placeholder" maxlength="20" />
+          <view class="field-label-wrap"><text class="field-label">用户名</text></view>
+          <view class="field-input-wrap">
+            <input class="field-input" v-model="loginForm.username" placeholder="请输入用户名" placeholder-class="placeholder" maxlength="20" :adjust-position="true" />
+          </view>
         </view>
         <view class="field">
-          <text class="field-label">密码</text>
-          <input class="field-input" v-model="loginForm.password" placeholder="请输入密码" placeholder-class="placeholder" password maxlength="32" />
+          <view class="field-label-wrap"><text class="field-label">密码</text></view>
+          <view class="field-input-wrap">
+            <input class="field-input" v-model="loginForm.password" placeholder="请输入密码" placeholder-class="placeholder" password maxlength="32" :adjust-position="true" />
+          </view>
         </view>
         <button class="btn-primary" :disabled="submitting" @tap="handleLogin">
           {{ submitting ? '登录中...' : '登录' }}
@@ -32,20 +36,28 @@
       <!-- 注册 -->
       <view v-if="mode === 'register'" class="form">
         <view class="field">
-          <text class="field-label">用户名</text>
-          <input class="field-input" v-model="registerForm.username" placeholder="4-20 个字符" placeholder-class="placeholder" maxlength="20" />
+          <view class="field-label-wrap"><text class="field-label">用户名</text></view>
+          <view class="field-input-wrap">
+            <input class="field-input" v-model="registerForm.username" placeholder="4-20 个字符" placeholder-class="placeholder" maxlength="20" :adjust-position="true" />
+          </view>
         </view>
         <view class="field">
-          <text class="field-label">密码</text>
-          <input class="field-input" v-model="registerForm.password" placeholder="6-32 个字符" placeholder-class="placeholder" password maxlength="32" />
+          <view class="field-label-wrap"><text class="field-label">密码</text></view>
+          <view class="field-input-wrap">
+            <input class="field-input" v-model="registerForm.password" placeholder="6-32 个字符" placeholder-class="placeholder" password maxlength="32" :adjust-position="true" />
+          </view>
         </view>
         <view class="field">
-          <text class="field-label">昵称</text>
-          <input class="field-input" v-model="registerForm.name" placeholder="选填" placeholder-class="placeholder" maxlength="20" />
+          <view class="field-label-wrap"><text class="field-label">昵称</text></view>
+          <view class="field-input-wrap">
+            <input class="field-input" v-model="registerForm.name" placeholder="选填" placeholder-class="placeholder" maxlength="20" :adjust-position="true" />
+          </view>
         </view>
         <view class="field">
-          <text class="field-label">学校</text>
-          <input class="field-input" v-model="registerForm.school" placeholder="选填" placeholder-class="placeholder" maxlength="40" />
+          <view class="field-label-wrap"><text class="field-label">学校</text></view>
+          <view class="field-input-wrap">
+            <input class="field-input" v-model="registerForm.school" placeholder="选填" placeholder-class="placeholder" maxlength="40" :adjust-position="true" />
+          </view>
         </view>
         <button class="btn-primary" :disabled="submitting" @tap="handleRegister">
           {{ submitting ? '注册中...' : '注册' }}
@@ -213,13 +225,14 @@ async function handleRegister() {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 40rpx;
 }
 
 .field {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
+  margin-bottom: 40rpx;
+}
+
+.field-label-wrap {
+  margin-bottom: 16rpx;
 }
 
 .field-label {
@@ -228,15 +241,18 @@ async function handleRegister() {
   font-weight: 500;
 }
 
+.field-input-wrap {
+  border-bottom: 1px solid #EAE0D6;
+  padding: 12rpx 0;
+}
+
 .field-input {
-  height: 96rpx;
-  padding: 24rpx;
+  height: 72rpx;
   font-size: 32rpx;
   color: #2C1F14;
-  border-bottom: 1px solid #EAE0D6;
   background: transparent;
   width: 100%;
-  box-sizing: border-box;
+  padding: 0 8rpx;
 }
 
 .placeholder {
