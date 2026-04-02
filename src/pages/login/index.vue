@@ -229,11 +229,15 @@ async function handleRegister() {
 }
 
 .field-input {
-  padding: 20rpx 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 24rpx;
   font-size: 32rpx;
   color: #2C1F14;
   border-bottom: 1px solid #EAE0D6;
   background: transparent;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .placeholder {
