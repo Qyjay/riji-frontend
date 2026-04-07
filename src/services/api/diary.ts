@@ -41,7 +41,7 @@ export interface DiaryDerivative {
 
 export async function generateDiary(date: string, weather?: string): Promise<Diary> {
   if (USE_MOCK) return mock.generateDiary(date, weather)
-  return request<Diary>({ url: '/diaries/generate', method: 'POST', data: { date, weather } })
+  return request<Diary>({ url: '/diaries/generate', method: 'POST', data: { date, weather }, timeout: 60000 })
 }
 
 export async function getDiaries(page = 1, pageSize = 10): Promise<{ list: Diary[]; total: number }> {
@@ -58,6 +58,11 @@ export async function getDiaryDetail(id: string): Promise<Diary> {
 export async function updateDiary(id: string, content: string): Promise<Diary> {
   if (USE_MOCK) return mock.updateDiary(id, content)
   return request<Diary>({ url: `/diaries/${id}`, method: 'PUT', data: { content } })
+}
+
+export async function deleteDiary(id: string): Promise<void> {
+  if (USE_MOCK) return
+  return request<void>({ url: `/diaries/${id}`, method: 'DELETE' })
 }
 
 export async function getEmotionTrend(id: string): Promise<{ dominant: string; trend: Array<{ hour: number; label: string; score: number }> }> {

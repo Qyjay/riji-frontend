@@ -97,13 +97,17 @@
           <text class="gen-text">{{ generatingDiary ? 'AI 生成中...' : '生成今日日记' }}</text>
         </view>
 
-        <!-- 已有日记时显示查看按钮 -->
+        <!-- 已有日记时显示查看和重写按钮 -->
         <view
           v-if="todaySummary && todaySummary.has_diary"
-          class="view-diary-btn press-feedback"
-          @click="goDetail(todaySummary!.diary_id!)"
+          class="diary-actions"
         >
-          <text class="view-diary-text">查看今日日记 →</text>
+          <view class="view-diary-btn press-feedback" @click="goDetail(todaySummary!.diary_id!)">
+            <text class="view-diary-text">查看</text>
+          </view>
+          <view class="regenerate-btn press-feedback" :class="{ regenerating: regeneratingDiary }" @click="handleRegenerateDiary">
+            <text class="regenerate-text">{{ regeneratingDiary ? '重写中...' : '重写日记 ✨' }}</text>
+          </view>
         </view>
       </view>
 
@@ -203,7 +207,7 @@ import SideDrawer from '@/components/SideDrawer.vue'
 import DiaryCard from '@/components/DiaryCard.vue'
 import TabBar from '@/components/TabBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
-import { getDiaries, generateDiary, getTodaySummary } from '@/services/api/diary'
+import { getDiaries, generateDiary, getTodaySummary, deleteDiary } from '@/services/api/diary'
 import type { Diary, TodaySummary } from '@/services/api/diary'
 import { getTodayAnniversaries } from '@/services/api/anniversary'
 import type { Anniversary } from '@/services/api/anniversary'
@@ -222,6 +226,7 @@ const todayHistory = ref<Array<{ diary: any; yearsAgo: number }>>([])
 // 今日摘要
 const todaySummary = ref<TodaySummary | null>(null)
 const generatingDiary = ref(false)
+const regeneratingDiary = ref(false)
 
 // 状态栏 + NavBar 占位高度（px）
 const navPlaceholderHeight = ref(64) // 默认值，onMounted 后更新
@@ -275,6 +280,39 @@ async function handleGenerateDiary() {
     uni.hideLoading()
     generatingDiary.value = false
     uni.showToast({ title: '生成失败，请重试', icon: 'none' })
+  }
+}
+
+async function handleRegenerateDiary() {
+  if (regeneratingDiary.value) return
+  const res = await uni.showModal({
+    title: '确认重写',
+    content: '确定要删除今日日记并重新生成吗？此操作不可恢复。',
+    confirmText: '重写',
+    confirmColor: '#E8855A',
+    cancelText: '取消',
+  })
+  if (res.confirm !== true) return
+
+  regeneratingDiary.value = true
+  uni.showLoading({ title: '重写中...', mask: true })
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    // 先删除旧日记
+    if (todaySummary.value?.diary_id) {
+      await deleteDiary(todaySummary.value.diary_id)
+    }
+    // 再生成新日记
+    const diary = await generateDiary(today, '多云 18°C')
+    uni.hideLoading()
+    regeneratingDiary.value = false
+    uni.navigateTo({
+      url: `/pages/diary/preview?id=${diary.id}&title=${encodeURIComponent(diary.title)}&content=${encodeURIComponent(diary.content)}&editCount=${diary.editCount}&maxEdits=${diary.maxEdits}`
+    })
+  } catch {
+    uni.hideLoading()
+    regeneratingDiary.value = false
+    uni.showToast({ title: '重写失败，请重试', icon: 'none' })
   }
 }
 
@@ -649,6 +687,30 @@ function onActionClick(payload: { action: string; diaryId: string }) {
 .view-diary-text {
   font-size: 28rpx;
   color: #E8855A;
+  font-weight: 600;
+}
+
+/* 日记操作按钮容器 */
+.diary-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+/* 重写日记按钮 */
+.regenerate-btn {
+  flex: 1;
+  background: linear-gradient(135deg, #E8855A 0%, #F5A623 100%);
+  border-radius: 16rpx;
+  padding: 16rpx;
+  text-align: center;
+  &:active { opacity: 0.8; }
+  &.regenerating { opacity: 0.6; }
+}
+
+.regenerate-text {
+  font-size: 28rpx;
+  color: #FFFFFF;
   font-weight: 600;
 }
 

@@ -159,6 +159,7 @@ import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend } from
 import type { Diary } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { API_BASE_URL } from '@/services/config'
 
 const diary = ref<Diary | null>(null)
 const loading = ref(true)
@@ -196,6 +197,19 @@ interface ContentBlock {
   src?: string
 }
 
+// 辅助函数：将相对路径转换为完整 URL
+function toFullUrl(path: string): string {
+  if (path && path.startsWith('/')) {
+    // /uploads/ 路径不走 /api，直接用 host
+    if (path.startsWith('/uploads/')) {
+      const host = API_BASE_URL.replace(/\/api$/, '')
+      return `${host}${path}`
+    }
+    return `${API_BASE_URL}${path}`
+  }
+  return path
+}
+
 const contentBlocks = computed<ContentBlock[]>(() => {
   if (!diary.value) return []
   const content = diary.value.content || ''
@@ -211,7 +225,7 @@ const contentBlocks = computed<ContentBlock[]>(() => {
 
   if (paragraphs.length === 0) {
     // 没有文字，只展示图片
-    images.forEach(src => blocks.push({ type: 'image', src }))
+    images.forEach(src => blocks.push({ type: 'image', src: toFullUrl(src) }))
     return blocks
   }
 
@@ -224,14 +238,14 @@ const contentBlocks = computed<ContentBlock[]>(() => {
 
     // 每隔 imgInterval 段插入一张图
     if (imgIdx < images.length && (i + 1) % imgInterval === 0) {
-      blocks.push({ type: 'image', src: images[imgIdx] })
+      blocks.push({ type: 'image', src: toFullUrl(images[imgIdx]) })
       imgIdx++
     }
   }
 
   // 剩余图片追加到末尾
   while (imgIdx < images.length) {
-    blocks.push({ type: 'image', src: images[imgIdx] })
+    blocks.push({ type: 'image', src: toFullUrl(images[imgIdx]) })
     imgIdx++
   }
 

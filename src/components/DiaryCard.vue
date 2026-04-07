@@ -53,6 +53,7 @@
 import { computed } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import type { Diary } from '@/services/api/diary'
+import { API_BASE_URL } from '@/services/config'
 
 const props = defineProps<{
   diary: Diary
@@ -75,7 +76,18 @@ function formatTime(ts: number): string {
 const maxShow = 9
 const displayImages = computed(() => {
   const imgs = props.diary.images ?? []
-  return imgs.slice(0, maxShow)
+  return imgs.slice(0, maxShow).map(img => {
+    // 相对路径拼接完整 URL
+    if (img && img.startsWith('/')) {
+      // /uploads/ 路径不走 /api，直接用 host
+      if (img.startsWith('/uploads/')) {
+        const host = API_BASE_URL.replace(/\/api$/, '')
+        return `${host}${img}`
+      }
+      return `${API_BASE_URL}${img}`
+    }
+    return img
+  })
 })
 
 const overflowCount = computed(() => {

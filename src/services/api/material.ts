@@ -84,3 +84,27 @@ export async function uploadVoice(filePath: string): Promise<{ url: string; tran
     })
   })
 }
+
+export async function uploadDiaryImage(filePath: string): Promise<{ url: string; thumbnailUrl: string; location: any }> {
+  if (USE_MOCK) {
+    // Mock 模式直接返回本地路径
+    return { url: filePath, thumbnailUrl: filePath, location: null }
+  }
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('token')
+    uni.uploadFile({
+      url: `${API_BASE_URL}/upload/diary-image`,
+      filePath,
+      name: 'file',
+      header: token ? { Authorization: `Bearer ${token}` } : {},
+      success: (res) => {
+        try {
+          const parsed = JSON.parse(res.data)
+          if (parsed.code === 0) resolve(parsed.data)
+          else reject(new Error(parsed.message || '上传失败'))
+        } catch { reject(new Error('解析响应失败')) }
+      },
+      fail: () => reject(new Error('上传失败')),
+    })
+  })
+}

@@ -114,12 +114,15 @@
               <text class="item-time">{{ formatTime(item.createdAt) }}</text>
               <text class="item-type-icon">{{ typeIcon(item.type) }}</text>
               <text v-if="item.emotion && item.emotion.emoji" class="item-emotion-emoji">{{ item.emotion.emoji }}</text>
+              <view class="item-delete-btn press-feedback" @click.stop="handleDeleteMaterial(item.id)">
+                <text class="item-delete-icon">×</text>
+              </view>
             </view>
             <view class="item-body">
               <image
                 v-if="item.type === 'image' && (item.mediaUrl || item.content)"
                 class="item-image"
-                :src="item.mediaUrl || item.content"
+                :src="toFullUrl(item.mediaUrl || item.content)"
                 mode="aspectFill"
               />
               <text v-else class="item-text">{{ item.content }}</text>
@@ -186,7 +189,8 @@
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
-import { createMaterial, getMaterials, extractEmotion } from '@/services/api/material'
+import { createMaterial, getMaterials, extractEmotion, uploadDiaryImage, deleteMaterial } from '@/services/api/material'
+import { API_BASE_URL } from '@/services/config'
 import type { RawMaterial } from '@/services/api/material'
 import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
 import ChatDetailSheet from '@/components/ChatDetailSheet.vue'
@@ -308,7 +312,9 @@ async function handleSave() {
 
     if (photos.value.length > 0) {
       type = 'image'
-      mediaUrl = photos.value[0]
+      // 先上传图片，获取永久 URL
+      const uploaded = await uploadDiaryImage(photos.value[0])
+      mediaUrl = uploaded.url
     }
 
     const content = textInput.value.trim()
@@ -391,6 +397,39 @@ function typeIcon(type: string): string {
   if (type === 'voice') return '🎤'
   if (type === 'chat') return '💬'
   return '📝'
+}
+
+// 辅助函数：将相对路径转换为完整 URL
+function toFullUrl(path: string): string {
+  if (path && path.startsWith('/')) {
+    // /uploads/ 路径不走 /api，直接用 host
+    if (path.startsWith('/uploads/')) {
+      const host = API_BASE_URL.replace(/\/api$/, '')
+      return `${host}${path}`
+    }
+    return `${API_BASE_URL}${path}`
+  }
+  return path
+}
+
+// ── 删除素材 ──
+async function handleDeleteMaterial(id: string) {
+  const res = await uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这条素材吗？',
+    confirmText: '删除',
+    confirmColor: '#E8855A',
+    cancelText: '取消',
+  })
+  if (res.confirm !== true) return
+
+  try {
+    await deleteMaterial(id)
+    todayMaterials.value = todayMaterials.value.filter(m => m.id !== id)
+    uni.showToast({ title: '已删除', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  }
 }
 
 function handleBack() {
@@ -623,7 +662,23 @@ function handleBack() {
 
 .item-emotion-emoji {
   font-size: 22rpx;
+}
+
+.item-delete-btn {
   margin-left: auto;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-delete-icon {
+  font-size: 24rpx;
+  color: #AE9D92;
+  line-height: 1;
 }
 
 .item-body {}

@@ -74,7 +74,7 @@ import { ref, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
-import { createMaterial, extractEmotion } from '@/services/api/material'
+import { createMaterial, extractEmotion, uploadDiaryImage } from '@/services/api/material'
 
 const navPlaceholderHeight = ref(64)
 const contentHeight = ref(600)
@@ -144,11 +144,13 @@ async function handleSave() {
   saving.value = true
 
   try {
+    // 先上传图片，获取永久 URL
+    const uploaded = await uploadDiaryImage(photos.value[0])
     // 为每张照片创建一条素材
     const mat = await createMaterial({
       type: 'image',
       content: caption.value.trim() || undefined,
-      mediaUrl: photos.value[0],
+      mediaUrl: uploaded.url,
       date: today,
     })
 
