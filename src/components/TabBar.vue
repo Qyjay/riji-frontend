@@ -29,6 +29,14 @@
               <text class="action-card-name">发帖</text>
               <text class="action-card-desc">发到广场</text>
             </view>
+            <!-- 修图 -->
+            <view class="action-card press-feedback" @click="chooseRetouch">
+              <view class="action-card-icon retouch-icon-wrap">
+                <DoodleIcon name="sparkle" color="#FFFFFF" :size="52" :filtered="false" />
+              </view>
+              <text class="action-card-name">修图</text>
+              <text class="action-card-desc">改成想要的样子</text>
+            </view>
           </view>
           <view class="action-panel-cancel press-feedback" @click="closeActionSheet">
             <text class="cancel-text">取消</text>
@@ -213,6 +221,11 @@ function choosePost() {
   closeActionSheet()
   uni.navigateTo({ url: '/pages/plaza/post' })
 }
+
+function chooseRetouch() {
+  closeActionSheet()
+  uni.navigateTo({ url: '/pages/write/retouch' })
+}
 </script>
 
 <style lang="scss">
@@ -333,7 +346,8 @@ function choosePost() {
 }
 
 .action-dual {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20rpx;
 }
 
@@ -373,6 +387,11 @@ function choosePost() {
 .post-icon-wrap {
   background: linear-gradient(135deg, #5BBF8E, #7DD4A8);
   box-shadow: 0 4rpx 16rpx rgba(91, 191, 142, 0.35);
+}
+
+.retouch-icon-wrap {
+  background: linear-gradient(135deg, #6B8EB4, #C8A86B);
+  box-shadow: 0 4rpx 16rpx rgba(139, 124, 105, 0.35);
 }
 
 .action-card-name {

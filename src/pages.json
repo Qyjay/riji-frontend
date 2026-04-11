@@ -31,6 +31,12 @@
       }
     },
     {
+      "path": "pages/write/retouch",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/messages/index",
       "style": {
         "navigationStyle": "custom"
