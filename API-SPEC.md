@@ -139,6 +139,40 @@ POST /auth/login
 **错误码：**
 - 用户名/密码错误 → `code` 非 0 + `message` 说明
 
+### 1.3 登出
+
+```
+POST /auth/logout
+```
+
+> 需要 JWT token。调用后服务端使当前 token 失效。
+
+**请求头：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| Authorization | string | 是 | `Bearer <token>` |
+
+**请求体：** 无
+
+**响应 `data`：** `null`
+
+**成功响应示例：**
+
+```json
+{
+  "code": 0,
+  "data": null,
+  "message": "已成功登出"
+}
+```
+
+**错误码：**
+- `1003` — Token 缺失/无效 → `"请先登录"`（HTTP 401）
+- `1004` — Token 已过期 → `"Token 已过期，请重新登录"`（HTTP 401）
+
+**前端处理：** 调用成功（`code === 0`）后清除本地 token 和用户信息，跳转登录页。即使网络失败，也应强制清除本地 token 完成登出。
+
 ---
 
 ## 2. 素材模块（Material）
@@ -1345,58 +1379,59 @@ POST /study/todos/{id}/toggle
 |---|------|------|------|------|
 | 1 | POST | `/auth/register` | Auth | 注册 |
 | 2 | POST | `/auth/login` | Auth | 登录 |
-| 3 | POST | `/materials` | Material | 创建素材 |
-| 4 | GET | `/materials?date=` | Material | 获取指定日期素材 |
-| 5 | GET | `/materials/{id}` | Material | 素材详情 |
-| 6 | PUT | `/materials/{id}` | Material | 更新素材 |
-| 7 | DELETE | `/materials/{id}` | Material | 删除素材 |
-| 8 | POST | `/materials/{id}/emotion` | Material | AI 情绪提取 |
-| 9 | POST | `/materials/{id}/polish` | Material | AI 文字润色 |
-| 10 | POST | `/materials/voice` | Material | 语音上传+转写 |
-| 11 | POST | `/diaries/generate` | Diary | AI 生成日记 |
-| 12 | GET | `/diaries?page=&page_size=` | Diary | 日记列表 |
-| 13 | GET | `/diaries/{id}` | Diary | 日记详情 |
-| 14 | PUT | `/diaries/{id}` | Diary | 更新日记 |
-| 15 | GET | `/diaries/{id}/emotion-trend` | Diary | 情绪趋势 |
-| 16 | POST | `/diaries/{id}/extract` | Diary | AI 信息提取 |
-| 17 | POST | `/diaries/{id}/derivative` | Diary | 生成衍生内容 |
-| 18 | GET | `/derivatives?diary_id=` | Diary | 衍生内容列表 |
-| 19 | POST | `/derivatives/{id}/share` | Diary | 设置分享范围 |
-| 20 | GET | `/diaries/today-summary?date=` | Diary | 今日概览 |
-| 21 | POST | `/chat` | AI | AI 对话 |
-| 22 | GET | `/chat/history?limit=` | AI | 聊天历史 |
-| 23 | POST | `/ai/tts` | AI | 文字转语音 |
-| 24 | GET | `/ai/fortune` | AI | 运势生成 |
-| 25 | GET | `/user/profile` | User | 获取用户资料 |
-| 26 | POST | `/user/profile` | User | 更新用户资料 |
-| 27 | GET | `/user/agent-portrait` | User | AI 画像图 |
-| 28 | GET | `/user/growth` | User | 成长数据 |
-| 29 | GET | `/user/achievements` | User | 成就列表 |
-| 30 | GET | `/user/settings` | User | 获取设置 |
-| 31 | POST | `/user/settings` | User | 更新设置 |
-| 32 | GET | `/user/semester-report` | User | 学期报告 |
-| 33 | GET | `/social/matches` | Social | 已匹配列表 |
-| 34 | POST | `/social/match-requests` | Social | 发送匹配请求 |
-| 35 | GET | `/social/messages/{matchId}?limit=&before=` | Social | 匹配消息 |
-| 36 | GET | `/social/matches/{matchId}/report` | Social | 匹配报告 |
-| 37 | POST | `/social/match-requests/{requestId}/respond` | Social | 响应匹配请求 |
-| 38 | POST | `/social/buddy` | Social | 申请搭子 |
-| 39 | POST | `/social/buddy/{requestId}/respond` | Social | 响应搭子申请 |
-| 40 | GET | `/user/portrait` | Social | 用户画像 |
-| 41 | POST | `/user/portrait/refresh` | Social | 刷新画像 |
-| 42 | GET | `/anniversaries` | Anniversary | 纪念日列表 |
-| 43 | POST | `/anniversaries` | Anniversary | 创建纪念日 |
-| 44 | PUT | `/anniversaries/{id}` | Anniversary | 更新纪念日 |
-| 45 | DELETE | `/anniversaries/{id}` | Anniversary | 删除纪念日 |
-| 46 | GET | `/anniversaries/today` | Anniversary | 今日纪念日 |
-| 47 | GET | `/study/pomodoros` | Study | 番茄钟列表 |
-| 48 | POST | `/study/pomodoros` | Study | 创建番茄钟 |
-| 49 | POST | `/study/pomodoros/{id}/complete` | Study | 完成番茄钟 |
-| 50 | GET | `/study/todos` | Study | 待办列表 |
-| 51 | POST | `/study/todos` | Study | 创建待办 |
-| 52 | POST | `/study/todos/{id}/toggle` | Study | 切换待办状态 |
+| 3 | POST | `/auth/logout` | Auth | 登出 |
+| 4 | POST | `/materials` | Material | 创建素材 |
+| 5 | GET | `/materials?date=` | Material | 获取指定日期素材 |
+| 6 | GET | `/materials/{id}` | Material | 素材详情 |
+| 7 | PUT | `/materials/{id}` | Material | 更新素材 |
+| 8 | DELETE | `/materials/{id}` | Material | 删除素材 |
+| 9 | POST | `/materials/{id}/emotion` | Material | AI 情绪提取 |
+| 10 | POST | `/materials/{id}/polish` | Material | AI 文字润色 |
+| 11 | POST | `/materials/voice` | Material | 语音上传+转写 |
+| 12 | POST | `/diaries/generate` | Diary | AI 生成日记 |
+| 13 | GET | `/diaries?page=&page_size=` | Diary | 日记列表 |
+| 14 | GET | `/diaries/{id}` | Diary | 日记详情 |
+| 15 | PUT | `/diaries/{id}` | Diary | 更新日记 |
+| 16 | GET | `/diaries/{id}/emotion-trend` | Diary | 情绪趋势 |
+| 17 | POST | `/diaries/{id}/extract` | Diary | AI 信息提取 |
+| 18 | POST | `/diaries/{id}/derivative` | Diary | 生成衍生内容 |
+| 19 | GET | `/derivatives?diary_id=` | Diary | 衍生内容列表 |
+| 20 | POST | `/derivatives/{id}/share` | Diary | 设置分享范围 |
+| 21 | GET | `/diaries/today-summary?date=` | Diary | 今日概览 |
+| 22 | POST | `/chat` | AI | AI 对话 |
+| 23 | GET | `/chat/history?limit=` | AI | 聊天历史 |
+| 24 | POST | `/ai/tts` | AI | 文字转语音 |
+| 25 | GET | `/ai/fortune` | AI | 运势生成 |
+| 26 | GET | `/user/profile` | User | 获取用户资料 |
+| 27 | POST | `/user/profile` | User | 更新用户资料 |
+| 28 | GET | `/user/agent-portrait` | User | AI 画像图 |
+| 29 | GET | `/user/growth` | User | 成长数据 |
+| 30 | GET | `/user/achievements` | User | 成就列表 |
+| 31 | GET | `/user/settings` | User | 获取设置 |
+| 32 | POST | `/user/settings` | User | 更新设置 |
+| 33 | GET | `/user/semester-report` | User | 学期报告 |
+| 34 | GET | `/social/matches` | Social | 已匹配列表 |
+| 35 | POST | `/social/match-requests` | Social | 发送匹配请求 |
+| 36 | GET | `/social/messages/{matchId}?limit=&before=` | Social | 匹配消息 |
+| 37 | GET | `/social/matches/{matchId}/report` | Social | 匹配报告 |
+| 38 | POST | `/social/match-requests/{requestId}/respond` | Social | 响应匹配请求 |
+| 39 | POST | `/social/buddy` | Social | 申请搭子 |
+| 40 | POST | `/social/buddy/{requestId}/respond` | Social | 响应搭子申请 |
+| 41 | GET | `/user/portrait` | Social | 用户画像 |
+| 42 | POST | `/user/portrait/refresh` | Social | 刷新画像 |
+| 43 | GET | `/anniversaries` | Anniversary | 纪念日列表 |
+| 44 | POST | `/anniversaries` | Anniversary | 创建纪念日 |
+| 45 | PUT | `/anniversaries/{id}` | Anniversary | 更新纪念日 |
+| 46 | DELETE | `/anniversaries/{id}` | Anniversary | 删除纪念日 |
+| 47 | GET | `/anniversaries/today` | Anniversary | 今日纪念日 |
+| 48 | GET | `/study/pomodoros` | Study | 番茄钟列表 |
+| 49 | POST | `/study/pomodoros` | Study | 创建番茄钟 |
+| 50 | POST | `/study/pomodoros/{id}/complete` | Study | 完成番茄钟 |
+| 51 | GET | `/study/todos` | Study | 待办列表 |
+| 52 | POST | `/study/todos` | Study | 创建待办 |
+| 53 | POST | `/study/todos/{id}/toggle` | Study | 切换待办状态 |
 
-**共计 52 个接口**（Auth 2 + Material 8 + Diary 10 + AI 4 + User 8 + Social 9 + Anniversary 5 + Study 6）
+**共计 53 个接口**（Auth 3 + Material 8 + Diary 10 + AI 4 + User 8 + Social 9 + Anniversary 5 + Study 6）
 
 ---
 

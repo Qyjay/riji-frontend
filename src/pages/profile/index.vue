@@ -113,6 +113,7 @@ import { getUserProfile } from '@/services/api/user'
 import { getAchievements } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
 import type { Achievement } from '@/services/api/user'
+import { logout } from '@/services/api/auth'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
@@ -175,8 +176,11 @@ function handleLogout() {
   uni.showModal({
     title: '退出登录',
     content: '确定要退出吗？',
-    success(res) {
-      if (res.confirm) uni.showToast({ title: '已退出', icon: 'success' })
+    async success(res) {
+      if (res.confirm) {
+        await logout()
+        uni.reLaunch({ url: '/pages/login/index' })
+      }
     }
   })
 }
