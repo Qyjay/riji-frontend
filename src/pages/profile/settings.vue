@@ -352,6 +352,7 @@ import CustomNavBar from '@/components/CustomNavBar.vue'
 import { USE_MOCK, setMockMode, API_BASE_URL, setApiBaseUrl, getDefaultApiBaseUrl } from '@/services/config'
 import { useSettingsStore } from '@/stores/settings'
 import { getSettings, updateSettings } from '@/services/api/user'
+import { logout } from '@/services/api/auth'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -659,9 +660,10 @@ function onLogout() {
     title: '退出登录',
     content: '确定退出登录吗？',
     confirmColor: '#D4645C',
-    success: (res) => {
+    success: async (res) => {
       if (res.confirm) {
-        uni.showToast({ title: '已退出登录', icon: 'success' })
+        await logout()
+        uni.reLaunch({ url: '/pages/login/index' })
       }
     },
   })

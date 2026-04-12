@@ -96,9 +96,15 @@ export async function login(username: string, password: string): Promise<AuthRes
 
 /**
  * 登出
- * 清除本地 token 和用户信息
+ * 调用后端使 token 失效，然后清除本地存储
+ * 即使网络失败也强制清除本地 token 完成登出
  */
-export function logout(): void {
+export async function logout(): Promise<void> {
+  try {
+    await request({ url: '/auth/logout', method: 'POST' })
+  } catch {
+    // 网络失败也继续清除本地状态
+  }
   removeToken()
   uni.removeStorageSync('currentUser')
 }
