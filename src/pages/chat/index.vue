@@ -50,23 +50,11 @@
                   </view>
                 </view>
               </view>
-              <text class="bubble-text" :class="msg.role === 'user' ? 'bubble-text--user' : ''">
+              <!-- AI 消息使用 markdown 渲染 -->
+              <MarkdownRenderer v-if="msg.role === 'assistant'" class="bubble-rich-text" :content="msg.content"></MarkdownRenderer>
+              <text v-else class="bubble-text" :class="msg.role === 'user' ? 'bubble-text--user' : ''">
                 {{ msg.content }}
               </text>
-            </view>
-          </view>
-
-          <!-- AI thinking indicator -->
-          <view v-if="isThinking" class="message-wrap message-wrap--ai">
-            <view class="msg-avatar doodle-box-v3">
-              <DoodleIcon name="robot" color="#FFFFFF" :size="32" :filtered="false" />
-            </view>
-            <view class="message-bubble bubble--ai">
-              <view class="thinking-dots">
-                <view class="dot" />
-                <view class="dot" />
-                <view class="dot" />
-              </view>
             </view>
           </view>
 
@@ -76,7 +64,8 @@
               <DoodleIcon name="robot" color="#FFFFFF" :size="32" :filtered="false" />
             </view>
             <view class="message-bubble bubble--ai">
-              <text class="bubble-text">{{ streamingContent }}<text class="cursor-blink">|</text></text>
+              <MarkdownRenderer class="bubble-rich-text" :content="streamingContent"></MarkdownRenderer>
+              <text class="cursor-blink">|</text>
             </view>
           </view>
 
@@ -161,9 +150,10 @@ import { ref, nextTick, onMounted } from 'vue'
 import { onUnload } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { getUserProfile } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
-import { chat, getChatHistory } from '@/services/api/ai'
+import { chatStream, getChatHistory } from '@/services/api/ai'
 import type { ChatMessage } from '@/services/api/ai'
 import { closeSession } from '@/services/api/chat'
 import { uploadVoice } from '@/services/api/material'
@@ -200,7 +190,6 @@ const interestTags = ref(23)
 
 const messages = ref<ExtendedMessage[]>([])
 const inputText = ref('')
-const isThinking = ref(false)
 const isStreaming = ref(false)
 const streamingContent = ref('')
 const scrollTopVal = ref(0)
@@ -234,7 +223,7 @@ onUnload(async () => {
 async function handleSend() {
   const text = inputText.value.trim()
   const atts = [...pendingAttachments.value]
-  if ((!text && atts.length === 0) || isThinking.value || isStreaming.value) return
+  if ((!text && atts.length === 0) || isStreaming.value) return
 
   let msgContent = text
   if (atts.length > 0 && !text) {
@@ -247,45 +236,53 @@ async function handleSend() {
     timestamp: Date.now(),
     attachments: atts.length > 0 ? atts : undefined,
   })
+
   inputText.value = ''
   pendingAttachments.value = []
-  isThinking.value = true
+  isStreaming.value = true
+  scrollToBottom()
+
+  let sendText = msgContent
+  if (atts.length > 0) {
+    const attDesc = atts.map(a => a.type === 'image' ? `[用户上传了图片: ${a.name}]` : `[用户上传了文件: ${a.name}]`).join('\n')
+    sendText = attDesc + (text ? '\n' + text : '')
+  }
+
+  // 启动流式显示
+  isStreaming.value = true
+  streamingContent.value = ''
   scrollToBottom()
 
   try {
-    let sendText = msgContent
-    if (atts.length > 0) {
-      const attDesc = atts.map(a => a.type === 'image' ? `[用户上传了图片: ${a.name}]` : `[用户上传了文件: ${a.name}]`).join('\n')
-      sendText = attDesc + (text ? '\n' + text : '')
-    }
-
-    const response = await chat(sendText)
-    isThinking.value = false
-
-    // 流式打字机
-    isStreaming.value = true
-    streamingContent.value = ''
-    scrollToBottom()
-
-    const chunkSize = 2
-    for (let i = 0; i < response.length; i += chunkSize) {
-      await new Promise(resolve => setTimeout(resolve, 25))
-      streamingContent.value = response.slice(0, i + chunkSize)
-      if (i % 40 === 0) scrollToBottom()
-    }
-    streamingContent.value = response
-
-    isStreaming.value = false
-    messages.value.push({
-      role: 'assistant',
-      content: response,
-      timestamp: Date.now(),
-    })
-    streamingContent.value = ''
-    scrollToBottom()
+    console.log('[DEBUG] 发送给后端的 sendText:', sendText)
+    await chatStream(
+      sendText,
+      // onChunk: 每次收到片段
+      (chunk) => {
+        streamingContent.value += chunk
+        scrollToBottom()
+      },
+      // onDone: 流结束
+      () => {
+        isStreaming.value = false
+        messages.value.push({
+          role: 'assistant',
+          content: streamingContent.value,
+          timestamp: Date.now(),
+        })
+        streamingContent.value = ''
+        scrollToBottom()
+      },
+      // onError: 出错
+      (err) => {
+        isStreaming.value = false
+        streamingContent.value = ''
+        uni.showToast({ title: err.message || 'AI 对话失败', icon: 'none' })
+      },
+    )
   } catch {
-    isThinking.value = false
     isStreaming.value = false
+    streamingContent.value = ''
     uni.showToast({ title: '发送失败', icon: 'none' })
   }
 }
@@ -451,16 +448,24 @@ const msgScrollHeight = ref(400)
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
+  const screenWidth = info.screenWidth ?? 390
+  const rpxRatio = screenWidth / 750 // rpx 转 px 的比例
+
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value
-  // AI 信息卡 ~130 + 快捷操作 ~70 + 输入栏 ~110 + 安全区底部 ~34
-  msgScrollHeight.value = scrollHeight.value - 344
+
+  // 各组件高度（rpx）-> px 转换后相加
+  // AI 信息卡 ~150rpx + 快捷操作 ~60rpx + 输入栏 ~100rpx + 安全区底部 ~34rpx
+  const fixedHeightPx = Math.ceil((150 + 60 + 100 + 34) * rpxRatio)
+  msgScrollHeight.value = scrollHeight.value - fixedHeightPx
   try { profile.value = await getUserProfile() } catch {}
 
   try {
     const history = await getChatHistory(1, 20)
+    console.log('[DEBUG] 获取历史消息:', history.list.length, '条')
     messages.value = history.list
-  } catch {
+    console.log('[DEBUG] messages 设置后:', messages.value.length, '条')
+  } catch (e) {
     messages.value = [{
       role: 'assistant',
       content: '嗨 Kylin！今天过得怎么样？你可以和我聊天、说「帮我写日记」或「最近有什么纪念日」哦 😊',
@@ -530,6 +535,8 @@ onMounted(async () => {
 .bubble--user { background: #E8855A; border-radius: 20rpx 0 20rpx 20rpx; }
 .bubble-text { font-size: 30rpx; color: #2C1F14; word-break: break-all; }
 .bubble-text--user { color: #FFFFFF; }
+.bubble-rich-text { font-size: 30rpx; color: #2C1F14; word-break: break-all; line-height: 1.6; }
+.bubble-rich-text rich-text { line-height: 1.6; }
 
 .msg-attachments { margin-bottom: 12rpx; }
 .msg-attachment-item { margin-bottom: 8rpx; }
@@ -537,12 +544,6 @@ onMounted(async () => {
 .att-file-info { display: flex; align-items: center; gap: 8rpx; padding: 8rpx 0; }
 .att-file-icon { font-size: 28rpx; }
 .att-file-name { font-size: 24rpx; color: #8A7668; max-width: 300rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.thinking-dots { display: flex; gap: 10rpx; padding: 8rpx 0; align-items: center; }
-.dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: #AE9D92; animation: bounce 1.2s ease infinite; }
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10rpx); } }
 
 .cursor-blink { animation: blink 0.8s step-end infinite; color: #E8855A; }
 @keyframes blink { 50% { opacity: 0; } }

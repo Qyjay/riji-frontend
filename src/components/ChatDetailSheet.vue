@@ -21,7 +21,8 @@
           :class="msg.role === 'user' ? 'sheet-msg--user' : 'sheet-msg--ai'"
         >
           <view class="sheet-msg-bubble" :class="msg.role === 'user' ? 'bubble--user' : 'bubble--ai'">
-            <text class="sheet-msg-text">{{ msg.content }}</text>
+            <MarkdownRenderer v-if="msg.role === 'assistant'" class="sheet-msg-markdown" :content="msg.content"></MarkdownRenderer>
+            <text v-else class="sheet-msg-text">{{ msg.content }}</text>
           </view>
           <text class="sheet-msg-time">{{ formatTime(msg.timestamp) }}</text>
         </view>
@@ -32,6 +33,7 @@
 
 <script setup lang="ts">
 import type { ChatSessionDetail, ChatSessionMessage } from '@/services/api/chat'
+import MarkdownRenderer from './MarkdownRenderer.vue'
 
 defineProps<{
   visible: boolean
@@ -161,6 +163,11 @@ function formatTime(ts: number): string {
 }
 
 .sheet-msg-text {
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+.sheet-msg-markdown {
   font-size: 28rpx;
   line-height: 1.6;
 }

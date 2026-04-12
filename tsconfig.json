@@ -7,7 +7,11 @@
       "@/*": ["./src/*"]
     },
     "lib": ["esnext", "dom"],
-    "types": ["@dcloudio/types"]
+    "types": ["@dcloudio/types"],
+    "verbatimModuleSyntax": false,
+    "preserveValueImports": false,
+    "importsNotUsedAsValues": "remove"
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"]
 }
+

@@ -6,11 +6,11 @@ const DEFAULT_API_BASE_URL = 'http://localhost:8000/api'
 function _readMock(): boolean {
   try {
     const saved = uni.getStorageSync('dev_mock_mode')
-    // 只有明确存储了 false 才关闭 mock，其他所有情况都默认开启
+    // 只有明确存储了 false 才关闭 mock，其他所有情况都默认关闭
     if (saved === false) return false
-    return true
+    return false  // 默认关闭 mock，使用真实后端
   } catch {
-    return true
+    return false
   }
 }
 
