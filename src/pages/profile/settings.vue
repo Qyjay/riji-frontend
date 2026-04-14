@@ -64,7 +64,7 @@
               class="row-switch"
               :checked="notify.diary"
               color="#E8855A"
-              @change="notify.diary = $event.detail.value"
+              @change="onNotifyDiaryChange"
             />
           </view>
 
@@ -82,7 +82,7 @@
               class="row-switch"
               :checked="notify.pomodoro"
               color="#E8855A"
-              @change="notify.pomodoro = $event.detail.value"
+              @change="onNotifyPomodoroChange"
             />
           </view>
 
@@ -92,7 +92,7 @@
               class="row-switch"
               :checked="notify.buddy"
               color="#E8855A"
-              @change="notify.buddy = $event.detail.value"
+              @change="onNotifyBuddyChange"
             />
           </view>
         </view>
@@ -214,7 +214,7 @@
               class="row-switch"
               :checked="chatSettings.enabled"
               color="#7C6FE3"
-              @change="chatSettings.enabled = $event.detail.value; saveChatSettings()"
+              @change="onChatEnabledChange"
             />
           </view>
           <view class="row-hint-wrap">
@@ -250,7 +250,7 @@
               class="row-switch"
               :checked="chatSettings.toast"
               color="#7C6FE3"
-              @change="chatSettings.toast = $event.detail.value; saveChatSettings()"
+              @change="onChatToastChange"
             />
           </view>
           <view class="row-hint-wrap">
@@ -400,6 +400,22 @@ const notify = reactive({
   pomodoro: true,
   buddy: true,
 })
+
+function getSwitchValue(event: any) {
+  return Boolean(event?.detail?.value)
+}
+
+function onNotifyDiaryChange(event: any) {
+  notify.diary = getSwitchValue(event)
+}
+
+function onNotifyPomodoroChange(event: any) {
+  notify.pomodoro = getSwitchValue(event)
+}
+
+function onNotifyBuddyChange(event: any) {
+  notify.buddy = getSwitchValue(event)
+}
 
 const timeOptions = ['19:00', '20:00', '21:00', '22:00', '23:00']
 const timePickerVisible = ref(false)
@@ -552,6 +568,16 @@ async function saveChatSettings() {
   } catch (e) {
     uni.showToast({ title: '保存失败', icon: 'none' })
   }
+}
+
+function onChatEnabledChange(event: any) {
+  chatSettings.enabled = getSwitchValue(event)
+  saveChatSettings()
+}
+
+function onChatToastChange(event: any) {
+  chatSettings.toast = getSwitchValue(event)
+  saveChatSettings()
 }
 
 const silenceOptions = [15, 20, 30, 45, 60, 90, 120]

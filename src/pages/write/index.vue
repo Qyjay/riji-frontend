@@ -100,7 +100,7 @@
                   <text class="chat-title">{{ getChatTitle(item) }}</text>
                   <text v-if="item.emotion?.emoji" class="chat-mood-emoji">{{ item.emotion.emoji }}</text>
                 </view>
-                <text class="chat-summary">{{ item.content }}</text>
+                <text class="chat-summary">{{ getChatPreview(item.content) }}</text>
                 <view class="chat-expand-row">
                   <text class="chat-expand-text">展开对话 ›</text>
                 </view>
@@ -194,6 +194,7 @@ import { API_BASE_URL } from '@/services/config'
 import type { RawMaterial } from '@/services/api/material'
 import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
 import ChatDetailSheet from '@/components/ChatDetailSheet.vue'
+import { getAssistantPreview } from '@/utils/chat-message'
 
 // ── 布局 ──
 const navPlaceholderHeight = ref(64)
@@ -358,6 +359,11 @@ async function handleSave() {
 const chatDetailVisible = ref(false)
 const chatDetailData = ref<SessionMessagesResult | null>(null)
 
+function getChatPreview(content: string) {
+  const summary = getAssistantPreview(content || '', 42)
+  return summary || '点击查看对话详情'
+}
+
 function formatTimeRange(start?: number, end?: number): string {
   if (!start) return ''
   const fmt = (ts: number) => {
@@ -369,8 +375,7 @@ function formatTimeRange(start?: number, end?: number): string {
 }
 
 function getChatTitle(mat: RawMaterial): string {
-  const firstSentence = mat.content?.split(/[。！？\n]/)?.[0] || '对话记录'
-  return firstSentence.length > 15 ? firstSentence.slice(0, 15) + '...' : firstSentence
+  return getAssistantPreview(mat.content || '', 15) || '对话记录'
 }
 
 async function openChatDetail(mat: RawMaterial) {

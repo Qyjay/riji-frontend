@@ -19,13 +19,13 @@
           <view class="ai-info">
             <view class="ai-name-row">
               <text class="ai-name">AI 伙伴</text>
-              <text class="ai-time">刚刚</text>
+              <text class="ai-time">{{ aiTime }}</text>
             </view>
-            <text class="ai-preview">看到你昨天的雅思全对了...</text>
+            <text class="ai-preview">{{ aiPreview }}</text>
           </view>
         </view>
-        <view class="unread-badge">
-          <text class="unread-num">2</text>
+        <view v-if="lastPreview" class="unread-badge">
+          <text class="unread-num">新</text>
         </view>
       </view>
 
@@ -98,17 +98,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import { useChatStore } from '@/stores/chat'
+import { getAssistantPreview } from '@/utils/chat-message'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
+const chatStore = useChatStore()
+const { lastPreview } = storeToRefs(chatStore)
+
 onMounted(() => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 50
+  if (!lastPreview.value) {
+    chatStore.loadHistory().catch(() => undefined)
+  }
+})
+
+const aiPreview = computed(() => {
+  const preview = lastPreview.value
+  if (!preview) return '来和 AI 伙伴聊聊今天发生的事吧'
+  if (preview.role === 'assistant') {
+    const summary = getAssistantPreview(preview.content, 28)
+    if (summary) return summary
+  }
+  if (preview.content) {
+    const text = preview.content.replace(/\s+/g, ' ').trim()
+    return text.length > 28 ? `${text.slice(0, 28)}...` : text
+  }
+  if (preview.attachments.length) return `发送了 ${preview.attachments.length} 个附件`
+  return '来和 AI 伙伴聊聊今天发生的事吧'
+})
+
+const aiTime = computed(() => {
+  const preview = lastPreview.value
+  if (!preview) return '现在'
+  const diffMinutes = Math.max(1, Math.floor((Date.now() - preview.createdAt) / 60000))
+  if (diffMinutes < 60) return `${diffMinutes}分钟前`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}小时前`
+  return '昨天'
 })
 
 const buddyMessages = [

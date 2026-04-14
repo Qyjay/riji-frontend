@@ -15,7 +15,7 @@ marked.setOptions({
 })
 
 // 自定义渲染器，处理代码块和特殊内容
-const renderer = new marked.Renderer()
+const renderer: any = new marked.Renderer()
 
 // 代码块渲染
 renderer.code = function({ text, lang }: { text: string; lang?: string }) {
@@ -49,8 +49,20 @@ renderer.blockquote = function({ text }: { text: string }) {
 }
 
 // 表格渲染
-renderer.table = function({ header, rows }: { header: string; rows: string[][] }) {
-  return `<table class="md-table"><thead>${header}</thead><tbody>${rows.join('')}</tbody></table>`
+renderer.table = function(token: any) {
+  const headerCells = Array.isArray(token?.header)
+    ? token.header.map((cell: any) => `<th>${cell?.text || ''}</th>`).join('')
+    : String(token?.header || '')
+  const rows = Array.isArray(token?.rows)
+    ? token.rows.map((row: any) => {
+      if (Array.isArray(row)) {
+        return `<tr>${row.map((cell: any) => `<td>${cell?.text || cell || ''}</td>`).join('')}</tr>`
+      }
+      return String(row || '')
+    }).join('')
+    : String(token?.rows || '')
+  const head = headerCells.startsWith('<tr>') ? headerCells : `<tr>${headerCells}</tr>`
+  return `<table class="md-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`
 }
 
 // 处理特殊标签（如 AI 思考标签）

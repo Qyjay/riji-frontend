@@ -74,7 +74,7 @@
           <text class="custom-label">显示照片</text>
           <switch
             :checked="showPhoto"
-            @change="e => showPhoto = e.detail.value"
+            @change="handleShowPhotoChange"
             color="#E8855A"
             class="custom-switch"
           />
@@ -85,7 +85,7 @@
           <text class="custom-label">显示位置</text>
           <switch
             :checked="showLocation"
-            @change="e => showLocation = e.detail.value"
+            @change="handleShowLocationChange"
             color="#E8855A"
             class="custom-switch"
           />
@@ -162,6 +162,14 @@ function handleSave() {
   uni.showToast({ title: '已保存到相册', icon: 'success' })
 }
 
+function handleShowPhotoChange(event: any) {
+  showPhoto.value = Boolean(event?.detail?.value)
+}
+
+function handleShowLocationChange(event: any) {
+  showLocation.value = Boolean(event?.detail?.value)
+}
+
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
 
@@ -170,8 +178,8 @@ onMounted(async () => {
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
   const pages = getCurrentPages()
-  const current = pages[pages.length - 1]
-  const options = (current as any).$page?.options ?? current.options ?? {}
+  const current = pages[pages.length - 1] as any
+  const options = current?.$page?.options ?? current?.options ?? {}
   const id = (options as any).id ?? '1'
   try {
     diary.value = await getDiaryDetail(id)

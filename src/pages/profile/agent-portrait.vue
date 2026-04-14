@@ -1,6 +1,6 @@
 <template>
   <view class="page-container">
-    <CustomNavBar title="AI 智能体画像" leftIcon="back" @leftClick="uni.navigateBack()" />
+    <CustomNavBar title="AI 智能体画像" leftIcon="back" @leftClick="handleBack" />
 
     <view class="nav-placeholder" :style="{ height: navBarHeight + 'px' }" />
 
@@ -75,7 +75,7 @@
               <switch
                 :checked="sw.value"
                 checked-color="#E8855A"
-                @change="sw.value = $event.detail.value"
+                @change="handleSwitchSettingChange(sw, $event)"
               />
             </view>
 
@@ -85,7 +85,7 @@
               <picker
                 :value="retentionIndex"
                 :range="retentionOptions"
-                @change="retentionIndex = Number($event.detail.value)"
+                @change="handleRetentionChange"
               >
                 <view class="picker-display">
                   <text class="picker-text">{{ retentionOptions[retentionIndex] }}</text>
@@ -109,6 +109,10 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 
 const navBarHeight = ref(88)
 const scrollHeight = ref(600)
+
+function handleBack() {
+  uni.navigateBack()
+}
 
 onMounted(() => {
   const info = uni.getSystemInfoSync()
@@ -177,6 +181,14 @@ const switchSettings = reactive([
 // ─── 数据保留期限 ───
 const retentionOptions = ['30天', '90天', '180天', '365天']
 const retentionIndex = ref(2) // 默认 180天
+
+function handleSwitchSettingChange(setting: { value: boolean }, event: any) {
+  setting.value = Boolean(event?.detail?.value)
+}
+
+function handleRetentionChange(event: any) {
+  retentionIndex.value = Number(event?.detail?.value ?? 0)
+}
 </script>
 
 <style scoped>

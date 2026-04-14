@@ -186,8 +186,8 @@ onMounted(async () => {
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
   const pages = getCurrentPages()
-  const current = pages[pages.length - 1]
-  const options = (current as any).$page?.options ?? current.options ?? {}
+  const current = pages[pages.length - 1] as any
+  const options = current?.$page?.options ?? current?.options ?? {}
   const id = (options as any).id ?? '1'
   try {
     diary.value = await getDiaryDetail(id)

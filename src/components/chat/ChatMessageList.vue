@@ -1,0 +1,367 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import DoodleIcon from '@/components/DoodleIcon.vue'
+import type { UiChatMessage } from '@/stores/chat'
+import { parseAssistantContent } from '@/utils/chat-message'
+
+type DisplayItem =
+  | { type: 'time'; id: string; label: string }
+  | { type: 'message'; id: string; message: UiChatMessage }
+
+const props = defineProps<{
+  messages: UiChatMessage[]
+  scrollTop: number
+  scrollWithAnimation?: boolean
+  showScrollToBottom?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'scroll', event: any): void
+  (e: 'reachBottom'): void
+  (e: 'jumpBottom'): void
+  (e: 'retry', id: string): void
+}>()
+
+const thinkingExpandedState = ref<Record<string, boolean>>({})
+
+function formatTimeLabel(timestamp: number) {
+  const date = new Date(timestamp)
+  const hours = `${date.getHours()}`.padStart(2, '0')
+  const minutes = `${date.getMinutes()}`.padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+const displayItems = computed<DisplayItem[]>(() => {
+  const items: DisplayItem[] = []
+  let lastTimestamp = 0
+  props.messages.forEach((message) => {
+    if (!lastTimestamp || Math.abs(message.createdAt - lastTimestamp) > 5 * 60 * 1000) {
+      items.push({
+        type: 'time',
+        id: `time-${message.id}`,
+        label: formatTimeLabel(message.createdAt),
+      })
+    }
+    items.push({
+      type: 'message',
+      id: message.id,
+      message,
+    })
+    lastTimestamp = message.createdAt
+  })
+  return items
+})
+
+function getAssistantParts(message: UiChatMessage) {
+  return parseAssistantContent(message.content)
+}
+
+function isThinkingExpanded(message: UiChatMessage) {
+  if (thinkingExpandedState.value[message.id] !== undefined) {
+    return thinkingExpandedState.value[message.id]
+  }
+  const { thinking, body } = getAssistantParts(message)
+  if (!thinking) return false
+  return !body
+}
+
+function toggleThinking(message: UiChatMessage) {
+  thinkingExpandedState.value = {
+    ...thinkingExpandedState.value,
+    [message.id]: !isThinkingExpanded(message),
+  }
+}
+</script>
+
+<template>
+  <view class="messages-panel">
+    <scroll-view
+      class="messages-scroll"
+      scroll-y
+      :scroll-top="scrollTop"
+      :scroll-with-animation="scrollWithAnimation"
+      lower-threshold="80"
+      @scroll="emit('scroll', $event)"
+      @scrolltolower="emit('reachBottom')"
+    >
+      <view class="messages-inner">
+        <slot v-if="!displayItems.length" name="empty" />
+        <template v-for="item in displayItems" :key="item.id">
+          <view v-if="item.type === 'time'" class="time-divider">
+            <text class="time-divider-text">{{ item.label }}</text>
+          </view>
+          <view v-else class="message-wrap" :class="item.message.role === 'user' ? 'message-wrap--user' : 'message-wrap--ai'">
+            <view v-if="item.message.role === 'assistant'" class="msg-avatar doodle-box-v3">
+              <DoodleIcon name="robot" color="#FFFFFF" :size="32" :filtered="false" />
+            </view>
+            <view class="message-stack">
+              <view class="message-bubble" :class="item.message.role === 'user' ? 'bubble--user' : 'bubble--ai'">
+                <view v-if="item.message.attachments.length" class="msg-attachments">
+                  <view v-for="attachment in item.message.attachments" :key="attachment.url + attachment.name" class="msg-attachment-item">
+                    <image
+                      v-if="attachment.type === 'image'"
+                      :src="attachment.thumbnailUrl || attachment.url"
+                      class="att-image-thumb"
+                      mode="aspectFill"
+                    />
+                    <view v-else class="att-file-info">
+                      <text class="att-file-icon">📎</text>
+                      <text class="att-file-name">{{ attachment.name }}</text>
+                    </view>
+                  </view>
+                </view>
+                <view v-if="item.message.role === 'assistant'" class="assistant-content">
+                  <view class="assistant-block">
+                    <view
+                      v-if="getAssistantParts(item.message).thinking"
+                      class="thinking-card"
+                    >
+                      <view class="thinking-header" @click="toggleThinking(item.message)">
+                        <text class="thinking-title">思考过程</text>
+                        <text class="thinking-toggle">{{ isThinkingExpanded(item.message) ? '收起' : '展开' }}</text>
+                      </view>
+                      <view v-if="isThinkingExpanded(item.message)" class="thinking-body">
+                        <MarkdownRenderer class="bubble-rich-text thinking-rich-text" :content="getAssistantParts(item.message).thinking" />
+                      </view>
+                    </view>
+                    <MarkdownRenderer
+                      v-if="getAssistantParts(item.message).body"
+                      class="bubble-rich-text"
+                      :content="getAssistantParts(item.message).body"
+                    />
+                  </view>
+                  <text v-if="item.message.status === 'streaming'" class="streaming-cursor">|</text>
+                </view>
+                <text v-else class="bubble-text bubble-text--user">{{ item.message.content || '附件消息' }}</text>
+              </view>
+              <view v-if="item.message.status === 'failed'" class="message-error-row">
+                <text class="message-error-text">{{ item.message.error || '发送失败' }}</text>
+                <text
+                  v-if="item.message.role === 'user'"
+                  class="message-retry"
+                  @click="emit('retry', item.message.id)"
+                >重试</text>
+              </view>
+            </view>
+          </view>
+        </template>
+        <view class="scroll-bottom-spacer" />
+      </view>
+    </scroll-view>
+
+    <view v-if="showScrollToBottom" class="jump-bottom-btn press-feedback" @click="emit('jumpBottom')">
+      <text class="jump-bottom-text">回到底部</text>
+    </view>
+  </view>
+</template>
+
+<style scoped lang="scss">
+.messages-panel {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.messages-scroll {
+  height: 100%;
+}
+
+.messages-inner {
+  padding: 24rpx 32rpx 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.time-divider {
+  display: flex;
+  justify-content: center;
+}
+
+.time-divider-text {
+  font-size: 22rpx;
+  color: #ae9d92;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.message-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 16rpx;
+}
+
+.message-wrap--user {
+  justify-content: flex-end;
+}
+
+.message-wrap--ai {
+  justify-content: flex-start;
+}
+
+.message-stack {
+  max-width: 76%;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.msg-avatar {
+  width: 64rpx;
+  height: 64rpx;
+  background: linear-gradient(135deg, #e8855a, #f0a882) !important;
+  border-color: transparent !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 1px 2px 0 rgba(232, 133, 90, 0.15);
+}
+
+.message-bubble {
+  padding: 20rpx 24rpx;
+  line-height: 1.6;
+}
+
+.bubble--ai {
+  background: #f8f1eb;
+  border-radius: 0 24rpx 24rpx 24rpx;
+}
+
+.bubble--user {
+  background: linear-gradient(135deg, #e8855a, #f0a882);
+  border-radius: 24rpx 0 24rpx 24rpx;
+}
+
+.bubble-text,
+.bubble-rich-text {
+  font-size: 28rpx;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.assistant-content {
+  display: inline-flex;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.assistant-block {
+  width: 100%;
+}
+
+.thinking-card {
+  margin-bottom: 16rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(174, 157, 146, 0.28);
+  overflow: hidden;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 14rpx 18rpx;
+}
+
+.thinking-title {
+  font-size: 22rpx;
+  color: #8a7668;
+  font-weight: 600;
+}
+
+.thinking-toggle {
+  font-size: 22rpx;
+  color: #e8855a;
+}
+
+.thinking-body {
+  padding: 0 18rpx 16rpx;
+}
+
+.thinking-rich-text {
+  opacity: 0.84;
+}
+
+.streaming-cursor {
+  color: #e8855a;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.bubble-text--user {
+  color: #ffffff;
+}
+
+.msg-attachments {
+  margin-bottom: 12rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.att-image-thumb {
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 16rpx;
+}
+
+.att-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 0;
+}
+
+.att-file-icon {
+  font-size: 28rpx;
+}
+
+.att-file-name {
+  font-size: 24rpx;
+  color: #8a7668;
+}
+
+.message-error-row {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+  padding: 0 8rpx;
+}
+
+.message-error-text,
+.message-retry {
+  font-size: 22rpx;
+  color: #c05030;
+}
+
+.message-retry {
+  text-decoration: underline;
+}
+
+.jump-bottom-btn {
+  position: absolute;
+  right: 24rpx;
+  bottom: 24rpx;
+  padding: 12rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(44, 31, 20, 0.78);
+}
+
+.jump-bottom-text {
+  font-size: 22rpx;
+  color: #ffffff;
+}
+
+.scroll-bottom-spacer {
+  height: 20rpx;
+}
+</style>

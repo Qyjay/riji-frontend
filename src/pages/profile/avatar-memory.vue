@@ -206,7 +206,7 @@
             <switch
               :checked="avatarStatus?.isActive ?? false"
               color="#E8855A"
-              @change="e => onToggle('isActive', e.detail.value)"
+              @change="handleAvatarActiveChange"
             />
           </view>
         </view>
@@ -284,7 +284,7 @@
           <switch
             :checked="settings.aiDiaryStyle"
             color="#E8855A"
-            @change="e => settings.aiDiaryStyle = e.detail.value"
+            @change="handleAiDiaryStyleChange"
           />
         </view>
 
@@ -297,7 +297,7 @@
           <switch
             :checked="settings.aiChatStyle"
             color="#E8855A"
-            @change="e => settings.aiChatStyle = e.detail.value"
+            @change="handleAiChatStyleChange"
           />
         </view>
 
@@ -309,7 +309,7 @@
             <switch
               :checked="settings.allowAnalyzeDiary"
               color="#E8855A"
-              @change="e => settings.allowAnalyzeDiary = e.detail.value"
+              @change="handleAnalyzeDiaryChange"
             />
           </view>
           <view class="setting-row setting-row--inner">
@@ -317,7 +317,7 @@
             <switch
               :checked="settings.allowAnalyzeChat"
               color="#E8855A"
-              @change="e => settings.allowAnalyzeChat = e.detail.value"
+              @change="handleAnalyzeChatChange"
             />
           </view>
           <view class="setting-row setting-row--inner">
@@ -587,6 +587,30 @@ async function onToggle(field: keyof AvatarStatus, value: boolean) {
   if (!avatarStatus.value) return
   avatarStatus.value = { ...avatarStatus.value, [field]: value }
   await updateAvatarStatus({ [field]: value })
+}
+
+function getSwitchValue(event: any) {
+  return Boolean(event?.detail?.value)
+}
+
+function handleAvatarActiveChange(event: any) {
+  return onToggle('isActive', getSwitchValue(event))
+}
+
+function handleAiDiaryStyleChange(event: any) {
+  settings.aiDiaryStyle = getSwitchValue(event)
+}
+
+function handleAiChatStyleChange(event: any) {
+  settings.aiChatStyle = getSwitchValue(event)
+}
+
+function handleAnalyzeDiaryChange(event: any) {
+  settings.allowAnalyzeDiary = getSwitchValue(event)
+}
+
+function handleAnalyzeChatChange(event: any) {
+  settings.allowAnalyzeChat = getSwitchValue(event)
 }
 
 // 频道选项

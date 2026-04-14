@@ -21,7 +21,42 @@
           :class="msg.role === 'user' ? 'sheet-msg--user' : 'sheet-msg--ai'"
         >
           <view class="sheet-msg-bubble" :class="msg.role === 'user' ? 'bubble--user' : 'bubble--ai'">
-            <MarkdownRenderer v-if="msg.role === 'assistant'" class="sheet-msg-markdown" :content="msg.content"></MarkdownRenderer>
+            <view v-if="msg.role === 'assistant'" class="sheet-assistant-block">
+              <view
+                v-if="getAssistantParts(msg.content).thinking"
+                class="sheet-thinking-card"
+              >
+                <view
+                  class="sheet-thinking-header"
+                  @click="toggleThinking(getMessageKey(msg, idx), msg.content)"
+                >
+                  <text class="sheet-thinking-title">思考过程</text>
+                  <text class="sheet-thinking-toggle">
+                    {{ isThinkingExpanded(getMessageKey(msg, idx), msg.content) ? '收起' : '展开' }}
+                  </text>
+                </view>
+                <view
+                  v-if="isThinkingExpanded(getMessageKey(msg, idx), msg.content)"
+                  class="sheet-thinking-body"
+                >
+                  <MarkdownRenderer
+                    class="sheet-thinking-markdown"
+                    :content="getAssistantParts(msg.content).thinking"
+                  />
+                </view>
+              </view>
+              <MarkdownRenderer
+                v-if="getAssistantParts(msg.content).body"
+                class="sheet-msg-markdown"
+                :content="getAssistantParts(msg.content).body"
+              />
+              <text
+                v-else-if="getAssistantParts(msg.content).thinking"
+                class="sheet-msg-text"
+              >
+                AI 正在思考中...
+              </text>
+            </view>
             <text v-else class="sheet-msg-text">{{ msg.content }}</text>
           </view>
           <text class="sheet-msg-time">{{ formatTime(msg.timestamp) }}</text>
@@ -32,7 +67,9 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { ChatSessionDetail, ChatSessionMessage } from '@/services/api/chat'
+import { parseAssistantContent } from '@/utils/chat-message'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 
 defineProps<{
@@ -47,6 +84,28 @@ const emit = defineEmits<{
 
 function close() {
   emit('close')
+}
+
+const thinkingExpandedState = ref<Record<string, boolean>>({})
+
+function getAssistantParts(content: string) {
+  return parseAssistantContent(content || '')
+}
+
+function getMessageKey(msg: ChatSessionMessage, idx: number) {
+  return String(msg.id ?? `${msg.timestamp}-${idx}`)
+}
+
+function isThinkingExpanded(messageKey: string, content: string) {
+  if (messageKey in thinkingExpandedState.value) {
+    return thinkingExpandedState.value[messageKey]
+  }
+  const parts = getAssistantParts(content)
+  return !parts.body
+}
+
+function toggleThinking(messageKey: string, content: string) {
+  thinkingExpandedState.value[messageKey] = !isThinkingExpanded(messageKey, content)
 }
 
 function formatTimeRange(start?: number, end?: number | null): string {
@@ -170,6 +229,47 @@ function formatTime(ts: number): string {
 .sheet-msg-markdown {
   font-size: 28rpx;
   line-height: 1.6;
+}
+
+.sheet-assistant-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.sheet-thinking-card {
+  border-radius: 20rpx;
+  border: 1px dashed rgba(186, 150, 104, 0.35);
+  background: rgba(255, 248, 238, 0.92);
+  overflow: hidden;
+}
+
+.sheet-thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 16rpx 20rpx;
+}
+
+.sheet-thinking-title {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #8A6A4A;
+}
+
+.sheet-thinking-toggle {
+  font-size: 22rpx;
+  color: #AA7C52;
+}
+
+.sheet-thinking-body {
+  padding: 0 20rpx 18rpx;
+}
+
+.sheet-thinking-markdown {
+  font-size: 24rpx;
+  line-height: 1.7;
 }
 
 .sheet-msg-time {
