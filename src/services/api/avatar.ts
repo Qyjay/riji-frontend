@@ -82,12 +82,22 @@ export async function updateAvatarStatus(fields: Partial<AvatarStatus>): Promise
 
 // ── 分身侧写 ──────────────────────────────────────────────────────
 
+/** 去除 AI 返回中的 <think>...</think> 标签，只保留正文 */
+function stripThinkTags(profile: AvatarProfile): AvatarProfile {
+  return {
+    ...profile,
+    summary: profile.summary.replace(/<think>[\s\S]*?<\/think>/g, '').trim(),
+  }
+}
+
 export async function getAvatarProfile(): Promise<AvatarProfile> {
-  if (USE_MOCK) return mock.getAvatarProfile()
-  return request<AvatarProfile>({ url: '/avatar/profile' })
+  if (USE_MOCK) return stripThinkTags(mock.getAvatarProfile())
+  const res = await request<AvatarProfile>({ url: '/avatar/profile' })
+  return stripThinkTags(res)
 }
 
 export async function regenerateProfile(): Promise<AvatarProfile> {
-  if (USE_MOCK) return mock.regenerateProfile()
-  return request<AvatarProfile>({ url: '/avatar/profile/regenerate', method: 'POST' })
+  if (USE_MOCK) return stripThinkTags(mock.regenerateProfile())
+  const res = await request<AvatarProfile>({ url: '/avatar/profile/regenerate', method: 'POST' })
+  return stripThinkTags(res)
 }

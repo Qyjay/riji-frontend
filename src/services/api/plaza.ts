@@ -128,6 +128,13 @@ export async function addComment(postId: string, content: string, isAgent = fals
   return request<PlazaComment>({ url: `/plaza/posts/${postId}/comments`, method: 'POST', data: { content, isAgent } })
 }
 
+/** AI 分身自动生成评论：后端根据用户分身画像 + 帖子内容生成并发布 */
+export async function agentComment(postId: string): Promise<PlazaComment> {
+  if (USE_MOCK) return mock.agentComment(postId)
+  const res = await request<{ comment: PlazaComment }>({ url: `/plaza/posts/${postId}/agent-comment`, method: 'POST' })
+  return res.comment
+}
+
 // ── 分身推荐 ──────────────────────────────────────────────────────
 
 export async function getAgentMatches(): Promise<AgentMatch[]> {

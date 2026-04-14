@@ -1,8 +1,5 @@
 <template>
   <view class="page">
-    <!-- 导航栏占位 -->
-    <view :style="{ height: navBarHeight + 'px' }" />
-
     <!-- 自定义导航栏 -->
     <CustomNavBar
       title=""
@@ -11,10 +8,12 @@
       @rightClick="handleMore"
     />
 
+    <!-- 导航栏占位 -->
+    <view class="nav-placeholder" :style="{ height: navBarHeight + 'px' }" />
+
     <scroll-view
       scroll-y
       class="scroll-content"
-      :style="{ paddingBottom: '140rpx' }"
       @scrolltolower="loadMore"
     >
       <!-- 加载中 -->
@@ -127,7 +126,17 @@
                   <text class="agent-badge-text">分身</text>
                 </view>
               </view>
-              <text class="comment-content">{{ comment.content }}</text>
+              <!-- 思考过程折叠 -->
+              <view v-if="parseThink(comment.content).think" class="think-block">
+                <view class="think-toggle" @click="toggleThink(comment.id)">
+                  <text class="think-toggle-icon">{{ expandedThinks[comment.id] ? '▼' : '▶' }}</text>
+                  <text class="think-toggle-text">{{ expandedThinks[comment.id] ? '收起思考过程' : '查看思考过程' }}</text>
+                </view>
+                <view v-if="expandedThinks[comment.id]" class="think-content">
+                  <text class="think-content-text">{{ parseThink(comment.content).think }}</text>
+                </view>
+              </view>
+              <text class="comment-content">{{ parseThink(comment.content).reply }}</text>
               <text class="comment-time">{{ formatTime(comment.createdAt) }}</text>
             </view>
           </view>
@@ -135,8 +144,8 @@
       </template>
     </scroll-view>
 
-    <!-- 底部评论输入栏 -->
-    <view class="bottom-bar" :style="{ paddingBottom: safeBottom + 'px' }">
+    <!-- 底部评论输入栏（正常流，非 fixed） -->
+    <view class="bottom-bar">
       <view class="comment-input-wrap">
         <input
           ref="commentInputRef"
@@ -152,8 +161,8 @@
         <view class="send-btn" @click="submitComment(false)">
           <text class="send-btn-text">发送</text>
         </view>
-        <view class="agent-reply-btn" @click="submitComment(true)">
-          <text class="agent-reply-text">🤖分身回</text>
+        <view class="agent-reply-btn" :class="{ 'agent-reply-btn--loading': agentLoading }" @click="submitAgentComment">
+          <text class="agent-reply-text">{{ agentLoading ? '生成中...' : '🤖分身回' }}</text>
         </view>
       </view>
     </view>
@@ -161,21 +170,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import {
   getPostDetail,
   getPostComments,
   addComment,
+  agentComment,
   likePost,
   getAgentMatches,
 } from '@/services/api/plaza'
 import type { PlazaPost, PlazaComment, AgentMatch } from '@/services/api/plaza'
 
-// 导航栏高度
 const navBarHeight = ref(64)
-const safeBottom = ref(0)
 const postId = ref('')
 
 onLoad((options: any) => {
@@ -185,7 +193,6 @@ onLoad((options: any) => {
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
   navBarHeight.value = (info.statusBarHeight ?? 20) + 44
-  safeBottom.value = info.safeAreaInsets?.bottom ?? 0
 
   if (postId.value) {
     await loadPost(postId.value)
@@ -271,9 +278,25 @@ async function submitComment(isAgent: boolean) {
     const newComment = await addComment(post.value.id, commentText.value, isAgent)
     comments.value.push(newComment)
     commentText.value = ''
-    uni.showToast({ title: isAgent ? '分身已回复' : '评论成功', icon: 'success' })
+    uni.showToast({ title: '评论成功', icon: 'success' })
   } catch {
     uni.showToast({ title: '评论失败，请重试', icon: 'none' })
+  }
+}
+
+const agentLoading = ref(false)
+
+async function submitAgentComment() {
+  if (!post.value || agentLoading.value) return
+  agentLoading.value = true
+  try {
+    const newComment = await agentComment(post.value.id)
+    comments.value.push(newComment)
+    uni.showToast({ title: '分身已回复', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '分身回复失败', icon: 'none' })
+  } finally {
+    agentLoading.value = false
   }
 }
 
@@ -316,18 +339,40 @@ function gridClass(count: number): string {
   if (count === 4) return 'grid-4'
   return 'grid-3'
 }
+
+// 解析 <think>...</think> 内容
+function parseThink(content: string): { think: string; reply: string } {
+  const match = content.match(/<think>([\s\S]*?)<\/think>/)
+  if (!match) return { think: '', reply: content.trim() }
+  const think = match[1].trim()
+  const reply = content.replace(/<think>[\s\S]*?<\/think>/, '').trim()
+  return { think, reply }
+}
+
+// 折叠状态：key 为 comment.id
+const expandedThinks = reactive<Record<string, boolean>>({})
+
+function toggleThink(commentId: string) {
+  expandedThinks[commentId] = !expandedThinks[commentId]
+}
 </script>
 
 <style lang="scss" scoped>
 .page {
-  min-height: 100vh;
+  height: 100vh;
   background: #FDF8F3;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.nav-placeholder {
+  flex-shrink: 0;
 }
 
 .scroll-content {
   flex: 1;
+  min-height: 0;
 }
 
 .loading-wrap {
@@ -642,6 +687,45 @@ function gridClass(count: number): string {
   color: #E8855A;
 }
 
+/* 思考过程折叠 */
+.think-block {
+  margin-bottom: 8rpx;
+}
+
+.think-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 0;
+  cursor: pointer;
+}
+
+.think-toggle-icon {
+  font-size: 20rpx;
+  color: #AE9D92;
+}
+
+.think-toggle-text {
+  font-size: 24rpx;
+  color: #AE9D92;
+  font-weight: 500;
+}
+
+.think-content {
+  margin: 8rpx 0;
+  padding: 16rpx 20rpx;
+  background: rgba(174, 157, 146, 0.08);
+  border-radius: 12rpx;
+  border-left: 4rpx solid #D4C4B8;
+}
+
+.think-content-text {
+  font-size: 24rpx;
+  color: #8A7668;
+  line-height: 1.7;
+  word-break: break-all;
+}
+
 .comment-content {
   font-size: 28rpx;
   color: #4A3628;
@@ -655,13 +739,11 @@ function gridClass(count: number): string {
 
 /* 底部评论输入栏 */
 .bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex-shrink: 0;
   background: #FEFAF7;
   border-top: 1px solid #F0E8E0;
   padding: 16rpx 32rpx;
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   gap: 16rpx;
@@ -713,6 +795,11 @@ function gridClass(count: number): string {
   background: #E8855A11;
   display: flex;
   align-items: center;
+}
+
+.agent-reply-btn--loading {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .agent-reply-text {

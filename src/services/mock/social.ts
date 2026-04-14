@@ -4,19 +4,27 @@ export function getMatches(): Match[] {
   return [
     {
       id: 'm1',
-      nickname: '小鹿',
-      avatar: 'https://picsum.photos/seed/match1/200/200',
-      school: '天津大学',
-      commonTags: ['学习', '留学'],
+      nickname: '小明',
+      avatar: '🧑‍🎓',
+      school: '南开大学',
+      commonTags: ['学习', '编程', '美食'],
       matchedAt: Date.now() - 86400000 * 3,
     },
     {
       id: 'm2',
-      nickname: '星空',
-      avatar: 'https://picsum.photos/seed/match2/200/200',
-      school: '南开大学',
-      commonTags: ['雅思', '心情'],
+      nickname: '小红',
+      avatar: '🏃',
+      school: '天津大学',
+      commonTags: ['运动', '音乐', '美食'],
       matchedAt: Date.now() - 86400000 * 7,
+    },
+    {
+      id: 'm3',
+      nickname: '小华',
+      avatar: '🍳',
+      school: '南开大学',
+      commonTags: ['美食', '阅读', '写作'],
+      matchedAt: Date.now() - 86400000 * 15,
     },
   ]
 }
@@ -31,8 +39,37 @@ export function createMatchRequest(data: Partial<MatchRequest>): MatchRequest {
   }
 }
 
-export function getMessages(): Message[] {
-  return []
+const mockMessages: Record<string, Message[]> = {
+  m1: [
+    { id: 'msg1', matchId: 'm1', fromUid: 'u_xiaolu', content: '嗨！看到你也在准备留学，我们可以一起备考呀', timestamp: Date.now() - 86400000 * 2 - 3600000 },
+    { id: 'msg2', matchId: 'm1', fromUid: 'me', content: '好呀！你现在准备到哪个阶段了？', timestamp: Date.now() - 86400000 * 2 - 3000000 },
+    { id: 'msg3', matchId: 'm1', fromUid: 'u_xiaolu', content: '刚考完一次模考，听力还行但口语还差一点😅 你呢？', timestamp: Date.now() - 86400000 * 2 - 2400000 },
+    { id: 'msg4', matchId: 'm1', fromUid: 'me', content: '我也是口语比较弱，要不我们约个时间一起练口语？', timestamp: Date.now() - 86400000 - 7200000 },
+    { id: 'msg5', matchId: 'm1', fromUid: 'u_xiaolu', content: '太好了！周三晚上 8 点怎么样？在图书馆三楼讨论区', timestamp: Date.now() - 86400000 - 3600000 },
+    { id: 'msg6', matchId: 'm1', fromUid: 'me', content: '没问题！到时候见～', timestamp: Date.now() - 86400000 - 3000000 },
+  ],
+  m2: [
+    { id: 'msg7', matchId: 'm2', fromUid: 'u_xingkong', content: '你好呀，看到你最近日记里提到在准备雅思，加油！', timestamp: Date.now() - 86400000 * 5 },
+    { id: 'msg8', matchId: 'm2', fromUid: 'me', content: '谢谢！你也是在备考吗？', timestamp: Date.now() - 86400000 * 5 + 600000 },
+    { id: 'msg9', matchId: 'm2', fromUid: 'u_xingkong', content: '对，我考过一次了，有些经验可以分享～', timestamp: Date.now() - 86400000 * 4 },
+  ],
+}
+
+export function getMessages(matchId: string): Message[] {
+  return mockMessages[matchId] ?? []
+}
+
+export function sendMessage(matchId: string, content: string): Message {
+  const msg: Message = {
+    id: `msg_${Date.now()}`,
+    matchId,
+    fromUid: 'me',
+    content,
+    timestamp: Date.now(),
+  }
+  if (!mockMessages[matchId]) mockMessages[matchId] = []
+  mockMessages[matchId].push(msg)
+  return msg
 }
 
 export function getMatchRecommendations(): MatchRecommendation[] {

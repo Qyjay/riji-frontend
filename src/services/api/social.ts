@@ -71,9 +71,14 @@ export async function createMatchRequest(data: Partial<MatchRequest>): Promise<M
 }
 
 export async function getMessages(matchId: string, limit = 50, before?: string): Promise<Message[]> {
-  if (USE_MOCK) return mock.getMessages()
+  if (USE_MOCK) return mock.getMessages(matchId)
   const query = before ? `?limit=${limit}&before=${before}` : `?limit=${limit}`
   return request<Message[]>({ url: `/social/messages/${matchId}${query}` })
+}
+
+export async function sendMessage(matchId: string, content: string): Promise<Message> {
+  if (USE_MOCK) return mock.sendMessage(matchId, content)
+  return request<Message>({ url: `/social/messages/${matchId}`, method: 'POST', data: { content } })
 }
 
 export async function getMatchRecommendations(): Promise<MatchRecommendation[]> {

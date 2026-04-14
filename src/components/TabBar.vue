@@ -104,6 +104,7 @@ const HIDE_ROUTES = [
   'pages/novel/index',
   'pages/novel/reader',
   'pages/social/match',
+  'pages/social/chat',
   'pages/profile/settings',
   'pages/profile/agent-portrait',
   'pages/profile/semester-report',

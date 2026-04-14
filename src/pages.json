@@ -133,6 +133,12 @@
       }
     },
     {
+      "path": "pages/social/chat",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/profile/agent-portrait",
       "style": {
         "navigationStyle": "custom"

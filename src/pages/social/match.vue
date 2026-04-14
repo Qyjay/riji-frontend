@@ -118,7 +118,7 @@
             :key="buddy.id"
             class="buddy-row"
             :class="{ 'buddy-row-border': buddy.id > 1 }"
-            @click="onBuddyClick(buddy.name)"
+            @click="onBuddyClick(buddy)"
           >
             <view class="buddy-avatar">
               <text class="buddy-avatar-emoji">{{ buddy.avatar }}</text>
@@ -305,8 +305,11 @@ function confirmAction() {
   }
 }
 
-function onBuddyClick(name: string) {
-  uni.showToast({ title: `${name}的聊天功能开发中`, icon: 'none' })
+function onBuddyClick(buddy: { id: number; name: string; avatar: string }) {
+  const matchId = buddy.id === 1 ? 'm1' : buddy.id === 2 ? 'm2' : `m${buddy.id}`
+  uni.navigateTo({
+    url: `/pages/social/chat?matchId=${matchId}&nickname=${encodeURIComponent(buddy.name)}&avatar=${encodeURIComponent(buddy.avatar)}`,
+  })
 }
 </script>
 

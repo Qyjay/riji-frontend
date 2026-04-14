@@ -449,6 +449,18 @@ export function addComment(postId: string, content: string, isAgent = false): Pl
   return comment
 }
 
+const agentReplies = [
+  '感觉和你想法好像！我最近也在研究这个，要不一起聊聊？',
+  '哈哈好巧，我也遇到过类似的情况，加油！',
+  '这个帖子好有意思，关注了～有机会线下面基！',
+  '作为同校同学表示深有同感，一起加油叭！',
+]
+
+export function agentComment(postId: string): PlazaComment {
+  const content = agentReplies[Math.floor(Math.random() * agentReplies.length)]
+  return addComment(postId, content, true)
+}
+
 export function getAgentMatches(): AgentMatch[] {
   return mockMatches
 }
