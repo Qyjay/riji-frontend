@@ -80,7 +80,7 @@
             <view class="tl-content">
               <text class="tl-time">{{ formatMatTime(mat.createdAt) }}</text>
               <text class="tl-type-icon">{{ matTypeIcon(mat.type) }}</text>
-              <text class="tl-text" :class="{ 'tl-text-clamp': (mat.content || '').length > 20 }">{{ mat.content || '图片素材' }}</text>
+              <text class="tl-text" :class="{ 'tl-text-clamp': getTimelinePreview(mat).length > 20 }">{{ getTimelinePreview(mat) }}</text>
               <text v-if="mat.emotion" class="tl-emotion">{{ mat.emotion.emoji }}</text>
             </view>
           </view>
@@ -211,6 +211,7 @@ import { getDiaries, generateDiary, getTodaySummary, deleteDiary } from '@/servi
 import type { Diary, TodaySummary } from '@/services/api/diary'
 import { getTodayAnniversaries } from '@/services/api/anniversary'
 import type { Anniversary } from '@/services/api/anniversary'
+import { getAssistantPreview } from '@/utils/chat-message'
 
 const drawerVisible = ref(false)
 const diaries = ref<Diary[]>([])
@@ -419,6 +420,17 @@ function matTypeIcon(type: string): string {
   if (type === 'image') return '📷'
   if (type === 'voice') return '🎤'
   return '📝'
+}
+
+function getTimelinePreview(mat: TodaySummary['materials'][number]): string {
+  if (mat.type === 'chat') {
+    return getAssistantPreview(mat.content || '', 24) || '对话素材'
+  }
+  const content = String(mat.content || '').replace(/\s+/g, ' ').trim()
+  if (!content) {
+    return mat.type === 'image' ? '图片素材' : '已记录素材'
+  }
+  return content.length > 24 ? `${content.slice(0, 24)}...` : content
 }
 
 // ── 跳转 ──

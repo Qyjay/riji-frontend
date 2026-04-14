@@ -49,14 +49,12 @@ function statusText(attachment: DraftChatAttachment) {
 
 <style scoped lang="scss">
 .pending-attachments {
-  background: #fefaf7;
-  border-top: 1px solid rgba(44, 31, 20, 0.06);
-  padding: 12rpx 0;
+  padding: 0 0 12rpx;
 }
 
 .att-scroll {
   white-space: nowrap;
-  padding: 0 24rpx;
+  padding: 0 10rpx;
 }
 
 .att-list {
@@ -71,19 +69,20 @@ function statusText(attachment: DraftChatAttachment) {
 
 .att-thumb,
 .att-file-card {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 12rpx;
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 18rpx;
 }
 
 .att-file-card {
-  background: #f5f0eb;
+  background: rgba(255, 255, 255, 0.78);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4rpx;
   padding: 8rpx;
+  border: 1px solid rgba(232, 133, 90, 0.08);
 }
 
 .att-file-icon-lg {
@@ -116,12 +115,12 @@ function statusText(attachment: DraftChatAttachment) {
 
 .att-remove {
   position: absolute;
-  top: -8rpx;
-  right: -8rpx;
+  top: -6rpx;
+  right: -6rpx;
   width: 36rpx;
   height: 36rpx;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(44, 31, 20, 0.58);
   display: flex;
   align-items: center;
   justify-content: center;
