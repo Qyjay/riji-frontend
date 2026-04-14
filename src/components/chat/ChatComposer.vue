@@ -24,9 +24,9 @@ function handleInput(event: any) {
 
 <template>
   <view class="input-bar">
-    <view class="input-row">
+    <view class="input-shell">
       <view class="attach-btn press-feedback" @click="emit('attach')">
-        <DoodleIcon name="attach" color="#AE9D92" :size="36" />
+        <DoodleIcon name="attach" color="#8A7668" :size="30" />
       </view>
       <textarea
         class="input-field"
@@ -43,11 +43,21 @@ function handleInput(event: any) {
         @focus="emit('focus')"
         @blur="emit('blur')"
       />
-      <view class="voice-btn press-feedback" :class="{ 'voice-btn--active': isRecording }" @click="emit('toggle-recording')">
-        <DoodleIcon name="voice" :color="isRecording ? '#E8855A' : '#AE9D92'" :size="36" />
+      <view
+        v-if="canSend"
+        class="send-btn press-feedback"
+        :class="{ 'send-btn--active': canSend }"
+        @click="emit('send')"
+      >
+        <DoodleIcon name="send" color="#FFFFFF" :size="28" :filtered="false" />
       </view>
-      <view class="send-btn" :class="{ 'send-btn--active': canSend }" @click="emit('send')">
-        <DoodleIcon name="send" color="#FFFFFF" :size="36" :filtered="false" />
+      <view
+        v-else
+        class="voice-btn press-feedback"
+        :class="{ 'voice-btn--active': isRecording }"
+        @click="emit('toggle-recording')"
+      >
+        <DoodleIcon name="voice" :color="isRecording ? '#E8855A' : '#8A7668'" :size="30" />
       </view>
     </view>
   </view>
@@ -55,24 +65,26 @@ function handleInput(event: any) {
 
 <style scoped lang="scss">
 .input-bar {
-  background: #ffffff;
-  border-top: 1px solid rgba(44, 31, 20, 0.06);
-  padding: 16rpx 24rpx;
-  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  padding: 0;
 }
 
-.input-row {
+.input-shell {
   display: flex;
   align-items: flex-end;
   gap: 12rpx;
+  padding: 14rpx 16rpx;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(232, 133, 90, 0.08);
+  border-radius: 32rpx;
+  box-shadow: 0 16rpx 32rpx rgba(125, 91, 61, 0.08);
 }
 
 .attach-btn,
 .voice-btn,
 .send-btn {
-  width: 72rpx;
-  min-width: 72rpx;
-  height: 72rpx;
+  width: 64rpx;
+  min-width: 64rpx;
+  height: 64rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -80,9 +92,14 @@ function handleInput(event: any) {
   flex-shrink: 0;
 }
 
-.attach-btn,
+.attach-btn {
+  align-self: center;
+  background: rgba(245, 240, 235, 0.95);
+}
+
 .voice-btn {
-  background: #f5f0eb;
+  align-self: center;
+  background: rgba(245, 240, 235, 0.95);
 }
 
 .voice-btn--active {
@@ -91,11 +108,11 @@ function handleInput(event: any) {
 
 .input-field {
   flex: 1;
-  min-height: 72rpx;
+  min-height: 64rpx;
   max-height: 220rpx;
-  background: #f5f0eb;
-  border-radius: 36rpx;
-  padding: 18rpx 28rpx;
+  background: transparent;
+  border-radius: 0;
+  padding: 14rpx 6rpx 12rpx;
   font-size: 28rpx;
   line-height: 1.5;
   color: #2c1f14;
@@ -107,7 +124,8 @@ function handleInput(event: any) {
 }
 
 .send-btn {
-  background: #e8ddd5;
+  align-self: center;
+  background: #ead7c8;
 }
 
 .send-btn--active {

@@ -8,7 +8,7 @@ import { parseAssistantContent } from '@/utils/chat-message'
 
 type DisplayItem =
   | { type: 'time'; id: string; label: string }
-  | { type: 'message'; id: string; message: UiChatMessage }
+  | { type: 'message'; id: string; message: UiChatMessage; showAvatar: boolean }
 
 const props = defineProps<{
   messages: UiChatMessage[]
@@ -36,7 +36,7 @@ function formatTimeLabel(timestamp: number) {
 const displayItems = computed<DisplayItem[]>(() => {
   const items: DisplayItem[] = []
   let lastTimestamp = 0
-  props.messages.forEach((message) => {
+  props.messages.forEach((message, index) => {
     if (!lastTimestamp || Math.abs(message.createdAt - lastTimestamp) > 5 * 60 * 1000) {
       items.push({
         type: 'time',
@@ -48,6 +48,7 @@ const displayItems = computed<DisplayItem[]>(() => {
       type: 'message',
       id: message.id,
       message,
+      showAvatar: message.role === 'assistant' && props.messages[index - 1]?.role !== 'assistant',
     })
     lastTimestamp = message.createdAt
   })
@@ -93,9 +94,10 @@ function toggleThinking(message: UiChatMessage) {
             <text class="time-divider-text">{{ item.label }}</text>
           </view>
           <view v-else class="message-wrap" :class="item.message.role === 'user' ? 'message-wrap--user' : 'message-wrap--ai'">
-            <view v-if="item.message.role === 'assistant'" class="msg-avatar doodle-box-v3">
-              <DoodleIcon name="robot" color="#FFFFFF" :size="32" :filtered="false" />
+            <view v-if="item.showAvatar" class="msg-avatar">
+              <DoodleIcon name="robot" color="#FFFFFF" :size="26" :filtered="false" />
             </view>
+            <view v-else-if="item.message.role === 'assistant'" class="msg-avatar-placeholder" />
             <view class="message-stack">
               <view class="message-bubble" :class="item.message.role === 'user' ? 'bubble--user' : 'bubble--ai'">
                 <view v-if="item.message.attachments.length" class="msg-attachments">
@@ -169,10 +171,10 @@ function toggleThinking(message: UiChatMessage) {
 }
 
 .messages-inner {
-  padding: 24rpx 32rpx 16rpx;
+  padding: 18rpx 24rpx 12rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 18rpx;
 }
 
 .time-divider {
@@ -181,17 +183,17 @@ function toggleThinking(message: UiChatMessage) {
 }
 
 .time-divider-text {
-  font-size: 22rpx;
-  color: #ae9d92;
-  padding: 8rpx 18rpx;
+  font-size: 20rpx;
+  color: #b19c90;
+  padding: 6rpx 16rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.56);
 }
 
 .message-wrap {
   display: flex;
   align-items: flex-end;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .message-wrap--user {
@@ -203,37 +205,43 @@ function toggleThinking(message: UiChatMessage) {
 }
 
 .message-stack {
-  max-width: 76%;
+  max-width: 79%;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 6rpx;
 }
 
 .msg-avatar {
-  width: 64rpx;
-  height: 64rpx;
-  background: linear-gradient(135deg, #e8855a, #f0a882) !important;
-  border-color: transparent !important;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, #e8855a, #f0a882);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 1px 2px 0 rgba(232, 133, 90, 0.15);
+  box-shadow: 0 10rpx 22rpx rgba(232, 133, 90, 0.14);
+}
+
+.msg-avatar-placeholder {
+  width: 52rpx;
+  flex-shrink: 0;
 }
 
 .message-bubble {
-  padding: 20rpx 24rpx;
+  padding: 18rpx 20rpx;
   line-height: 1.6;
 }
 
 .bubble--ai {
-  background: #f8f1eb;
-  border-radius: 0 24rpx 24rpx 24rpx;
+  background: rgba(255, 252, 248, 0.88);
+  border-radius: 8rpx 22rpx 22rpx 22rpx;
+  box-shadow: 0 12rpx 28rpx rgba(120, 91, 68, 0.05);
 }
 
 .bubble--user {
-  background: linear-gradient(135deg, #e8855a, #f0a882);
-  border-radius: 24rpx 0 24rpx 24rpx;
+  background: linear-gradient(135deg, #df8156, #eba27f);
+  border-radius: 22rpx 8rpx 22rpx 22rpx;
 }
 
 .bubble-text,
@@ -254,10 +262,10 @@ function toggleThinking(message: UiChatMessage) {
 }
 
 .thinking-card {
-  margin-bottom: 16rpx;
-  border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(174, 157, 146, 0.28);
+  margin-bottom: 14rpx;
+  border-radius: 16rpx;
+  background: rgba(248, 242, 236, 0.9);
+  border: 1px solid rgba(174, 157, 146, 0.18);
   overflow: hidden;
 }
 
@@ -353,7 +361,8 @@ function toggleThinking(message: UiChatMessage) {
   bottom: 24rpx;
   padding: 12rpx 20rpx;
   border-radius: 999rpx;
-  background: rgba(44, 31, 20, 0.78);
+  background: rgba(44, 31, 20, 0.66);
+  box-shadow: 0 10rpx 24rpx rgba(44, 31, 20, 0.12);
 }
 
 .jump-bottom-text {
@@ -362,6 +371,6 @@ function toggleThinking(message: UiChatMessage) {
 }
 
 .scroll-bottom-spacer {
-  height: 20rpx;
+  height: 8rpx;
 }
 </style>

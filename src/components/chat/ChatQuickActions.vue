@@ -3,6 +3,7 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 
 defineProps<{
   collapsed?: boolean
+  compact?: boolean
   actions: Array<{ iconName: string; iconColor: string; label: string; path: string }>
 }>()
 
@@ -12,7 +13,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <view v-if="!collapsed" class="quick-actions">
+  <view v-if="!collapsed" class="quick-actions" :class="{ 'quick-actions--compact': compact }">
     <scroll-view class="quick-scroll" scroll-x>
       <view
         v-for="action in actions"
@@ -31,25 +32,23 @@ const emit = defineEmits<{
 
 <style scoped lang="scss">
 .quick-actions {
-  background: #ffffff;
-  border-top: 1px solid rgba(44, 31, 20, 0.06);
-  padding: 12rpx 0;
+  padding: 8rpx 0 10rpx;
 }
 
 .quick-scroll {
   white-space: nowrap;
-  padding: 0 24rpx;
+  padding: 0 8rpx;
 }
 
 .quick-btn {
   display: inline-flex;
   align-items: center;
   gap: 12rpx;
-  background: #fdf8f3;
-  border-radius: 20rpx;
-  padding: 12rpx 24rpx;
+  background: rgba(255, 255, 255, 0.74);
+  border-radius: 999rpx;
+  padding: 12rpx 20rpx;
   margin-right: 12rpx;
-  border: 1px solid rgba(232, 133, 90, 0.1);
+  border: 1px solid rgba(232, 133, 90, 0.08);
 }
 
 .quick-icon-wrap {
@@ -62,5 +61,13 @@ const emit = defineEmits<{
   font-size: 24rpx;
   color: #4a3628;
   white-space: nowrap;
+}
+
+.quick-actions--compact .quick-btn {
+  padding: 10rpx 18rpx;
+}
+
+.quick-actions--compact .quick-label {
+  font-size: 22rpx;
 }
 </style>

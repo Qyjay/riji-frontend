@@ -53,7 +53,11 @@ let cancelRecordingFlag = false
 
 const interestCount = computed(() => profile.value.styleTags?.length || 23)
 const canSend = computed(() => Boolean(draftText.value.trim()) || pendingAttachments.value.length > 0)
-const quickCollapsed = computed(() => Boolean(draftText.value.trim()) || pendingAttachments.value.length > 0)
+const hasConversation = computed(() => messages.value.length > 0)
+const showCompactActions = computed(
+  () => hasConversation.value && !draftText.value.trim() && pendingAttachments.value.length === 0 && !isRecording.value,
+)
+
 function jumpBottom() {
   manualScrollLocked.value = false
   showScrollToBottom.value = false
@@ -335,30 +339,44 @@ function handleMenu() {
         @retry="chatStore.retryMessage"
       >
         <template #empty>
-          <ChatEmptyState :suggestions="suggestions" @use-prompt="applyPrompt" />
+          <ChatEmptyState
+            :suggestions="suggestions"
+            :actions="quickActions"
+            @use-prompt="applyPrompt"
+            @navigate="handleQuickAction"
+          />
         </template>
       </ChatMessageList>
 
-      <ChatQuickActions :actions="quickActions" :collapsed="quickCollapsed" @navigate="handleQuickAction" />
-      <ChatAttachmentTray :attachments="pendingAttachments" @remove="chatStore.removePendingAttachment" />
-      <ChatRecordingBar :visible="isRecording" :duration="recordDuration" @cancel="cancelRecording" />
-      <ChatComposer
-        :model-value="draftText"
-        :can-send="canSend"
-        :disabled="isStreaming"
-        :is-recording="isRecording"
-        @update:modelValue="chatStore.setDraftText"
-        @send="handleSend"
-        @attach="handleAttach"
-        @toggle-recording="toggleRecording"
-      />
+      <view class="composer-shell" :class="{ 'composer-shell--recording': isRecording }">
+        <ChatAttachmentTray :attachments="pendingAttachments" @remove="chatStore.removePendingAttachment" />
+        <ChatRecordingBar :visible="isRecording" :duration="recordDuration" @cancel="cancelRecording" />
+        <ChatQuickActions
+          v-if="showCompactActions"
+          :actions="quickActions.slice(0, 3)"
+          compact
+          @navigate="handleQuickAction"
+        />
+        <ChatComposer
+          :model-value="draftText"
+          :can-send="canSend"
+          :disabled="isStreaming"
+          :is-recording="isRecording"
+          @update:modelValue="chatStore.setDraftText"
+          @send="handleSend"
+          @attach="handleAttach"
+          @toggle-recording="toggleRecording"
+        />
+      </view>
     </view>
   </view>
 </template>
 
 <style scoped lang="scss">
 .page {
-  background: #fdf8f3;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.88), transparent 42%),
+    linear-gradient(180deg, #fffaf5 0%, #f8f0e8 42%, #fdf8f3 100%);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -370,5 +388,15 @@ function handleMenu() {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.composer-shell {
+  padding: 0 16rpx 18rpx;
+  padding-bottom: calc(18rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(253, 248, 243, 0) 0%, rgba(253, 248, 243, 0.82) 22%, #fdf8f3 100%);
+}
+
+.composer-shell--recording {
+  padding-top: 8rpx;
 }
 </style>
