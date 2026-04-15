@@ -158,8 +158,36 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getUserProfile, updateUserProfile } from '@/services/api/user'
+import { request } from '@/services/request'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+
+// 上传头像到服务器
+async function uploadAvatar(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: 'http://localhost:8000/api/upload/avatar',
+      filePath,
+      name: 'file',
+      header: { Authorization: `Bearer ${uni.getStorageSync('token')}` },
+      success(res) {
+        try {
+          const data = JSON.parse(res.data)
+          if (data.code === 0) {
+            resolve(data.data.avatar)
+          } else {
+            reject(new Error(data.message || '上传失败'))
+          }
+        } catch {
+          reject(new Error('解析响应失败'))
+        }
+      },
+      fail(err) {
+        reject(new Error(err.errMsg || '上传失败'))
+      },
+    })
+  })
+}
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -204,8 +232,13 @@ function chooseAvatar() {
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success(res) {
-      form.avatar = res.tempFilePaths[0]
+    success: async (res) => {
+      try {
+        const url = await uploadAvatar(res.tempFilePaths[0])
+        form.avatar = url
+      } catch (e: any) {
+        uni.showToast({ title: e.message || '上传失败', icon: 'none' })
+      }
     },
   })
 }

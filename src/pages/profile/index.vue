@@ -13,14 +13,14 @@
     <!-- NavBar 占位 -->
     <view class="nav-placeholder" :style="{ height: navPlaceholderHeight + 'px' }" />
 
-    <!-- ── 内容滚动区 ── -->
-    <scroll-view class="page-scroll" scroll-y :style="{ height: scrollHeight + 'px' }">
+    <!-- ── 内容区 ── -->
+    <view class="page-content">
 
       <!-- 用户卡片 -->
       <view class="profile-card" @click="goEditProfile">
         <view class="profile-avatar-wrap">
           <view class="profile-avatar">
-            <image class="profile-avatar-img" src="/static/brand/logo-d-mascot.png" mode="aspectFill" />
+            <image class="profile-avatar-img" :src="avatarUrl" mode="aspectFill" />
           </view>
           <view class="profile-level-badge">
             <text class="profile-level-text">Lv.{{ profile.level }}</text>
@@ -98,8 +98,7 @@
         <text class="logout-text">退出登录</text>
       </view>
 
-      <view class="bottom-spacer" />
-    </scroll-view>
+    </view>
 
     <!-- ── TabBar ── -->
     <TabBar :current="4" />
@@ -109,6 +108,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { getUserProfile } from '@/services/api/user'
 import { getAchievements } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
@@ -118,8 +118,14 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 
+// 头像需要拼接后端地址
+const avatarUrl = computed(() => {
+  if (!profile.value.avatar) return '/static/brand/logo-d-mascot.png'
+  if (profile.value.avatar.startsWith('http')) return profile.value.avatar
+  return 'http://localhost:8000' + profile.value.avatar
+})
+
 const navPlaceholderHeight = ref(64)
-const scrollHeight = ref(600)
 const debugInfo = ref({ windowHeight: 0, statusBarHeight: 0, screenHeight: 0, platform: '' })
 
 const profile = ref<UserProfile>({
@@ -147,7 +153,6 @@ const expHint = computed(() => `再写 ${nextLevelXP.value - currentXP.value} XP
 
 const menuItems = [
   { key: 'avatar',  iconName: 'robot',    iconColor: '#E8855A', name: '我的分身',   iconBg: 'rgba(232, 133, 90, 0.12)', path: '/pages/profile/avatar-memory' },
-  { key: 'skill',   iconName: 'sparkle',  iconColor: '#5BBF8E', name: '技能树',     iconBg: 'rgba(91, 175, 133, 0.12)', path: '' },
   { key: 'report',  iconName: 'book',     iconColor: '#6B8EC4', name: '学期报告',   iconBg: 'rgba(123, 184, 212, 0.12)', path: '/pages/novel/index' },
   { key: 'about',   iconName: 'settings', iconColor: '#E8C44E', name: '关于 App',   iconBg: 'rgba(230, 184, 112, 0.12)', path: '/pages/settings/about' },
 ]
@@ -194,7 +199,15 @@ onMounted(async () => {
     platform: info.uniPlatform || info.platform || 'unknown'
   }
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
-  scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 50
+  await loadProfile()
+})
+
+// 每次页面显示时刷新头像
+onShow(async () => {
+  await loadProfile()
+})
+
+async function loadProfile() {
   try {
     profile.value = await getUserProfile()
   } catch {
@@ -205,7 +218,7 @@ onMounted(async () => {
   } catch {
     achievements.value = []
   }
-})
+}
 </script>
 
 <style lang="scss" scoped>
@@ -217,10 +230,11 @@ onMounted(async () => {
   width: 100%;
 }
 
-.page-scroll {
-  -webkit-overflow-scrolling: touch;
+.page-content {
   padding: 32rpx;
   padding-bottom: 130rpx;
+  min-height: calc(100vh - 64px - 120rpx);
+  box-sizing: border-box;
 }
 
 /* ── 用户卡片 ── */
