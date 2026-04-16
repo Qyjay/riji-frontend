@@ -98,6 +98,9 @@ export interface TodaySummary {
   has_diary: boolean
   diary_id: string | null
   diary_status: string | null
+  greeting_user_name?: string
+  diary_count?: number
+  dominant_emotion?: string
 }
 
 export async function getTodaySummary(date: string): Promise<TodaySummary> {

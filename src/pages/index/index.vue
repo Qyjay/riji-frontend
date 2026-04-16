@@ -116,24 +116,24 @@
         <view class="greeting-inner" :class="isMorning ? 'greeting-morning' : 'greeting-night'">
           <view class="greeting-header">
             <DoodleIcon :name="isMorning ? 'sun' : 'moon'" :color="isMorning ? '#C8A86B' : '#9B72C8'" :size="22" />
-            <text class="greeting-title">{{ isMorning ? '早上好 Kylin！' : '晚安 Kylin' }}</text>
+            <text class="greeting-title">{{ greetingTitle }}</text>
             <view class="greeting-close press-feedback" @click="greetingCardVisible = false">
               <DoodleIcon name="cross" color="#AE9D92" :size="16" />
             </view>
           </view>
 
           <template v-if="isMorning">
-            <text class="greeting-desc">今天有数据结构课，雅思倒计时 43 天</text>
-            <view class="greeting-todo press-feedback">
+            <text class="greeting-desc">{{ greetingDesc }}</text>
+            <view class="greeting-todo press-feedback" @click="handleGreetingAction">
               <DoodleIcon name="list" color="#E8855A" :size="36" />
-              <text class="todo-label">今日待办 (3)</text>
-              <text class="todo-arrow"> 查看详情 → </text>
+              <text class="todo-label">{{ greetingActionLabel }}</text>
+              <text class="todo-arrow"> {{ greetingActionArrow }} </text>
             </view>
           </template>
 
           <template v-else>
-            <text class="greeting-desc">今日共写了 2 篇日记，整体情绪以开心为主</text>
-            <text class="greeting-night-tip">早点休息，明天又是新的一天</text>
+            <text class="greeting-desc">{{ greetingDesc }}</text>
+            <text class="greeting-night-tip">{{ greetingNightTip }}</text>
           </template>
         </view>
       </view>
@@ -238,6 +238,71 @@ const now = new Date()
 const hour = now.getHours()
 const isMorning = hour >= 6 && hour < 12
 const greetingCardVisible = ref(true)
+
+const greetingUserName = computed(() => {
+  const name = String(todaySummary.value?.greeting_user_name || '').trim()
+  return name || '同学'
+})
+
+const greetingTitle = computed(() => {
+  return isMorning ? `早上好 ${greetingUserName.value}！` : `晚安 ${greetingUserName.value}`
+})
+
+const greetingDesc = computed(() => {
+  const summary = todaySummary.value
+  if (!summary) {
+    return isMorning ? '新的一天，记得记录生活里的小闪光' : '今天辛苦了，给自己一个微笑'
+  }
+
+  if (isMorning) {
+    if (summary.material_count > 0) {
+      return `今天已记录 ${summary.material_count} 条素材，继续保持`
+    }
+    return '新的一天，记得记录生活里的小闪光'
+  }
+
+  const diaryCount = summary.diary_count ?? (summary.has_diary ? 1 : 0)
+  const dominant = String(summary.dominant_emotion || '').trim()
+  if (diaryCount > 0) {
+    return dominant
+      ? `今日共写了 ${diaryCount} 篇日记，整体情绪以${dominant}为主`
+      : `今日共写了 ${diaryCount} 篇日记`
+  }
+
+  if (summary.material_count > 0) {
+    return `今天记录了 ${summary.material_count} 条素材，离日记只差一步`
+  }
+
+  return '今天还没有留下记录，睡前写一句也很好'
+})
+
+const greetingNightTip = computed(() => {
+  const summary = todaySummary.value
+  if (!summary) return '早点休息，明天又是新的一天'
+
+  const diaryCount = summary.diary_count ?? (summary.has_diary ? 1 : 0)
+  if (diaryCount > 0) {
+    return '早点休息，明天又是新的一天'
+  }
+  return '如果还没困，不妨写下今天最想记住的一刻'
+})
+
+const greetingActionLabel = computed(() => {
+  const summary = todaySummary.value
+  if (!summary) return '开始记录今天'
+
+  const diaryCount = summary.diary_count ?? (summary.has_diary ? 1 : 0)
+  if (diaryCount > 0) return `今日日记 ${diaryCount} 篇`
+  if (summary.material_count > 0) return `今日素材 ${summary.material_count} 条`
+  return '开始记录今天'
+})
+
+const greetingActionArrow = computed(() => {
+  if (todaySummary.value?.has_diary && todaySummary.value?.diary_id) {
+    return '查看今日日记 →'
+  }
+  return '去记录素材 →'
+})
 
 // ── 加载数据 ──
 onMounted(async () => {
@@ -442,6 +507,14 @@ function goWrite() {
   uni.navigateTo({ url: '/pages/write/index' })
 }
 
+function handleGreetingAction() {
+  if (todaySummary.value?.has_diary && todaySummary.value?.diary_id) {
+    goDetail(todaySummary.value.diary_id)
+    return
+  }
+  goWrite()
+}
+
 function onSearch() {
   uni.navigateTo({ url: '/pages/search/index' })
 }
@@ -460,9 +533,6 @@ function onActionClick(payload: { action: string; diaryId: string }) {
 <style lang="scss" scoped>
 .page {
   background: #FDF8F3;
-}
-
-.nav-placeholder {
 }
 
 /* ── AI 早安/晚安卡片 ── */

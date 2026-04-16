@@ -503,6 +503,9 @@ export function getTodaySummary(date: string): {
   has_diary: boolean
   diary_id: string | null
   diary_status: string | null
+  greeting_user_name: string
+  diary_count: number
+  dominant_emotion: string
 } {
   const todayDiary = mockDiaries.find(d => d.date === date)
   return {
@@ -516,6 +519,9 @@ export function getTodaySummary(date: string): {
     has_diary: !!todayDiary,
     diary_id: todayDiary?.id ?? null,
     diary_status: todayDiary?.status ?? null,
+    greeting_user_name: '同学',
+    diary_count: todayDiary ? 1 : 0,
+    dominant_emotion: todayDiary?.emotionSummary?.dominant || '开心',
   }
 }
 
