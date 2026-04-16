@@ -6,6 +6,7 @@ defineProps<{
   disabled?: boolean
   canSend?: boolean
   isRecording?: boolean
+  useWebSearch?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   (e: 'send'): void
   (e: 'attach'): void
   (e: 'toggle-recording'): void
+  (e: 'toggle-web-search'): void
   (e: 'focus'): void
   (e: 'blur'): void
 }>()
@@ -27,6 +29,13 @@ function handleInput(event: any) {
     <view class="input-shell">
       <view class="attach-btn press-feedback" @click="emit('attach')">
         <DoodleIcon name="attach" color="#8A7668" :size="30" />
+      </view>
+      <view
+        class="web-search-btn press-feedback"
+        :class="{ 'web-search-btn--active': useWebSearch }"
+        @click="emit('toggle-web-search')"
+      >
+        <DoodleIcon name="search" :color="useWebSearch ? '#FFFFFF' : '#8A7668'" :size="28" />
       </view>
       <textarea
         class="input-field"
@@ -80,6 +89,7 @@ function handleInput(event: any) {
 }
 
 .attach-btn,
+.web-search-btn,
 .voice-btn,
 .send-btn {
   width: 64rpx;
@@ -100,6 +110,15 @@ function handleInput(event: any) {
 .voice-btn {
   align-self: center;
   background: rgba(245, 240, 235, 0.95);
+}
+
+.web-search-btn {
+  align-self: center;
+  background: rgba(245, 240, 235, 0.95);
+}
+
+.web-search-btn--active {
+  background: #e8855a;
 }
 
 .voice-btn--active {

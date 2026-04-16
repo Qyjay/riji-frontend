@@ -1,1367 +1,203 @@
 <template>
-  <view class="page-wrapper">
-    <!-- NavBar -->
-    <CustomNavBar
-      title="我的分身"
-      leftIcon="back"
-      rightIcon="🔍"
-      @rightClick="onSearchClick"
-    />
-
-    <!-- 占位撑开 NavBar 高度 -->
+  <view class="page">
+    <CustomNavBar title="我的分身" leftIcon="back" rightIcon="搜索" @rightClick="showSearch = true" />
     <view :style="{ height: navBarHeight + 'px' }" />
 
-    <!-- 搜索浮层 -->
-    <view v-if="showSearch" class="search-overlay" @click.self="showSearch = false">
+    <view v-if="showSearch" class="overlay overlay--top" @click.self="closeSearch">
       <view class="search-box">
-        <input
-          v-model="searchKeyword"
-          class="search-input"
-          placeholder="搜索记忆..."
-          placeholder-style="color:#AE9D92"
-          focus
-          @input="onSearchInput"
-        />
+        <input v-model="searchKeyword" class="search-input" placeholder="搜索记忆、偏好、边界..." focus />
         <text class="search-cancel" @click="closeSearch">取消</text>
       </view>
     </view>
 
-    <scroll-view scroll-y class="scroll-container">
-
-      <!-- ① 头像区 -->
-      <view class="card avatar-card">
-        <view class="avatar-icon-wrap">
-          <DoodleIcon name="robot" :size="120" color="#E8855A" />
-        </view>
-        <text class="avatar-summary">{{ avatarFirstSentence }}</text>
-        <view class="know-bar-wrap">
-          <view class="know-bar-labels">
-            <text class="know-bar-label">了解度</text>
-            <text class="know-bar-pct">85%</text>
-          </view>
-          <view class="know-bar-track">
-            <view class="know-bar-fill" style="width: 85%" />
+    <scroll-view scroll-y class="scroll">
+      <view class="hero">
+        <view class="hero-main">
+          <view class="bot"><DoodleIcon name="robot" :size="104" color="#FFF3D7" /></view>
+          <view class="hero-text">
+            <text class="overline">RIJI AVATAR</text>
+            <text class="hero-title">{{ avatarStatus?.isActive ? '分身正在观察世界' : '分身正在休息' }}</text>
+            <text class="hero-desc">{{ avatarFirstSentence }}</text>
           </view>
         </view>
+        <view class="stats">
+          <view class="stat"><text class="stat-num">{{ memoryDocCount }}</text><text class="stat-label">长期记忆</text></view>
+          <view class="stat"><text class="stat-num">{{ factCount }}</text><text class="stat-label">结构侧写</text></view>
+          <view class="stat"><text class="stat-num">{{ draftActions.length }}</text><text class="stat-label">待确认</text></view>
+        </view>
+        <view class="meter"><view class="meter-head"><text>了解度</text><text>{{ knowledgeLevel }}%</text></view><view class="meter-track"><view class="meter-fill" :style="{ width: knowledgeLevel + '%' }" /></view></view>
       </view>
 
-      <!-- ② 记忆分类 Tab -->
-      <view class="card tab-card">
-        <view class="tab-grid">
-          <view
-            v-for="tab in memoryTabs"
-            :key="tab.key"
-            class="tab-btn"
-            :class="{ 'tab-btn--active': activeTab === tab.key }"
-            @click="switchTab(tab.key)"
-          >
-            <text class="tab-text" :class="{ 'tab-text--active': activeTab === tab.key }">
-              {{ tab.label }}
-            </text>
-          </view>
-        </view>
+      <view class="quick-grid">
+        <view class="quick quick--dark" @click="onRegenerate"><text class="quick-title">{{ isRegenerating ? '生成中...' : '重建侧写' }}</text><text class="quick-desc">用最新记忆刷新画像</text></view>
+        <view class="quick" @click="showAddPanel = true"><text class="quick-title">添加记忆</text><text class="quick-desc">写入偏好、需求、边界</text></view>
+        <view class="quick" @click="onExportMemory"><text class="quick-title">导出备份</text><text class="quick-desc">保存长期记忆快照</text></view>
       </view>
 
-      <!-- ③ 需求卡片区（只在 all / need tab 显示） -->
-      <view v-if="showNeedSection && needMemories.length" class="need-section">
-        <text class="section-header">💡 当前需求</text>
-        <view
-          v-for="item in needMemories"
-          :key="item.id"
-          class="need-card"
-        >
-          <view class="need-card-top">
-            <view class="need-status-dot" :class="`need-dot--${item.matchStatus}`" />
-            <text class="need-content">{{ item.content }}</text>
-          </view>
-          <text class="need-status-text">{{ matchStatusLabel(item.matchStatus) }}</text>
-          <view v-if="item.tags && item.tags.length" class="need-tags">
-            <text
-              v-for="tag in item.tags"
-              :key="tag"
-              class="need-tag"
-            >{{ tag }}</text>
-          </view>
-          <view class="need-actions">
-            <text class="need-btn" @click="editNeed(item)">编辑</text>
-            <text class="need-btn need-btn--close" @click="closeNeed(item)">关闭</text>
-          </view>
-        </view>
+      <view v-if="draftActions.length" class="card">
+        <view class="section-row"><view><text class="overline overline--card">APPROVAL</text><text class="section-title">待确认的分身行动</text></view><text class="pill warm">{{ draftActions.length }} 条</text></view>
+        <view v-for="action in draftActions" :key="action.id" class="draft"><text class="muted">广场评论草稿</text><text class="body-text">{{ action.outputText }}</text><view class="row-actions"><text class="btn ghost" @click="onRejectAction(action.id)">拒绝</text><text class="btn primary" @click="onApproveAction(action.id)">发布</text></view></view>
       </view>
 
-      <!-- ④ 记忆条目列表 -->
-      <view class="memory-list-section">
-        <view
-          v-for="group in groupedMemories"
-          :key="group.label"
-        >
-          <view class="group-header">
-            <text class="group-label">{{ group.label }}</text>
-          </view>
-          <view
-            v-for="item in group.items"
-            :key="item.id"
-            class="memory-item"
-          >
-            <!-- 编辑模式 -->
-            <view v-if="editingId === item.id" class="memory-edit-mode">
-              <textarea
-                v-model="editingContent"
-                class="memory-edit-textarea"
-                :auto-height="true"
-              />
-              <view class="memory-edit-actions">
-                <text class="mem-act-btn mem-act-save" @click="saveEdit(item)">保存</text>
-                <text class="mem-act-btn mem-act-cancel" @click="cancelEdit">取消</text>
-              </view>
-            </view>
-
-            <!-- 正常模式 -->
-            <view v-else class="memory-normal">
-              <text class="mem-cat-icon">{{ categoryIcon(item.category) }}</text>
-              <view class="mem-body">
-                <text class="mem-content">{{ item.content }}</text>
-                <text class="mem-source">来源：{{ sourceLabel(item.source) }} · 置信度 {{ Math.round(item.confidence * 100) }}%</text>
-              </view>
-              <view class="mem-btns">
-                <text class="mem-btn" @click="startEdit(item)">✏️</text>
-                <text class="mem-btn" @click="removeMemory(item.id)">🗑️</text>
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <!-- 搜索无结果 -->
-        <view v-if="searchKeyword && filteredMemories.length === 0" class="empty-tip">
-          <text class="empty-tip-text">没有找到相关记忆</text>
-        </view>
+      <view class="card">
+        <view class="section-row"><view><text class="overline overline--card">PORTRAIT</text><text class="section-title">分身侧写</text></view><text class="soft-link" @click="onRegenerate">刷新</text></view>
+        <text class="body-text">{{ avatarProfile?.summary || '还没有生成侧写。让日记、对话和素材先沉淀一些记忆，或者点击“重建侧写”。' }}</text>
+        <view v-if="profileKeywords.length" class="chips"><text v-for="keyword in profileKeywords" :key="keyword" class="chip">{{ keyword }}</text></view>
+        <text class="meta">基于 {{ avatarProfile?.diaryCount ?? 0 }} 篇日记、{{ avatarProfile?.chatCount ?? memoryDocCount }} 条对话/记忆线索生成</text>
       </view>
 
-      <!-- ⑤ 添加记忆 -->
-      <view class="card add-memory-card" @click="showAddPanel = true">
-        <text class="add-memory-text">➕ 添加记忆</text>
+      <view class="card tabs-card"><view class="section-row compact"><view><text class="overline overline--card">MEMORY FACTS</text><text class="section-title">结构化记忆</text></view><text class="soft-link" @click="showAddPanel = true">新增</text></view><scroll-view scroll-x show-scrollbar="false" class="tabs-scroll"><view class="tabs"><view v-for="tab in memoryTabs" :key="tab.key" class="tab" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key"><text>{{ tab.label }}</text></view></view></scroll-view></view>
+
+      <view v-if="showNeedSection && needFacts.length" class="block"><view class="section-row plain"><text class="section-title">当前需求</text><text class="pill">{{ needFacts.length }} 条</text></view><view v-for="item in needFacts" :key="item.id" class="need"><text class="body-text">{{ item.content }}</text><view class="fact-meta"><text>{{ percent(item.confidence) }}</text><text>{{ stabilityLabel(item.stability) }}</text></view><view class="row-actions"><text class="btn ghost" @click="startEdit(item)">编辑</text><text class="btn danger" @click="disableFact(item)">停用</text></view></view></view>
+      <view class="block">
+        <view v-if="groupedFacts.length === 0" class="empty"><text class="empty-title">还没有这类结构化记忆</text><text class="empty-desc">你可以手动添加，也可以从长期记忆文档里抽取事实。</text><text class="empty-btn" @click="showAddPanel = true">添加第一条</text></view>
+        <view v-for="group in groupedFacts" :key="group.label"><text class="group-title">{{ group.label }}</text><view v-for="item in group.items" :key="item.id" class="fact-card" :class="{ pinned: item.isPinned }"><view v-if="editingId === item.id" class="edit-box"><view class="mini-tabs"><text v-for="tab in factTabs" :key="tab.key" class="mini-tab" :class="{ active: editingCategory === tab.key }" @click="editingCategory = tab.key">{{ tab.label }}</text></view><textarea v-model="editingContent" class="textarea" :auto-height="true" /><view class="row-actions"><text class="btn ghost" @click="cancelEdit">取消</text><text class="btn primary" @click="saveEdit(item)">保存</text></view></view><view v-else class="fact-row"><view class="fact-icon">{{ categoryIcon(item.category) }}</view><view class="fact-body"><view class="fact-head"><text class="fact-category">{{ categoryLabel(item.category) }}</text><text v-if="item.isPinned" class="pin">置顶</text></view><text class="fact-content">{{ item.content }}</text><view class="fact-meta"><text>{{ percent(item.confidence) }}</text><text>{{ stabilityLabel(item.stability) }}</text><text>{{ formatDate(item.updatedAt) }}</text></view></view><view class="fact-actions"><text @click="togglePinned(item)">{{ item.isPinned ? '取消' : '置顶' }}</text><text @click="startEdit(item)">编辑</text><text class="danger-text" @click="removeFact(item.id)">删除</text></view></view></view></view>
       </view>
 
-      <!-- 添加记忆面板 -->
-      <view v-if="showAddPanel" class="panel-overlay" @click.self="showAddPanel = false">
-        <view class="add-panel">
-          <text class="panel-title">添加记忆</text>
-          <view class="panel-tabs">
-            <view
-              v-for="tab in memoryTabs.filter(t => t.key !== 'all')"
-              :key="tab.key"
-              class="panel-tab"
-              :class="{ 'panel-tab--active': newMemCategory === tab.key }"
-              @click="newMemCategory = tab.key"
-            >
-              <text class="panel-tab-text">{{ tab.label }}</text>
-            </view>
-          </view>
-          <textarea
-            v-model="newMemContent"
-            class="panel-textarea"
-            placeholder="写下这条记忆..."
-            placeholder-style="color:#AE9D92"
-          />
-          <view class="panel-confirm-row">
-            <text class="panel-cancel" @click="showAddPanel = false">取消</text>
-            <text class="panel-confirm" @click="confirmAddMemory">确认添加</text>
-          </view>
-        </view>
-      </view>
+      <view v-if="showAddPanel" class="overlay panel-overlay" @click.self="showAddPanel = false"><view class="panel"><view class="handle" /><text class="panel-title">添加结构化记忆</text><view class="mini-tabs"><text v-for="tab in factTabs" :key="tab.key" class="mini-tab" :class="{ active: newFactCategory === tab.key }" @click="newFactCategory = tab.key">{{ tab.label }}</text></view><textarea v-model="newFactContent" class="textarea panel-textarea" placeholder="例如：我喜欢低压力、慢慢熟悉的社交方式。" /><view class="check-row" @click="newFactPinned = !newFactPinned"><view class="checkbox" :class="{ checked: newFactPinned }"><text v-if="newFactPinned">✓</text></view><text>作为重要记忆置顶</text></view><view class="row-actions"><text class="btn ghost" @click="showAddPanel = false">取消</text><text class="btn primary" @click="confirmAddFact">写入记忆</text></view></view></view>
 
-      <!-- ⑥ 分身侧写 -->
-      <view class="card profile-card">
-        <text class="section-header">分身侧写</text>
-        <text v-if="isEditingProfile" class="profile-summary-text">
-          <textarea
-            v-model="editingProfileContent"
-            class="profile-edit-textarea"
-            :auto-height="true"
-          />
-        </text>
-        <text v-else class="profile-summary-text">{{ avatarProfile?.summary }}</text>
-        <text class="profile-meta">基于 {{ avatarProfile?.diaryCount ?? 47 }} 篇日记和 {{ avatarProfile?.chatCount ?? 23 }} 次对话生成</text>
-        <view class="profile-actions">
-          <text
-            class="profile-btn"
-            :class="{ 'profile-btn--loading': isRegenerating }"
-            @click="onRegenerate"
-          >{{ isRegenerating ? '生成中...' : '重新生成' }}</text>
-          <text class="profile-btn profile-btn--primary" @click="onEditProfile">
-            {{ isEditingProfile ? '保存' : '编辑' }}
-          </text>
-        </view>
-      </view>
+      <view class="card"><view class="section-row"><view><text class="overline overline--card">LONG MEMORY</text><text class="section-title">长期记忆底座</text></view><text class="pill warm">{{ memoryDocCount }} 条</text></view><text class="body-text">日记、对话、素材、广场互动会先沉淀为原文记忆，再抽取成上方的结构化侧写。</text><view v-if="latestMemoryDocs.length" class="docs"><view v-for="doc in latestMemoryDocs" :key="doc.id" class="doc"><text class="doc-source">{{ sourceTypeLabel(doc.sourceType) }}</text><text class="doc-title">{{ doc.title || doc.summary || '未命名记忆' }}</text></view></view><view class="row-actions"><text class="btn ghost" @click="onExportMemory">导出</text><text class="btn danger" @click="onDeleteAllMemory">清空记忆</text></view></view>
 
-      <!-- ⑦ 分身设置 -->
-      <view class="card settings-card">
-        <text class="section-header">⚙️ 分身设置</text>
-
-        <!-- 分身状态 -->
-        <view class="setting-row">
-          <text class="setting-label">分身状态</text>
-          <view class="setting-right">
-            <text class="setting-value-text">{{ avatarStatus?.isActive ? '冲浪中' : '休息中' }}</text>
-            <switch
-              :checked="avatarStatus?.isActive ?? false"
-              color="#E8855A"
-              @change="handleAvatarActiveChange"
-            />
-          </view>
-        </view>
-
-        <!-- 自动浏览频道 -->
-        <view class="setting-group">
-          <text class="setting-group-label">自动浏览频道</text>
-          <view class="setting-checkbox-grid">
-            <view
-              v-for="ch in channelOptions"
-              :key="ch.key"
-              class="setting-checkbox-item"
-              @click="toggleChannel(ch.key)"
-            >
-              <view
-                class="checkbox-box"
-                :class="{ 'checkbox-box--checked': isChannelEnabled(ch.key) }"
-              >
-                <text v-if="isChannelEnabled(ch.key)" class="checkbox-check">✓</text>
-              </view>
-              <text class="checkbox-label">{{ ch.label }}</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 自动行为 -->
-        <view class="setting-group">
-          <text class="setting-group-label">自动行为</text>
-          <view class="setting-checkbox-grid">
-            <view
-              v-for="act in actionOptions"
-              :key="act.key"
-              class="setting-checkbox-item"
-              @click="toggleAction(act.key)"
-            >
-              <view
-                class="checkbox-box"
-                :class="{ 'checkbox-box--checked': isActionEnabled(act.key) }"
-              >
-                <text v-if="isActionEnabled(act.key)" class="checkbox-check">✓</text>
-              </view>
-              <text class="checkbox-label">{{ act.label }}</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 匹配范围 -->
-        <view class="setting-group">
-          <text class="setting-group-label">匹配范围</text>
-          <view class="setting-row setting-row--inner">
-            <text class="setting-label">学校</text>
-            <view class="setting-right">
-              <text class="setting-value-text">{{ avatarStatus?.matchRange?.school ?? '南开大学' }}</text>
-              <text class="setting-btn-small" @click="onChangeSchool">切换</text>
-            </view>
-          </view>
-          <view class="setting-row setting-row--inner">
-            <text class="setting-label">距离</text>
-            <view class="setting-right">
-              <text class="setting-value-text">{{ avatarStatus?.matchRange?.distanceKm ?? 3 }} km</text>
-              <view class="distance-btns">
-                <text class="distance-btn" @click="adjustDistance(-1)">−</text>
-                <text class="distance-btn" @click="adjustDistance(1)">+</text>
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <!-- AI 日记风格 -->
-        <view class="setting-row">
-          <view class="setting-label-wrap">
-            <text class="setting-label">AI 日记风格</text>
-            <text class="setting-hint">用分身画像影响日记生成风格</text>
-          </view>
-          <switch
-            :checked="settings.aiDiaryStyle"
-            color="#E8855A"
-            @change="handleAiDiaryStyleChange"
-          />
-        </view>
-
-        <!-- AI 聊天风格 -->
-        <view class="setting-row">
-          <view class="setting-label-wrap">
-            <text class="setting-label">AI 聊天风格</text>
-            <text class="setting-hint">用分身画像影响聊天语气</text>
-          </view>
-          <switch
-            :checked="settings.aiChatStyle"
-            color="#E8855A"
-            @change="handleAiChatStyleChange"
-          />
-        </view>
-
-        <!-- 隐私 -->
-        <view class="setting-group">
-          <text class="setting-group-label">隐私</text>
-          <view class="setting-row setting-row--inner">
-            <text class="setting-label">允许 AI 分析日记</text>
-            <switch
-              :checked="settings.allowAnalyzeDiary"
-              color="#E8855A"
-              @change="handleAnalyzeDiaryChange"
-            />
-          </view>
-          <view class="setting-row setting-row--inner">
-            <text class="setting-label">允许分析对话记录</text>
-            <switch
-              :checked="settings.allowAnalyzeChat"
-              color="#E8855A"
-              @change="handleAnalyzeChatChange"
-            />
-          </view>
-          <view class="setting-row setting-row--inner">
-            <text class="setting-label">数据保留期限</text>
-            <picker
-              mode="selector"
-              :range="dataRetentionOptions"
-              :value="dataRetentionIndex"
-              @change="onDataRetentionChange"
-            >
-              <view class="picker-display">
-                <text class="setting-value-text">{{ dataRetentionOptions[dataRetentionIndex] }}</text>
-                <text class="picker-arrow">›</text>
-              </view>
-            </picker>
-          </view>
-        </view>
-      </view>
-
-      <!-- ⑧ 底部留白 -->
-      <view style="height: 60rpx" />
+      <view class="card"><view class="section-row"><view><text class="overline overline--card">CONTROLS</text><text class="section-title">分身社交设置</text></view><switch :checked="avatarStatus?.isActive ?? false" color="#1F6F61" @change="handleAvatarActiveChange" /></view><view class="setting"><text class="setting-title">自动浏览频道</text><view class="setting-grid"><text v-for="item in channelOptions" :key="item.key" class="setting-chip" :class="{ active: isChannelEnabled(item.key) }" @click="toggleChannel(item.key)">{{ item.label }}</text></view></view><view class="setting"><text class="setting-title">允许的分身动作</text><view class="setting-grid"><text v-for="item in actionOptions" :key="item.key" class="setting-chip" :class="{ active: isActionEnabled(item.key) }" @click="toggleAction(item.key)">{{ item.label }}</text></view></view><view class="setting last"><text class="setting-title">匹配范围</text><view class="setting-row"><text>学校</text><view class="setting-right"><text>{{ avatarStatus?.matchRange?.school || '不限学校' }}</text><text class="soft-link" @click="onChangeSchool">切换</text></view></view><view class="setting-row"><text>距离</text><view class="setting-right"><text>{{ avatarStatus?.matchRange?.distanceKm ?? 3 }} km</text><text class="round-btn" @click="adjustDistance(-1)">−</text><text class="round-btn" @click="adjustDistance(1)">+</text></view></view></view></view>
+      <view class="bottom-space" />
     </scroll-view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
-import {
-  getMemories,
-  addMemory,
-  updateMemory,
-  deleteMemory,
-  getAvatarStatus,
-  updateAvatarStatus,
-  getAvatarProfile,
-  regenerateProfile,
-} from '@/services/api/avatar'
-import type { AvatarMemory, AvatarStatus, AvatarProfile } from '@/services/api/avatar'
+import { approveAgentAction, getAgentActions, getAvatarProfile, getAvatarStatus, regenerateProfile, rejectAgentAction, updateAvatarStatus } from '@/services/api/avatar'
+import type { AgentAction, AvatarProfile, AvatarStatus } from '@/services/api/avatar'
+import { createMemoryFact, deleteAllMemory, deleteMemoryFact, exportMemory, getMemoryDocuments, getMemoryFacts, updateMemoryFact } from '@/services/api/memory'
+import type { MemoryDocument, MemoryFact } from '@/services/api/memory'
 
-// ── NavBar 高度 ────────────────────────────────────────────────────
-const navBarHeight = ref(64) // (statusBarHeight ?? 20) + 44
+const navBarHeight = ref(64)
+const showSearch = ref(false)
+const searchKeyword = ref('')
+const activeTab = ref('all')
+const memoryFacts = ref<MemoryFact[]>([])
+const memoryDocs = ref<MemoryDocument[]>([])
+const draftActions = ref<AgentAction[]>([])
+const memoryDocCount = ref(0)
+const avatarProfile = ref<AvatarProfile | null>(null)
+const avatarStatus = ref<AvatarStatus | null>(null)
+const isRegenerating = ref(false)
+const showAddPanel = ref(false)
+const newFactCategory = ref('profile')
+const newFactContent = ref('')
+const newFactPinned = ref(false)
+const editingId = ref<string | null>(null)
+const editingContent = ref('')
+const editingCategory = ref('profile')
+const memoryTabs = [
+  { key: 'all', label: '全部' },
+  { key: 'profile', label: '画像' },
+  { key: 'interest', label: '兴趣' },
+  { key: 'preference', label: '偏好' },
+  { key: 'habit', label: '习惯' },
+  { key: 'need', label: '需求' },
+  { key: 'relationship', label: '关系' },
+  { key: 'boundary', label: '边界' },
+]
+const factTabs = memoryTabs.filter(item => item.key !== 'all')
+const channelOptions = [{ key: 'buddy', label: '找搭子' }, { key: 'help', label: '求助' }, { key: 'dating', label: '恋爱' }, { key: 'share', label: '分享' }]
+const actionOptions = [{ key: 'browse', label: '浏览广场' }, { key: 'match', label: '发现匹配' }, { key: 'comment', label: '生成评论草稿' }]
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
   navBarHeight.value = (info.statusBarHeight ?? 20) + 44
-  await Promise.all([loadMemories(), loadStatus(), loadProfile()])
+  await Promise.all([loadFacts(), loadStatus(), loadProfile(), loadActions(), loadMemoryDocuments()])
 })
 
-// ── 搜索 ───────────────────────────────────────────────────────────
-const showSearch = ref(false)
-const searchKeyword = ref('')
-
-function onSearchClick() {
-  showSearch.value = true
-}
-function closeSearch() {
-  showSearch.value = false
-  searchKeyword.value = ''
-}
-function onSearchInput() {
-  // 实时过滤（由 filteredMemories 计算属性驱动）
-}
-
-// ── 分类 Tab ──────────────────────────────────────────────────────
-const memoryTabs = [
-  { key: 'all',         label: '全部' },
-  { key: 'fact',        label: '📋 事实' },
-  { key: 'interest',    label: '⭐ 偏好' },
-  { key: 'personality', label: '🧠 性格' },
-  { key: 'need',        label: '💡 需求' },
-  { key: 'habit',       label: '🌙 习惯' },
-  { key: 'relation',    label: '👥 关系' },
-]
-
-const activeTab = ref('all')
-
-async function switchTab(key: string) {
-  activeTab.value = key
-  await loadMemories(key === 'all' ? undefined : key)
-}
-
-// ── 记忆数据 ──────────────────────────────────────────────────────
-const memories = ref<AvatarMemory[]>([])
-
-async function loadMemories(category?: string) {
-  memories.value = await getMemories(category)
-}
-
-// 过滤（搜索关键词）
-const filteredMemories = computed(() => {
-  if (!searchKeyword.value.trim()) return memories.value
-  const kw = searchKeyword.value.trim().toLowerCase()
-  return memories.value.filter(m => m.content.toLowerCase().includes(kw))
+const factCount = computed(() => memoryFacts.value.length)
+const knowledgeLevel = computed(() => Math.min(98, Math.max(12, Math.round(memoryDocCount.value * 4 + factCount.value * 7))))
+const avatarFirstSentence = computed(() => {
+  const summary = avatarProfile.value?.summary?.trim() || '我还在学习你的表达方式、偏好和边界。'
+  const dot = summary.search(/[。！？!?]/)
+  return dot >= 0 ? summary.slice(0, dot + 1) : summary.slice(0, 44)
 })
-
-// 需求卡片
+const profileKeywords = computed(() => memoryFacts.value.filter(item => item.isPinned || ['interest', 'preference', 'habit'].includes(item.category)).slice(0, 6).map(item => item.object || item.content.slice(0, 8)))
+const filteredFacts = computed(() => {
+  const list = activeTab.value === 'all' ? memoryFacts.value : memoryFacts.value.filter(item => item.category === activeTab.value)
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  return keyword ? list.filter(item => `${item.content} ${item.category} ${item.object}`.toLowerCase().includes(keyword)) : list
+})
 const showNeedSection = computed(() => activeTab.value === 'all' || activeTab.value === 'need')
-const needMemories = computed(() =>
-  filteredMemories.value.filter(m => m.category === 'need')
-)
+const needFacts = computed(() => filteredFacts.value.filter(item => item.category === 'need'))
+const nonNeedFacts = computed(() => filteredFacts.value.filter(item => !(showNeedSection.value && item.category === 'need')))
+const latestMemoryDocs = computed(() => memoryDocs.value.slice(0, 3))
 
-// 非需求记忆，按时间分组
-const now = Date.now()
-const DAY = 86400000
-const WEEK = 7 * DAY
-
-const nonNeedMemories = computed(() =>
-  filteredMemories.value.filter(m => !(showNeedSection.value && m.category === 'need'))
-)
-
-interface MemoryGroup {
-  label: string
-  items: AvatarMemory[]
-}
-
-const groupedMemories = computed<MemoryGroup[]>(() => {
-  const today: AvatarMemory[] = []
-  const thisWeek: AvatarMemory[] = []
-  const earlier: AvatarMemory[] = []
-
-  for (const m of nonNeedMemories.value) {
-    const diff = now - m.createdAt
-    if (diff < DAY) today.push(m)
-    else if (diff < WEEK) thisWeek.push(m)
-    else earlier.push(m)
-  }
-
-  const groups: MemoryGroup[] = []
-  if (today.length)    groups.push({ label: '今天', items: today })
-  if (thisWeek.length) groups.push({ label: '本周', items: thisWeek })
-  if (earlier.length)  groups.push({ label: '更早', items: earlier })
+interface FactGroup { label: string; items: MemoryFact[] }
+const groupedFacts = computed<FactGroup[]>(() => {
+  const pinned = nonNeedFacts.value.filter(item => item.isPinned)
+  const regular = nonNeedFacts.value.filter(item => !item.isPinned)
+  const groups: FactGroup[] = []
+  if (pinned.length) groups.push({ label: '置顶记忆', items: pinned })
+  if (regular.length) groups.push({ label: activeTab.value === 'all' ? '全部侧写' : categoryLabel(activeTab.value), items: regular })
   return groups
 })
 
-// ── 分类图标 & 标签 ────────────────────────────────────────────────
-function categoryIcon(cat: string) {
-  const map: Record<string, string> = {
-    fact: '📋', interest: '⭐', personality: '🧠',
-    need: '💡', habit: '🌙', relation: '👥',
-  }
-  return map[cat] ?? '📝'
-}
+function closeSearch() { showSearch.value = false; searchKeyword.value = '' }
+async function loadFacts() { try { memoryFacts.value = (await getMemoryFacts({ activeOnly: true })).items } catch { memoryFacts.value = [] } }
+async function loadMemoryDocuments() { try { const res = await getMemoryDocuments({ limit: 100, offset: 0 }); memoryDocs.value = res.items; memoryDocCount.value = res.items.length } catch { memoryDocs.value = []; memoryDocCount.value = 0 } }
+async function loadActions() { try { draftActions.value = await getAgentActions('draft') } catch { draftActions.value = [] } }
+async function loadProfile() { avatarProfile.value = await getAvatarProfile() }
+async function loadStatus() { avatarStatus.value = await getAvatarStatus() }
 
-function sourceLabel(source: string) {
-  const map: Record<string, string> = {
-    diary: '日记', chat: '对话', manual: '手动', behavior: '行为',
-  }
-  return map[source] ?? source
+async function confirmAddFact() {
+  const content = newFactContent.value.trim()
+  if (!content) { uni.showToast({ title: '请输入记忆内容', icon: 'none' }); return }
+  try {
+    const fact = await createMemoryFact({ category: newFactCategory.value, content, object: content.slice(0, 80), confidence: 1, stability: 'stable', isPinned: newFactPinned.value })
+    memoryFacts.value.unshift(fact)
+    newFactContent.value = ''
+    newFactPinned.value = false
+    showAddPanel.value = false
+    uni.showToast({ title: '已写入记忆', icon: 'success' })
+  } catch (e: any) { uni.showToast({ title: e?.message || '添加失败', icon: 'none' }) }
 }
-
-function matchStatusLabel(status?: string) {
-  const map: Record<string, string> = {
-    searching: '🟢 搜索中', matched: '🟡 已匹配', expired: '⚪ 已过期',
-  }
-  return map[status ?? ''] ?? ''
-}
-
-// ── 需求卡片操作 ────────────────────────────────────────────────────
-async function editNeed(item: AvatarMemory) {
-  startEdit(item)
-}
-
-async function closeNeed(item: AvatarMemory) {
-  await updateMemory(item.id, { matchStatus: 'expired' })
-  await loadMemories(activeTab.value === 'all' ? undefined : activeTab.value)
-}
-
-// ── 记忆编辑 ──────────────────────────────────────────────────────
-const editingId = ref<string | null>(null)
-const editingContent = ref('')
-
-function startEdit(item: AvatarMemory) {
-  editingId.value = item.id
-  editingContent.value = item.content
-}
-function cancelEdit() {
-  editingId.value = null
-  editingContent.value = ''
-}
-async function saveEdit(item: AvatarMemory) {
-  await updateMemory(item.id, { content: editingContent.value })
-  const idx = memories.value.findIndex(m => m.id === item.id)
-  if (idx >= 0) memories.value[idx] = { ...memories.value[idx], content: editingContent.value }
+function startEdit(item: MemoryFact) { editingId.value = item.id; editingContent.value = item.content; editingCategory.value = item.category }
+function cancelEdit() { editingId.value = null; editingContent.value = '' }
+async function saveEdit(item: MemoryFact) {
+  const content = editingContent.value.trim()
+  if (!content) { uni.showToast({ title: '记忆不能为空', icon: 'none' }); return }
+  replaceFact(await updateMemoryFact(item.id, { category: editingCategory.value, content, object: content.slice(0, 80) }))
   cancelEdit()
 }
-
-async function removeMemory(id: string) {
-  uni.showModal({
-    title: '删除记忆',
-    content: '确定删除这条记忆吗？',
-    confirmColor: '#E8855A',
-    success: async (res) => {
-      if (res.confirm) {
-        await deleteMemory(id)
-        memories.value = memories.value.filter(m => m.id !== id)
-      }
-    },
-  })
-}
-
-// ── 添加记忆 ──────────────────────────────────────────────────────
-const showAddPanel = ref(false)
-const newMemCategory = ref('fact')
-const newMemContent = ref('')
-
-async function confirmAddMemory() {
-  if (!newMemContent.value.trim()) {
-    uni.showToast({ title: '请输入内容', icon: 'none' })
-    return
-  }
-  const mem = await addMemory({ category: newMemCategory.value, content: newMemContent.value.trim() })
-  memories.value.unshift(mem)
-  newMemContent.value = ''
-  showAddPanel.value = false
-}
-
-// ── 分身侧写 ──────────────────────────────────────────────────────
-const avatarProfile = ref<AvatarProfile | null>(null)
-const isRegenerating = ref(false)
-const isEditingProfile = ref(false)
-const editingProfileContent = ref('')
-
-const avatarFirstSentence = computed(() => {
-  const s = avatarProfile.value?.summary ?? ''
-  const dot = s.search(/[。！？!?]/)
-  return dot >= 0 ? s.slice(0, dot + 1) : s.slice(0, 40)
-})
-
-async function loadProfile() {
-  avatarProfile.value = await getAvatarProfile()
-}
-
+async function togglePinned(item: MemoryFact) { replaceFact(await updateMemoryFact(item.id, { isPinned: !item.isPinned })) }
+async function disableFact(item: MemoryFact) { const updated = await updateMemoryFact(item.id, { isActive: false }); memoryFacts.value = memoryFacts.value.filter(fact => fact.id !== updated.id) }
+function removeFact(id: string) { uni.showModal({ title: '删除结构化记忆', content: '删除后这条侧写不会再参与分身画像和匹配。确定继续吗？', confirmColor: '#B55248', success: async (res) => { if (!res.confirm) return; await deleteMemoryFact(id); memoryFacts.value = memoryFacts.value.filter(item => item.id !== id) } }) }
+function replaceFact(next: MemoryFact) { const index = memoryFacts.value.findIndex(item => item.id === next.id); if (index >= 0) memoryFacts.value[index] = next }
 async function onRegenerate() {
   if (isRegenerating.value) return
   isRegenerating.value = true
-  try {
-    avatarProfile.value = await regenerateProfile()
-    uni.showToast({ title: '侧写已更新', icon: 'success' })
-  } finally {
-    isRegenerating.value = false
-  }
+  try { avatarProfile.value = await regenerateProfile(); uni.showToast({ title: '侧写已更新', icon: 'success' }) }
+  catch (e: any) { uni.showToast({ title: e?.message || '生成失败', icon: 'none' }) }
+  finally { isRegenerating.value = false }
 }
-
-function onEditProfile() {
-  if (isEditingProfile.value) {
-    // 保存
-    if (avatarProfile.value) {
-      avatarProfile.value = { ...avatarProfile.value, summary: editingProfileContent.value }
-    }
-    isEditingProfile.value = false
-  } else {
-    editingProfileContent.value = avatarProfile.value?.summary ?? ''
-    isEditingProfile.value = true
-  }
-}
-
-// ── 分身状态 ──────────────────────────────────────────────────────
-const avatarStatus = ref<AvatarStatus | null>(null)
-
-async function loadStatus() {
-  avatarStatus.value = await getAvatarStatus()
-}
-
-async function onToggle(field: keyof AvatarStatus, value: boolean) {
-  if (!avatarStatus.value) return
-  avatarStatus.value = { ...avatarStatus.value, [field]: value }
-  await updateAvatarStatus({ [field]: value })
-}
-
-function getSwitchValue(event: any) {
-  return Boolean(event?.detail?.value)
-}
-
-function handleAvatarActiveChange(event: any) {
-  return onToggle('isActive', getSwitchValue(event))
-}
-
-function handleAiDiaryStyleChange(event: any) {
-  settings.aiDiaryStyle = getSwitchValue(event)
-}
-
-function handleAiChatStyleChange(event: any) {
-  settings.aiChatStyle = getSwitchValue(event)
-}
-
-function handleAnalyzeDiaryChange(event: any) {
-  settings.allowAnalyzeDiary = getSwitchValue(event)
-}
-
-function handleAnalyzeChatChange(event: any) {
-  settings.allowAnalyzeChat = getSwitchValue(event)
-}
-
-// 频道选项
-const channelOptions = [
-  { key: 'buddy',  label: '找搭子' },
-  { key: 'help',   label: '求助' },
-  { key: 'dating', label: '恋爱' },
-  { key: 'share',  label: '分享' },
-]
-
-function isChannelEnabled(key: string) {
-  return avatarStatus.value?.enabledChannels?.includes(key) ?? false
-}
-
-async function toggleChannel(key: string) {
-  if (!avatarStatus.value) return
-  const channels = [...(avatarStatus.value.enabledChannels ?? [])]
-  const idx = channels.indexOf(key)
-  if (idx >= 0) channels.splice(idx, 1)
-  else channels.push(key)
-  avatarStatus.value = { ...avatarStatus.value, enabledChannels: channels }
-  await updateAvatarStatus({ enabledChannels: channels })
-}
-
-// 行为选项
-const actionOptions = [
-  { key: 'reply_buddy', label: '帮我回复找搭子帖' },
-  { key: 'reply_help',  label: '帮我回复求助帖' },
-  { key: 'auto_post',   label: '自动发帖' },
-  { key: 'push_match',  label: '发现匹配推送给我' },
-]
-
-function isActionEnabled(key: string) {
-  return avatarStatus.value?.enabledActions?.includes(key) ?? false
-}
-
-async function toggleAction(key: string) {
-  if (!avatarStatus.value) return
-  const actions = [...(avatarStatus.value.enabledActions ?? [])]
-  const idx = actions.indexOf(key)
-  if (idx >= 0) actions.splice(idx, 1)
-  else actions.push(key)
-  avatarStatus.value = { ...avatarStatus.value, enabledActions: actions }
-  await updateAvatarStatus({ enabledActions: actions })
-}
-
-// 匹配范围
-function onChangeSchool() {
-  uni.showModal({
-    title: '切换学校',
-    editable: true,
-    placeholderText: '输入学校名称',
-    success: async (res) => {
-      if (res.confirm && res.content && avatarStatus.value) {
-        const matchRange = { ...avatarStatus.value.matchRange, school: res.content }
-        avatarStatus.value = { ...avatarStatus.value, matchRange }
-        await updateAvatarStatus({ matchRange })
-      }
-    },
-  })
-}
-
-async function adjustDistance(delta: number) {
-  if (!avatarStatus.value) return
-  const current = avatarStatus.value.matchRange?.distanceKm ?? 3
-  const next = Math.max(1, Math.min(50, current + delta))
-  const matchRange = { ...avatarStatus.value.matchRange, distanceKm: next }
-  avatarStatus.value = { ...avatarStatus.value, matchRange }
-  await updateAvatarStatus({ matchRange })
-}
-
-// 本地设置（AI 风格 & 隐私）
-const settings = reactive({
-  aiDiaryStyle: true,
-  aiChatStyle: true,
-  allowAnalyzeDiary: true,
-  allowAnalyzeChat: false,
-})
-
-const dataRetentionOptions = ['30天', '90天', '180天', '365天']
-const dataRetentionIndex = ref(1) // 默认 90天
-
-function onDataRetentionChange(e: any) {
-  dataRetentionIndex.value = e.detail.value
-}
+async function onApproveAction(actionId: string) { try { await approveAgentAction(actionId); draftActions.value = draftActions.value.filter(item => item.id !== actionId); await loadMemoryDocuments(); uni.showToast({ title: '已发布', icon: 'success' }) } catch (e: any) { uni.showToast({ title: e?.message || '发布失败', icon: 'none' }) } }
+async function onRejectAction(actionId: string) { try { await rejectAgentAction(actionId) } finally { draftActions.value = draftActions.value.filter(item => item.id !== actionId) } }
+async function onExportMemory() { try { const payload = await exportMemory(); console.log('memory export', payload); uni.showToast({ title: `已导出 ${payload.documents.length} 条`, icon: 'success' }) } catch (e: any) { uni.showToast({ title: e?.message || '导出失败', icon: 'none' }) } }
+function onDeleteAllMemory() { uni.showModal({ title: '清空全部记忆', content: '这会删除长期记忆、结构化侧写、分身名片、草稿行动和旧分身记忆。确定继续吗？', confirmColor: '#B55248', success: async (res) => { if (!res.confirm) return; await deleteAllMemory(); memoryFacts.value = []; memoryDocs.value = []; draftActions.value = []; memoryDocCount.value = 0; avatarProfile.value = { summary: '', diaryCount: 0, chatCount: 0, generatedAt: 0 }; uni.showToast({ title: '已清空', icon: 'success' }) } }) }
+function handleAvatarActiveChange(event: any) { return updateStatusField('isActive', Boolean(event?.detail?.value)) }
+async function updateStatusField(field: keyof AvatarStatus, value: any) { if (!avatarStatus.value) return; avatarStatus.value = { ...avatarStatus.value, [field]: value }; await updateAvatarStatus({ [field]: value }) }
+function isChannelEnabled(key: string) { return avatarStatus.value?.enabledChannels?.includes(key) ?? false }
+async function toggleChannel(key: string) { if (!avatarStatus.value) return; const channels = [...(avatarStatus.value.enabledChannels ?? [])]; const index = channels.indexOf(key); if (index >= 0) channels.splice(index, 1); else channels.push(key); avatarStatus.value = { ...avatarStatus.value, enabledChannels: channels }; await updateAvatarStatus({ enabledChannels: channels }) }
+function isActionEnabled(key: string) { return avatarStatus.value?.enabledActions?.includes(key) ?? false }
+async function toggleAction(key: string) { if (!avatarStatus.value) return; const actions = [...(avatarStatus.value.enabledActions ?? [])]; const index = actions.indexOf(key); if (index >= 0) actions.splice(index, 1); else actions.push(key); avatarStatus.value = { ...avatarStatus.value, enabledActions: actions }; await updateAvatarStatus({ enabledActions: actions }) }
+function onChangeSchool() { uni.showModal({ title: '切换学校', editable: true, placeholderText: '输入学校名称，留空表示不限', success: async (res) => { if (!res.confirm || !avatarStatus.value) return; const matchRange = { ...avatarStatus.value.matchRange, school: res.content || '' }; avatarStatus.value = { ...avatarStatus.value, matchRange }; await updateAvatarStatus({ matchRange }) } }) }
+async function adjustDistance(delta: number) { if (!avatarStatus.value) return; const current = avatarStatus.value.matchRange?.distanceKm ?? 3; const next = Math.max(1, Math.min(50, current + delta)); const matchRange = { ...avatarStatus.value.matchRange, distanceKm: next }; avatarStatus.value = { ...avatarStatus.value, matchRange }; await updateAvatarStatus({ matchRange }) }
+function categoryIcon(category: string) { return ({ profile: '像', interest: '趣', preference: '偏', habit: '习', need: '需', relationship: '联', boundary: '界', experience: '历' } as Record<string, string>)[category] ?? '记' }
+function categoryLabel(category: string) { return factTabs.find(item => item.key === category)?.label ?? category }
+function stabilityLabel(stability: string) { return ({ stable: '稳定记忆', recent: '近期线索', temporary: '临时状态' } as Record<string, string>)[stability] ?? (stability || '未标注') }
+function sourceTypeLabel(sourceType: string) { return ({ diary: '日记', chat_session: '对话', material: '素材', plaza_post: '广场', plaza_post_index: '公开索引', plaza_comment: '评论', social_message: '私聊' } as Record<string, string>)[sourceType] ?? sourceType }
+function percent(value: number) { return `${Math.round((value || 0) * 100)}%` }
+function formatDate(ts: number) { if (!ts) return '未知'; const date = new Date(ts); return `${date.getMonth() + 1}/${date.getDate()}` }
 </script>
 
 <style lang="scss" scoped>
-// ── 颜色变量 ────────────────────────────────────────────────────────
-$primary: #E8855A;
-$bg: #FDF8F3;
-$text-title: #2C1F14;
-$text-body: #4A3628;
-$hint: #AE9D92;
-$card-bg: #FFFFFF;
-$need-bg: #FFFDF9;
-
-// ── 整体 ────────────────────────────────────────────────────────────
-.page-wrapper {
-  background: $bg;
-  min-height: 100vh;
-  position: relative;
-}
-
-.scroll-container {
-  height: 100vh;
-  box-sizing: border-box;
-}
-
-// ── 通用卡片 ────────────────────────────────────────────────────────
-.card {
-  background: $card-bg;
-  border-radius: 24rpx;
-  margin: 20rpx 32rpx;
-  padding: 32rpx;
-  box-shadow: 0 2px 12px rgba(44, 31, 20, 0.06);
-}
-
-// ── section header ───────────────────────────────────────────────────
-.section-header {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: $text-title;
-  display: block;
-  margin-bottom: 24rpx;
-}
-
-// ── 搜索浮层 ────────────────────────────────────────────────────────
-.search-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.3);
-  z-index: 200;
-  display: flex;
-  align-items: flex-start;
-}
-
-.search-box {
-  background: $card-bg;
-  width: 100%;
-  padding: 32rpx;
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  margin-top: 0;
-}
-
-.search-input {
-  flex: 1;
-  height: 72rpx;
-  background: $bg;
-  border-radius: 36rpx;
-  padding: 0 28rpx;
-  font-size: 28rpx;
-  color: $text-body;
-}
-
-.search-cancel {
-  font-size: 28rpx;
-  color: $primary;
-  white-space: nowrap;
-}
-
-// ── 头像区 ───────────────────────────────────────────────────────────
-.avatar-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.avatar-icon-wrap {
-  margin-bottom: 20rpx;
-}
-
-.avatar-summary {
-  font-size: 28rpx;
-  color: $text-body;
-  text-align: center;
-  line-height: 1.6;
-  margin-bottom: 28rpx;
-}
-
-.know-bar-wrap {
-  width: 100%;
-}
-
-.know-bar-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12rpx;
-}
-
-.know-bar-label {
-  font-size: 24rpx;
-  color: $hint;
-}
-
-.know-bar-pct {
-  font-size: 24rpx;
-  color: $primary;
-  font-weight: 600;
-}
-
-.know-bar-track {
-  width: 100%;
-  height: 12rpx;
-  background: #F0E8E0;
-  border-radius: 6rpx;
-  overflow: hidden;
-}
-
-.know-bar-fill {
-  height: 100%;
-  border-radius: 6rpx;
-  background: linear-gradient(90deg, #E8855A, #D4645C);
-}
-
-// ── 分类 Tab ─────────────────────────────────────────────────────────
-.tab-card {
-  padding: 24rpx;
-}
-
-.tab-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-}
-
-.tab-btn {
-  padding: 14rpx 24rpx;
-  border-radius: 32rpx;
-  background: #F5EDE4;
-  transition: background 0.2s;
-}
-
-.tab-btn--active {
-  background: $primary;
-}
-
-.tab-text {
-  font-size: 26rpx;
-  color: $text-body;
-}
-
-.tab-text--active {
-  color: #FFFFFF;
-  font-weight: 600;
-}
-
-// ── 需求卡片区 ────────────────────────────────────────────────────────
-.need-section {
-  margin: 0 32rpx;
-}
-
-.need-card {
-  background: $need-bg;
-  border-radius: 20rpx;
-  padding: 28rpx;
-  margin-bottom: 20rpx;
-  border: 1px solid #F0E0D0;
-}
-
-.need-card-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 16rpx;
-  margin-bottom: 12rpx;
-}
-
-.need-status-dot {
-  width: 20rpx;
-  height: 20rpx;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 6rpx;
-}
-
-.need-dot--searching { background: #4CAF50; }
-.need-dot--matched   { background: #FFC107; }
-.need-dot--expired   { background: #BDBDBD; }
-
-.need-content {
-  font-size: 28rpx;
-  color: $text-body;
-  line-height: 1.6;
-  flex: 1;
-}
-
-.need-status-text {
-  font-size: 24rpx;
-  color: $hint;
-  display: block;
-  margin-bottom: 12rpx;
-}
-
-.need-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-bottom: 20rpx;
-}
-
-.need-tag {
-  font-size: 22rpx;
-  color: $primary;
-  background: rgba(232, 133, 90, 0.1);
-  border-radius: 20rpx;
-  padding: 6rpx 18rpx;
-}
-
-.need-actions {
-  display: flex;
-  gap: 20rpx;
-  justify-content: flex-end;
-}
-
-.need-btn {
-  font-size: 26rpx;
-  color: $primary;
-  padding: 8rpx 24rpx;
-  border: 1px solid $primary;
-  border-radius: 24rpx;
-}
-
-.need-btn--close {
-  color: $hint;
-  border-color: $hint;
-}
-
-// ── 记忆条目 ──────────────────────────────────────────────────────────
-.memory-list-section {
-  margin: 0 32rpx;
-}
-
-.group-header {
-  margin: 24rpx 0 12rpx;
-}
-
-.group-label {
-  font-size: 24rpx;
-  color: $hint;
-  font-weight: 500;
-}
-
-.memory-item {
-  background: $card-bg;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  margin-bottom: 16rpx;
-  box-shadow: 0 1px 8px rgba(44, 31, 20, 0.04);
-}
-
-.memory-normal {
-  display: flex;
-  align-items: flex-start;
-  gap: 16rpx;
-}
-
-.mem-cat-icon {
-  font-size: 36rpx;
-  flex-shrink: 0;
-  line-height: 1.2;
-}
-
-.mem-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.mem-content {
-  font-size: 28rpx;
-  color: $text-body;
-  line-height: 1.6;
-  display: block;
-  margin-bottom: 8rpx;
-}
-
-.mem-source {
-  font-size: 22rpx;
-  color: $hint;
-  display: block;
-}
-
-.mem-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  flex-shrink: 0;
-}
-
-.mem-btn {
-  font-size: 32rpx;
-  padding: 4rpx;
-}
-
-// 编辑模式
-.memory-edit-mode {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.memory-edit-textarea {
-  width: 100%;
-  min-height: 80rpx;
-  font-size: 28rpx;
-  color: $text-body;
-  border: 1px solid #F0E0D0;
-  border-radius: 12rpx;
-  padding: 16rpx;
-  box-sizing: border-box;
-}
-
-.memory-edit-actions {
-  display: flex;
-  gap: 16rpx;
-  justify-content: flex-end;
-}
-
-.mem-act-btn {
-  font-size: 26rpx;
-  padding: 10rpx 28rpx;
-  border-radius: 24rpx;
-}
-
-.mem-act-save {
-  background: $primary;
-  color: #FFFFFF;
-}
-
-.mem-act-cancel {
-  background: #F5EDE4;
-  color: $hint;
-}
-
-// ── 空提示 ───────────────────────────────────────────────────────────
-.empty-tip {
-  display: flex;
-  justify-content: center;
-  padding: 48rpx 0;
-}
-
-.empty-tip-text {
-  font-size: 28rpx;
-  color: $hint;
-}
-
-// ── 添加记忆 ─────────────────────────────────────────────────────────
-.add-memory-card {
-  border: 1px dashed #D4B8A8;
-  background: transparent;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40rpx;
-  box-shadow: none;
-}
-
-.add-memory-text {
-  font-size: 30rpx;
-  color: $hint;
-}
-
-// 添加面板
-.panel-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.4);
-  z-index: 300;
-  display: flex;
-  align-items: flex-end;
-}
-
-.add-panel {
-  background: $card-bg;
-  width: 100%;
-  border-radius: 32rpx 32rpx 0 0;
-  padding: 40rpx 40rpx 60rpx;
-}
-
-.panel-title {
-  font-size: 34rpx;
-  font-weight: 600;
-  color: $text-title;
-  display: block;
-  margin-bottom: 28rpx;
-  text-align: center;
-}
-
-.panel-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-bottom: 28rpx;
-}
-
-.panel-tab {
-  padding: 12rpx 24rpx;
-  border-radius: 32rpx;
-  background: #F5EDE4;
-}
-
-.panel-tab--active {
-  background: $primary;
-}
-
-.panel-tab-text {
-  font-size: 26rpx;
-  color: $text-body;
-}
-
-.panel-tab--active .panel-tab-text {
-  color: #FFFFFF;
-}
-
-.panel-textarea {
-  width: 100%;
-  min-height: 160rpx;
-  font-size: 28rpx;
-  color: $text-body;
-  background: $bg;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  box-sizing: border-box;
-  margin-bottom: 28rpx;
-}
-
-.panel-confirm-row {
-  display: flex;
-  gap: 24rpx;
-}
-
-.panel-cancel {
-  flex: 1;
-  text-align: center;
-  padding: 24rpx 0;
-  border-radius: 24rpx;
-  background: #F5EDE4;
-  font-size: 30rpx;
-  color: $hint;
-}
-
-.panel-confirm {
-  flex: 2;
-  text-align: center;
-  padding: 24rpx 0;
-  border-radius: 24rpx;
-  background: $primary;
-  font-size: 30rpx;
-  color: #FFFFFF;
-  font-weight: 600;
-}
-
-// ── 分身侧写 ─────────────────────────────────────────────────────────
-.profile-card {
-  // inherits .card
-}
-
-.profile-summary-text {
-  font-size: 28rpx;
-  color: $text-body;
-  line-height: 1.8;
-  display: block;
-  margin-bottom: 20rpx;
-}
-
-.profile-edit-textarea {
-  width: 100%;
-  min-height: 200rpx;
-  font-size: 28rpx;
-  color: $text-body;
-  border: 1px solid #F0E0D0;
-  border-radius: 12rpx;
-  padding: 16rpx;
-  box-sizing: border-box;
-}
-
-.profile-meta {
-  font-size: 22rpx;
-  color: $hint;
-  display: block;
-  margin-bottom: 24rpx;
-}
-
-.profile-actions {
-  display: flex;
-  gap: 20rpx;
-  justify-content: flex-end;
-}
-
-.profile-btn {
-  font-size: 26rpx;
-  color: $primary;
-  padding: 10rpx 28rpx;
-  border: 1px solid $primary;
-  border-radius: 24rpx;
-}
-
-.profile-btn--primary {
-  background: $primary;
-  color: #FFFFFF;
-  border-color: $primary;
-}
-
-.profile-btn--loading {
-  opacity: 0.5;
-}
-
-// ── 分身设置 ─────────────────────────────────────────────────────────
-.settings-card {
-  // inherits .card
-}
-
-.setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20rpx 0;
-  border-bottom: 1px solid #F5EDE4;
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.setting-row--inner {
-  padding: 16rpx 0;
-}
-
-.setting-label {
-  font-size: 28rpx;
-  color: $text-body;
-}
-
-.setting-label-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.setting-hint {
-  font-size: 22rpx;
-  color: $hint;
-}
-
-.setting-right {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.setting-value-text {
-  font-size: 26rpx;
-  color: $hint;
-}
-
-.setting-btn-small {
-  font-size: 24rpx;
-  color: $primary;
-  padding: 6rpx 20rpx;
-  border: 1px solid $primary;
-  border-radius: 20rpx;
-}
-
-.setting-group {
-  padding: 20rpx 0;
-  border-bottom: 1px solid #F5EDE4;
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.setting-group-label {
-  font-size: 26rpx;
-  color: $hint;
-  display: block;
-  margin-bottom: 16rpx;
-}
-
-.setting-checkbox-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20rpx;
-}
-
-.setting-checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  width: calc(50% - 10rpx);
-}
-
-.checkbox-box {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 8rpx;
-  border: 1px solid #D4B8A8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.checkbox-box--checked {
-  background: $primary;
-  border-color: $primary;
-}
-
-.checkbox-check {
-  font-size: 22rpx;
-  color: #FFFFFF;
-  font-weight: 700;
-}
-
-.checkbox-label {
-  font-size: 26rpx;
-  color: $text-body;
-}
-
-.distance-btns {
-  display: flex;
-  gap: 8rpx;
-}
-
-.distance-btn {
-  width: 52rpx;
-  height: 52rpx;
-  border-radius: 26rpx;
-  border: 1px solid $primary;
-  color: $primary;
-  font-size: 32rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  line-height: 52rpx;
-}
-
-.picker-display {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.picker-arrow {
-  font-size: 28rpx;
-  color: $hint;
-}
+$ink:#271A12;$brown:#5E4030;$muted:#9A7863;$paper:#FFF9EF;$green:#1F6F61;$soft:#DDEEE5;$clay:#D97852;$danger:#B55248;$line:rgba(92,61,42,.13);$shadow:0 18rpx 48rpx rgba(73,45,25,.10);
+.page{min-height:100vh;background:radial-gradient(circle at 10% 4%,rgba(241,187,104,.32),transparent 30%),radial-gradient(circle at 94% 14%,rgba(31,111,97,.20),transparent 28%),linear-gradient(180deg,#FFF2DC 0%,#F7EFE5 48%,#FDF8F1 100%);color:$ink}.scroll{height:100vh;box-sizing:border-box}.card,.hero,.quick,.fact-card,.need,.draft,.doc{border:1px solid rgba(255,255,255,.72);box-shadow:$shadow}.card{margin:22rpx 28rpx;padding:30rpx;border-radius:32rpx;background:rgba(255,253,247,.92)}.hero{margin:24rpx 28rpx 20rpx;padding:34rpx;border-radius:40rpx;background:linear-gradient(135deg,rgba(28,87,77,.97),rgba(37,114,96,.88) 45%,rgba(202,109,75,.94));overflow:hidden}.hero-main{display:flex;gap:26rpx;align-items:center}.bot{width:140rpx;height:140rpx;border-radius:42rpx;background:rgba(255,249,239,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0}.hero-text{flex:1}.overline{display:block;font-size:20rpx;letter-spacing:2rpx;color:rgba(255,249,239,.68);font-weight:800;margin-bottom:8rpx}.overline--card{color:$muted}.hero-title{display:block;font-size:38rpx;color:$paper;font-weight:900;line-height:1.25;margin-bottom:12rpx}.hero-desc{display:block;font-size:25rpx;line-height:1.55;color:rgba(255,249,239,.82)}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14rpx;margin-top:30rpx}.stat{padding:20rpx 12rpx;border-radius:24rpx;background:rgba(255,249,239,.16);text-align:center}.stat-num{display:block;font-size:36rpx;color:$paper;font-weight:900}.stat-label{display:block;margin-top:4rpx;font-size:21rpx;color:rgba(255,249,239,.72)}.meter{margin-top:26rpx}.meter-head{display:flex;justify-content:space-between;margin-bottom:12rpx;font-size:23rpx;color:rgba(255,249,239,.82)}.meter-track{height:14rpx;border-radius:999rpx;background:rgba(255,249,239,.18);overflow:hidden}.meter-fill{height:100%;border-radius:999rpx;background:linear-gradient(90deg,#F9E1A8,#fff)}.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16rpx;margin:0 28rpx 20rpx}.quick{min-height:116rpx;padding:22rpx 18rpx;border-radius:28rpx;background:rgba(255,253,247,.86)}.quick--dark{background:$green}.quick--dark .quick-title,.quick--dark .quick-desc{color:$paper}.quick-title{display:block;font-size:27rpx;color:$ink;font-weight:900;margin-bottom:8rpx}.quick-desc{display:block;font-size:21rpx;color:$muted;line-height:1.35}.section-row{display:flex;justify-content:space-between;align-items:center;gap:20rpx;margin-bottom:22rpx}.compact{margin-bottom:16rpx}.plain{margin:0 28rpx 16rpx}.section-title{display:block;font-size:32rpx;color:$ink;font-weight:900}.soft-link,.pill,.chip,.doc-source{padding:8rpx 18rpx;border-radius:999rpx;font-size:23rpx;font-weight:800;background:rgba(31,111,97,.10);color:$green}.warm{background:rgba(217,120,82,.12);color:$clay}.body-text,.fact-content{display:block;font-size:28rpx;color:$brown;line-height:1.7}.meta,.muted{display:block;color:$muted;font-size:23rpx;margin-top:16rpx}.chips,.fact-meta,.tabs,.mini-tabs,.setting-grid{display:flex;flex-wrap:wrap;gap:12rpx}.chips{margin-top:20rpx}.tabs-scroll{white-space:nowrap}.tabs{min-width:max-content;flex-wrap:nowrap}.tab,.mini-tab,.setting-chip{padding:14rpx 24rpx;border-radius:999rpx;background:rgba(92,61,42,.08);color:$brown;font-size:25rpx;font-weight:800}.tab.active,.mini-tab.active,.setting-chip.active{background:$ink;color:$paper}.block{margin:0 28rpx}.need,.fact-card,.draft,.doc{padding:24rpx;margin-bottom:16rpx;border-radius:28rpx;background:rgba(255,253,247,.88);border-color:$line}.need,.fact-card.pinned{background:linear-gradient(135deg,rgba(255,248,224,.94),rgba(255,253,247,.92))}.row-actions{display:flex;gap:16rpx;margin-top:22rpx}.btn{flex:1;padding:18rpx 0;border-radius:999rpx;text-align:center;font-size:25rpx;font-weight:900}.primary{background:$green;color:$paper}.ghost{background:rgba(92,61,42,.08);color:$muted}.danger{background:rgba(181,82,72,.12);color:$danger}.group-title{display:block;margin:20rpx 4rpx 12rpx;font-size:24rpx;color:$muted;font-weight:900}.fact-row{display:flex;align-items:flex-start;gap:18rpx}.fact-icon{width:54rpx;height:54rpx;border-radius:18rpx;flex-shrink:0;background:$soft;color:$green;font-size:25rpx;font-weight:900;display:flex;align-items:center;justify-content:center}.fact-body{flex:1;min-width:0}.fact-head{display:flex;align-items:center;gap:10rpx;margin-bottom:8rpx}.fact-category{color:$green;font-size:24rpx;font-weight:900}.pin{padding:4rpx 12rpx;border-radius:999rpx;background:rgba(241,187,104,.20);color:#A76C17;font-size:20rpx;font-weight:900}.fact-meta{margin-top:12rpx;color:$muted;font-size:22rpx}.fact-actions{display:flex;flex-direction:column;gap:10rpx;flex-shrink:0}.fact-actions text{padding:8rpx 14rpx;border-radius:999rpx;background:rgba(31,111,97,.08);color:$green;font-size:22rpx;font-weight:900;text-align:center}.fact-actions .danger-text{color:$danger;background:rgba(181,82,72,.10)}.edit-box{display:flex;flex-direction:column;gap:18rpx}.textarea{width:100%;min-height:150rpx;box-sizing:border-box;padding:22rpx;border-radius:24rpx;background:rgba(247,239,229,.74);color:$brown;font-size:28rpx;line-height:1.6}.empty{margin:18rpx 0;padding:44rpx 30rpx;border-radius:32rpx;background:rgba(255,253,247,.68);border:1px dashed rgba(92,61,42,.18);text-align:center}.empty-title{display:block;color:$ink;font-size:29rpx;font-weight:900;margin-bottom:8rpx}.empty-desc{display:block;color:$muted;font-size:24rpx;line-height:1.5;margin-bottom:22rpx}.empty-btn{display:inline-flex;padding:14rpx 28rpx;border-radius:999rpx;background:$green;color:$paper;font-size:25rpx;font-weight:900}.overlay{position:fixed;inset:0;z-index:300;background:rgba(39,26,18,.34)}.overlay--top{z-index:220;display:flex;align-items:flex-start}.search-box{width:100%;padding:32rpx;display:flex;gap:18rpx;background:rgba(255,249,239,.96)}.search-input{flex:1;height:76rpx;border-radius:999rpx;padding:0 30rpx;background:#F0E4D5;color:$brown;font-size:27rpx}.search-cancel{align-self:center;color:$green;font-size:27rpx;font-weight:900}.panel-overlay{display:flex;align-items:flex-end}.panel{width:100%;padding:26rpx 36rpx 58rpx;border-radius:42rpx 42rpx 0 0;background:$paper;box-sizing:border-box}.handle{width:88rpx;height:10rpx;border-radius:999rpx;background:rgba(92,61,42,.18);margin:0 auto 28rpx}.panel-title{display:block;color:$ink;font-size:34rpx;font-weight:900;text-align:center;margin-bottom:26rpx}.panel-textarea{margin-top:22rpx}.check-row{display:flex;align-items:center;gap:14rpx;margin:20rpx 0 8rpx;color:$brown;font-size:25rpx}.checkbox{width:34rpx;height:34rpx;border-radius:10rpx;border:1px solid rgba(92,61,42,.28);display:flex;align-items:center;justify-content:center;color:$paper;font-weight:900}.checkbox.checked{background:$green;border-color:$green}.docs{display:flex;flex-direction:column;gap:12rpx;margin-top:22rpx}.doc{display:flex;align-items:center;gap:14rpx;box-shadow:none}.doc-title{flex:1;color:$brown;font-size:25rpx;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.setting{padding:22rpx 0;border-top:1px solid $line}.setting.last{padding-bottom:0}.setting-title{display:block;margin-bottom:16rpx;color:$muted;font-size:25rpx;font-weight:900}.setting-row{display:flex;justify-content:space-between;align-items:center;padding:16rpx 0;color:$brown;font-size:27rpx}.setting-right{display:flex;align-items:center;gap:14rpx;color:$muted;font-size:25rpx}.round-btn{width:48rpx;height:48rpx;border-radius:50%;background:$green;color:$paper;display:flex;align-items:center;justify-content:center;font-size:32rpx;font-weight:900}.bottom-space{height:80rpx}
 </style>

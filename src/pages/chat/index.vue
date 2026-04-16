@@ -16,7 +16,7 @@ import type { UserProfile } from '@/services/api/user'
 import { useChatStore, type DraftChatAttachment } from '@/stores/chat'
 
 const chatStore = useChatStore()
-const { messages, draftText, pendingAttachments, isStreaming, isRecording } = storeToRefs(chatStore)
+const { messages, draftText, pendingAttachments, isStreaming, isRecording, useWebSearch } = storeToRefs(chatStore)
 
 const quickActions = [
   { iconName: 'pen', iconColor: '#E8855A', label: '记录素材', path: '/pages/write/index' },
@@ -318,6 +318,13 @@ function handleMenu() {
     },
   })
 }
+
+function handleToggleWebSearch() {
+  chatStore.toggleWebSearch()
+  if (useWebSearch.value) {
+    uni.showToast({ title: '已开启联网搜索', icon: 'none', duration: 1200 })
+  }
+}
 </script>
 
 <template>
@@ -351,6 +358,9 @@ function handleMenu() {
       <view class="composer-shell" :class="{ 'composer-shell--recording': isRecording }">
         <ChatAttachmentTray :attachments="pendingAttachments" @remove="chatStore.removePendingAttachment" />
         <ChatRecordingBar :visible="isRecording" :duration="recordDuration" @cancel="cancelRecording" />
+        <view v-if="useWebSearch" class="web-search-tip">
+          <text class="web-search-tip__text">已开启联网搜索</text>
+        </view>
         <ChatQuickActions
           v-if="showCompactActions"
           :actions="quickActions.slice(0, 3)"
@@ -362,10 +372,12 @@ function handleMenu() {
           :can-send="canSend"
           :disabled="isStreaming"
           :is-recording="isRecording"
+          :use-web-search="useWebSearch"
           @update:modelValue="chatStore.setDraftText"
           @send="handleSend"
           @attach="handleAttach"
           @toggle-recording="toggleRecording"
+          @toggle-web-search="handleToggleWebSearch"
         />
       </view>
     </view>
@@ -398,5 +410,21 @@ function handleMenu() {
 
 .composer-shell--recording {
   padding-top: 8rpx;
+}
+
+.web-search-tip {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 10rpx 8rpx;
+}
+
+.web-search-tip__text {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #9a765f;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(232, 133, 90, 0.2);
+  border-radius: 999rpx;
+  padding: 6rpx 14rpx;
 }
 </style>

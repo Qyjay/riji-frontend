@@ -1,10 +1,14 @@
 export interface MockChatAttachment {
-  type: 'image' | 'file' | 'voice'
+  type: 'image' | 'file' | 'voice' | 'web'
   name: string
   url: string
   mimeType?: string
   size?: number
   thumbnailUrl?: string
+  snippet?: string
+  domain?: string
+  publishedAt?: string
+  source?: string
 }
 
 export interface MockChatMessage {
@@ -65,7 +69,12 @@ export function getSessionMessages(sessionId: string) {
   }
 }
 
-export async function chat(payload: { message: string; clientMessageId?: string | null; attachments?: MockChatAttachment[] }) {
+export async function chat(payload: {
+  message: string
+  clientMessageId?: string | null
+  useWebSearch?: boolean
+  attachments?: MockChatAttachment[]
+}) {
   const now = Date.now()
   const sessionId = 'mock-session-1'
   const userMessage: MockChatMessage = {

@@ -25,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const thinkingExpandedState = ref<Record<string, boolean>>({})
+const webSourcesExpandedState = ref<Record<string, boolean>>({})
 
 function formatTimeLabel(timestamp: number) {
   const date = new Date(timestamp)
@@ -74,6 +75,36 @@ function toggleThinking(message: UiChatMessage) {
     [message.id]: !isThinkingExpanded(message),
   }
 }
+
+function getWebAttachments(message: UiChatMessage) {
+  return message.attachments.filter((attachment) => attachment.type === 'web')
+}
+
+function getCommonAttachments(message: UiChatMessage) {
+  return message.attachments.filter((attachment) => attachment.type !== 'web')
+}
+
+function isWebSourcesExpanded(message: UiChatMessage) {
+  return Boolean(webSourcesExpandedState.value[message.id])
+}
+
+function toggleWebSources(message: UiChatMessage) {
+  webSourcesExpandedState.value = {
+    ...webSourcesExpandedState.value,
+    [message.id]: !isWebSourcesExpanded(message),
+  }
+}
+
+function openWebSource(url: string) {
+  if (!url) return
+  // #ifdef H5
+  window.open(url, '_blank')
+  // #endif
+  // #ifndef H5
+  uni.setClipboardData({ data: url })
+  uni.showToast({ title: '链接已复制', icon: 'none' })
+  // #endif
+}
 </script>
 
 <template>
@@ -101,7 +132,35 @@ function toggleThinking(message: UiChatMessage) {
             <view class="message-stack">
               <view class="message-bubble" :class="item.message.role === 'user' ? 'bubble--user' : 'bubble--ai'">
                 <view v-if="item.message.attachments.length" class="msg-attachments">
-                  <view v-for="attachment in item.message.attachments" :key="attachment.url + attachment.name" class="msg-attachment-item">
+                  <view
+                    v-if="getWebAttachments(item.message).length"
+                    class="web-sources-wrap"
+                  >
+                    <view class="web-sources-head press-feedback" @click="toggleWebSources(item.message)">
+                      <text class="web-sources-title">联网搜索结果（{{ getWebAttachments(item.message).length }}）</text>
+                      <text class="web-sources-toggle">{{ isWebSourcesExpanded(item.message) ? '收起' : '展开' }}</text>
+                    </view>
+                    <view v-if="isWebSourcesExpanded(item.message)" class="web-sources-body">
+                      <view
+                        v-for="attachment in getWebAttachments(item.message)"
+                        :key="attachment.url + attachment.name"
+                        class="web-source-card press-feedback"
+                        @click="openWebSource(attachment.url)"
+                      >
+                        <view class="web-source-head">
+                          <text class="web-source-title">{{ attachment.name }}</text>
+                          <text v-if="attachment.domain" class="web-source-domain">{{ attachment.domain }}</text>
+                        </view>
+                        <text v-if="attachment.snippet" class="web-source-snippet">{{ attachment.snippet }}</text>
+                        <text class="web-source-url">{{ attachment.url }}</text>
+                      </view>
+                    </view>
+                  </view>
+                  <view
+                    v-for="attachment in getCommonAttachments(item.message)"
+                    :key="attachment.url + attachment.name"
+                    class="msg-attachment-item"
+                  >
                     <image
                       v-if="attachment.type === 'image'"
                       :src="attachment.thumbnailUrl || attachment.url"
@@ -336,6 +395,84 @@ function toggleThinking(message: UiChatMessage) {
 .att-file-name {
   font-size: 24rpx;
   color: #8a7668;
+}
+
+.web-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 14rpx;
+  border-radius: 12rpx;
+  background: rgba(249, 245, 240, 0.92);
+  border: 1px solid rgba(216, 189, 170, 0.42);
+}
+
+.web-sources-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.web-sources-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 10rpx 12rpx;
+  border-radius: 12rpx;
+  background: rgba(245, 237, 229, 0.92);
+  border: 1px solid rgba(216, 189, 170, 0.32);
+}
+
+.web-sources-title {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #5a4537;
+  font-weight: 600;
+}
+
+.web-sources-toggle {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #e8855a;
+}
+
+.web-sources-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.web-source-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.web-source-title {
+  font-size: 24rpx;
+  color: #3f2c1f;
+  font-weight: 600;
+  flex: 1;
+}
+
+.web-source-domain {
+  font-size: 20rpx;
+  color: #9d7f6c;
+}
+
+.web-source-snippet {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #6c5646;
+}
+
+.web-source-url {
+  font-size: 20rpx;
+  color: #a66f52;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .message-error-row {
