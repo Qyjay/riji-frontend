@@ -5,6 +5,7 @@
 import { USE_MOCK } from '../config'
 import { request } from '../request'
 import * as mock from '../mock/plaza'
+import type { AgentAction } from './avatar'
 
 // ── 类型定义 ──────────────────────────────────────────────────────
 
@@ -56,6 +57,12 @@ export interface AgentMatch {
   agentConversation: AgentConversationMessage[]
   status: 'new' | 'viewed' | 'chatting' | 'dismissed'
   createdAt: number
+}
+
+export interface AgentCommentDraftResponse {
+  action: AgentAction
+  requiresApproval: boolean
+  message: string
 }
 
 // ── 帖子 ──────────────────────────────────────────────────────────
@@ -128,11 +135,27 @@ export async function addComment(postId: string, content: string, isAgent = fals
   return request<PlazaComment>({ url: `/plaza/posts/${postId}/comments`, method: 'POST', data: { content, isAgent } })
 }
 
-/** AI 分身自动生成评论：后端根据用户分身画像 + 帖子内容生成并发布 */
-export async function agentComment(postId: string): Promise<PlazaComment> {
-  if (USE_MOCK) return mock.agentComment(postId)
-  const res = await request<{ comment: PlazaComment }>({ url: `/plaza/posts/${postId}/agent-comment`, method: 'POST' })
-  return res.comment
+/** 兼容旧入口：生成分身评论草稿，不直接公开发布 */
+export async function agentComment(postId: string): Promise<AgentCommentDraftResponse> {
+  if (USE_MOCK) {
+    const comment = await mock.agentComment(postId)
+    return {
+      action: {
+        id: `draft_${Date.now()}`,
+        actionType: 'comment_post',
+        targetType: 'plaza_post',
+        targetId: postId,
+        inputContext: {},
+        outputText: comment.content,
+        status: 'draft',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      requiresApproval: true,
+      message: '已生成分身评论草稿，请先确认后再发布。',
+    }
+  }
+  return request<AgentCommentDraftResponse>({ url: `/plaza/posts/${postId}/agent-comment`, method: 'POST' })
 }
 
 // ── 分身推荐 ──────────────────────────────────────────────────────

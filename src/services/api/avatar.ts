@@ -45,6 +45,29 @@ export interface AvatarProfile {
   generatedAt: number
 }
 
+export interface AvatarCard {
+  displayName: string
+  publicSummary: string
+  interestTags: string[]
+  socialIntent: string[]
+  conversationStyle: Record<string, unknown>
+  boundaries: string[]
+  visibility: string
+  updatedAt: number
+}
+
+export interface AgentAction {
+  id: string
+  actionType: 'comment_post' | string
+  targetType: 'plaza_post' | string
+  targetId: string
+  inputContext: Record<string, unknown>
+  outputText: string
+  status: 'draft' | 'published' | 'rejected' | string
+  createdAt: number
+  updatedAt: number
+}
+
 // ── 记忆 ──────────────────────────────────────────────────────────
 
 export async function getMemories(category?: string): Promise<AvatarMemory[]> {
@@ -100,4 +123,35 @@ export async function regenerateProfile(): Promise<AvatarProfile> {
   if (USE_MOCK) return stripThinkTags(mock.regenerateProfile())
   const res = await request<AvatarProfile>({ url: '/avatar/profile/regenerate', method: 'POST' })
   return stripThinkTags(res)
+}
+
+// ── 分身名片 / 行动审批 ────────────────────────────────────────────
+
+export async function getAvatarCard(): Promise<AvatarCard> {
+  return request<AvatarCard>({ url: '/avatar/card' })
+}
+
+export async function regenerateAvatarCard(): Promise<AvatarCard> {
+  return request<AvatarCard>({ url: '/avatar/card/regenerate', method: 'POST' })
+}
+
+export async function getAgentActions(status?: string): Promise<AgentAction[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : ''
+  return request<AgentAction[]>({ url: `/avatar/actions${query}` })
+}
+
+export async function createPlazaCommentDraft(postId: string): Promise<AgentAction> {
+  return request<AgentAction>({
+    url: '/avatar/actions/plaza-comment-draft',
+    method: 'POST',
+    data: { post_id: postId },
+  })
+}
+
+export async function approveAgentAction(actionId: string): Promise<AgentAction> {
+  return request<AgentAction>({ url: `/avatar/actions/${actionId}/approve`, method: 'POST' })
+}
+
+export async function rejectAgentAction(actionId: string): Promise<AgentAction> {
+  return request<AgentAction>({ url: `/avatar/actions/${actionId}/reject`, method: 'POST' })
 }

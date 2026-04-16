@@ -166,6 +166,20 @@
         </view>
       </view>
     </view>
+
+    <view v-if="draftAction" class="draft-overlay" @click.self="draftAction = null">
+      <view class="draft-panel">
+        <text class="draft-kicker">🤖 分身草稿</text>
+        <text class="draft-title">公开发出前，先由你确认</text>
+        <text class="draft-content">{{ draftAction.outputText }}</text>
+        <view class="draft-actions">
+          <view class="draft-btn draft-btn--ghost" @click="rejectDraft">丢弃</view>
+          <view class="draft-btn draft-btn--primary" :class="{ 'draft-btn--loading': draftApproving }" @click="approveDraft">
+            {{ draftApproving ? '发布中...' : '确认发布' }}
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -182,6 +196,8 @@ import {
   getAgentMatches,
 } from '@/services/api/plaza'
 import type { PlazaPost, PlazaComment, AgentMatch } from '@/services/api/plaza'
+import { approveAgentAction, rejectAgentAction } from '@/services/api/avatar'
+import type { AgentAction } from '@/services/api/avatar'
 
 const navBarHeight = ref(64)
 const postId = ref('')
@@ -285,19 +301,58 @@ async function submitComment(isAgent: boolean) {
 }
 
 const agentLoading = ref(false)
+const draftAction = ref<AgentAction | null>(null)
+const draftApproving = ref(false)
 
 async function submitAgentComment() {
   if (!post.value || agentLoading.value) return
   agentLoading.value = true
   try {
-    const newComment = await agentComment(post.value.id)
-    comments.value.push(newComment)
-    uni.showToast({ title: '分身已回复', icon: 'success' })
+    const draft = await agentComment(post.value.id)
+    draftAction.value = draft.action
+    uni.showToast({ title: '草稿已生成', icon: 'success' })
   } catch (e: any) {
     uni.showToast({ title: e?.message || '分身回复失败', icon: 'none' })
   } finally {
     agentLoading.value = false
   }
+}
+
+async function approveDraft() {
+  if (!draftAction.value || !post.value || draftApproving.value) return
+  draftApproving.value = true
+  try {
+    const approved = await approveAgentAction(draftAction.value.id)
+    comments.value.push({
+      id: approved.id,
+      postId: post.value.id,
+      authorId: 'me',
+      authorName: '我的分身',
+      authorAvatar: post.value.authorAvatar,
+      content: approved.outputText,
+      isAgent: true,
+      createdAt: Date.now(),
+    })
+    post.value = {
+      ...post.value,
+      comments: post.value.comments + 1,
+      agentResponses: post.value.agentResponses + 1,
+    }
+    draftAction.value = null
+    uni.showToast({ title: '分身已发布', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '发布失败', icon: 'none' })
+  } finally {
+    draftApproving.value = false
+  }
+}
+
+async function rejectDraft() {
+  if (!draftAction.value) return
+  try {
+    await rejectAgentAction(draftAction.value.id)
+  } catch {}
+  draftAction.value = null
 }
 
 // 预览图片
@@ -805,5 +860,78 @@ function toggleThink(commentId: string) {
 .agent-reply-text {
   font-size: 24rpx;
   color: #E8855A;
+}
+
+.draft-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(44, 31, 20, 0.36);
+}
+
+.draft-panel {
+  width: 100%;
+  padding: 36rpx 36rpx calc(42rpx + env(safe-area-inset-bottom));
+  border-radius: 32rpx 32rpx 0 0;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(232, 133, 90, 0.18), transparent 34%),
+    #fffaf5;
+  box-shadow: 0 -12rpx 42rpx rgba(44, 31, 20, 0.16);
+}
+
+.draft-kicker {
+  display: block;
+  font-size: 24rpx;
+  color: #E8855A;
+  margin-bottom: 10rpx;
+}
+
+.draft-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #2C1F14;
+  margin-bottom: 22rpx;
+}
+
+.draft-content {
+  display: block;
+  padding: 26rpx;
+  border-radius: 22rpx;
+  background: #F5F0EB;
+  color: #4A3628;
+  font-size: 29rpx;
+  line-height: 1.7;
+}
+
+.draft-actions {
+  display: flex;
+  gap: 18rpx;
+  margin-top: 28rpx;
+}
+
+.draft-btn {
+  flex: 1;
+  padding: 22rpx 0;
+  border-radius: 999rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.draft-btn--ghost {
+  color: #8A7668;
+  background: #F1E8DF;
+}
+
+.draft-btn--primary {
+  color: #fff;
+  background: #E8855A;
+}
+
+.draft-btn--loading {
+  opacity: 0.55;
 }
 </style>

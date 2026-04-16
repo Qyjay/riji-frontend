@@ -3,12 +3,16 @@ import { request } from '../request'
 import * as mock from '../mock/chat'
 
 export interface ChatAttachment {
-  type: 'image' | 'file' | 'voice'
+  type: 'image' | 'file' | 'voice' | 'web'
   name: string
   url: string
   mimeType?: string
   size?: number
   thumbnailUrl?: string
+  snippet?: string
+  domain?: string
+  publishedAt?: string
+  source?: string
 }
 
 export interface ChatMessage {
@@ -53,6 +57,7 @@ export interface CloseSessionResult {
 export interface ChatSendPayload {
   message: string
   clientMessageId?: string | null
+  useWebSearch?: boolean
   attachments?: ChatAttachment[]
 }
 
@@ -74,6 +79,7 @@ export interface UploadChatFileResult {
 export type ChatStreamEvent =
   | { type: 'session'; sessionId: string }
   | { type: 'ack'; clientMessageId?: string | null; message: ChatMessage }
+  | { type: 'web_search'; results: ChatAttachment[] }
   | { type: 'chunk'; text: string }
   | { type: 'done'; message: ChatMessage }
   | { type: 'error'; message: string }

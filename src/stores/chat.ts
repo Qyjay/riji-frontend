@@ -49,6 +49,7 @@ export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false)
   const streamingMessageId = ref<string | null>(null)
   const isRecording = ref(false)
+  const useWebSearch = ref(false)
   const activeSessionId = ref<string | null>(null)
   const lastPreview = computed(() => messages.value[messages.value.length - 1] || null)
 
@@ -170,6 +171,7 @@ export const useChatStore = defineStore('chat', () => {
         {
           message: text,
           clientMessageId,
+          useWebSearch: useWebSearch.value,
           attachments: uploadedAttachments,
         },
         {
@@ -257,6 +259,14 @@ export const useChatStore = defineStore('chat', () => {
     streamingMessageId.value = null
   }
 
+  function setUseWebSearch(value: boolean) {
+    useWebSearch.value = value
+  }
+
+  function toggleWebSearch() {
+    useWebSearch.value = !useWebSearch.value
+  }
+
   return {
     messages,
     draftText,
@@ -264,6 +274,7 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming,
     streamingMessageId,
     isRecording,
+    useWebSearch,
     activeSessionId,
     lastPreview,
     loadHistory,
@@ -277,11 +288,13 @@ export const useChatStore = defineStore('chat', () => {
     transcribeVoice,
     closeCurrentSession,
     clearConversation,
+    setUseWebSearch,
+    toggleWebSearch,
     upsertMessage,
   }
 }, {
   persist: {
     storage: uniStorage,
-    paths: ['messages', 'draftText', 'activeSessionId'],
+    paths: ['messages', 'draftText', 'activeSessionId', 'useWebSearch'],
   },
 })
