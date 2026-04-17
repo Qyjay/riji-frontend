@@ -32,7 +32,7 @@ defineProps<{
   padding: 14rpx 26rpx 18rpx;
   background: rgba(255, 255, 255, 0.52);
   border-bottom: 1px solid rgba(44, 31, 20, 0.04);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(8rpx);
 }
 
 .ai-info-icon {

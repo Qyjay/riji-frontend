@@ -233,7 +233,7 @@ async function loadProfile() {
 .page-content {
   padding: 32rpx;
   padding-bottom: 130rpx;
-  min-height: calc(100vh - 64px - 120rpx);
+  min-height: calc(100vh - 248rpx);
   box-sizing: border-box;
 }
 
