@@ -42,6 +42,39 @@ function toUiMessage(message: ChatMessage): UiChatMessage {
   }
 }
 
+function getReadableChatError(error: unknown, options: { webSearchRequested: boolean; webSearchReturned: boolean }) {
+  const rawMessage = error instanceof Error ? error.message : String(error || '')
+  const lower = rawMessage.toLowerCase()
+  const isAiNoResponse = [
+    'server disconnected',
+    'network request failed',
+    'network error',
+    '请求超时',
+    'readtimeout',
+    'timeout',
+    'failed to fetch',
+    'http 502',
+    'http 503',
+    'http 504',
+    'ai 服务异常',
+    'miniMax'.toLowerCase(),
+  ].some((keyword) => lower.includes(keyword))
+
+  if (options.webSearchRequested && !options.webSearchReturned) {
+    return '联网搜索失败：搜索服务暂时没有响应，请稍后重试，或关闭联网搜索后再发送。'
+  }
+
+  if (options.webSearchRequested && options.webSearchReturned && isAiNoResponse) {
+    return '联网搜索已返回结果，但 AI 暂未响应，请稍后重试。'
+  }
+
+  if (isAiNoResponse) {
+    return 'AI 暂未响应：服务连接中断或超时，请稍后重试。'
+  }
+
+  return rawMessage || '发送失败，请稍后重试。'
+}
+
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<UiChatMessage[]>([])
   const draftText = ref('')
@@ -166,15 +199,23 @@ export const useChatStore = defineStore('chat', () => {
     streamingMessageId.value = optimisticAssistantId
 
     let acked = false
+    let webSearchReturned = false
+    let friendlyError: string | null = null
+    const webSearchRequested = useWebSearch.value
     try {
       await chatStream(
         {
           message: text,
           clientMessageId,
-          useWebSearch: useWebSearch.value,
+          useWebSearch: webSearchRequested,
           attachments: uploadedAttachments,
         },
         {
+          onEvent: (event) => {
+            if (event.type === 'web_search') {
+              webSearchReturned = true
+            }
+          },
           onSession: (sessionId) => {
             activeSessionId.value = sessionId
             const currentUser = messages.value.find((item) => item.id === optimisticUserId)
@@ -208,21 +249,36 @@ export const useChatStore = defineStore('chat', () => {
             }
           },
           onError: (error) => {
+            friendlyError = getReadableChatError(error, {
+              webSearchRequested,
+              webSearchReturned,
+            })
             if (!acked) {
               const user = messages.value.find((item) => item.id === optimisticUserId)
               if (user) {
                 user.status = 'failed'
-                user.error = error.message
+                user.error = friendlyError
               }
             }
             const assistant = messages.value.find((item) => item.id === optimisticAssistantId)
             if (assistant) {
               assistant.status = 'failed'
-              assistant.error = error.message
+              assistant.error = friendlyError
             }
           },
         },
       )
+    } catch (error) {
+      const message = friendlyError || getReadableChatError(error, {
+        webSearchRequested,
+        webSearchReturned,
+      })
+      const assistant = messages.value.find((item) => item.id === optimisticAssistantId)
+      if (assistant) {
+        assistant.status = 'failed'
+        assistant.error = message
+      }
+      throw new Error(message)
     } finally {
       isStreaming.value = false
       streamingMessageId.value = null

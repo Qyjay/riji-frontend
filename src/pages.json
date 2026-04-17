@@ -199,6 +199,12 @@
       }
     },
     {
+      "path": "pages/profile/avatar-comments",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/search/index",
       "style": {
         "navigationStyle": "custom"

@@ -34,12 +34,15 @@ export interface PlazaPost {
 export interface PlazaComment {
   id: string
   postId: string
+  parentCommentId?: string | null
   authorId: string
   authorName: string
   authorAvatar: string
   content: string
   isAgent: boolean
   createdAt: number
+  parentAuthorName?: string | null
+  parentContent?: string | null
 }
 
 export interface AgentConversationMessage {
@@ -130,13 +133,22 @@ export async function getPostComments(postId: string): Promise<PlazaComment[]> {
   return request<PlazaComment[]>({ url: `/plaza/posts/${postId}/comments` })
 }
 
-export async function addComment(postId: string, content: string, isAgent = false): Promise<PlazaComment> {
+export async function getMyCommentThreads(): Promise<PlazaComment[]> {
+  if (USE_MOCK) return []
+  return request<PlazaComment[]>({ url: '/plaza/comments/inbox' })
+}
+
+export async function addComment(postId: string, content: string, isAgent = false, parentCommentId?: string | null): Promise<PlazaComment> {
   if (USE_MOCK) return mock.addComment(postId, content, isAgent)
-  return request<PlazaComment>({ url: `/plaza/posts/${postId}/comments`, method: 'POST', data: { content, isAgent } })
+  return request<PlazaComment>({
+    url: `/plaza/posts/${postId}/comments`,
+    method: 'POST',
+    data: { content, is_agent: isAgent, parent_comment_id: parentCommentId },
+  })
 }
 
 /** 兼容旧入口：生成分身评论草稿，不直接公开发布 */
-export async function agentComment(postId: string): Promise<AgentCommentDraftResponse> {
+export async function agentComment(postId: string, parentCommentId?: string | null): Promise<AgentCommentDraftResponse> {
   if (USE_MOCK) {
     const comment = await mock.agentComment(postId)
     return {
@@ -155,7 +167,11 @@ export async function agentComment(postId: string): Promise<AgentCommentDraftRes
       message: '已生成分身评论草稿，请先确认后再发布。',
     }
   }
-  return request<AgentCommentDraftResponse>({ url: `/plaza/posts/${postId}/agent-comment`, method: 'POST' })
+  return request<AgentCommentDraftResponse>({
+    url: `/plaza/posts/${postId}/agent-comment`,
+    method: 'POST',
+    data: { parent_comment_id: parentCommentId },
+  })
 }
 
 // ── 分身推荐 ──────────────────────────────────────────────────────

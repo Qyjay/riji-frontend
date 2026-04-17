@@ -35,7 +35,13 @@ export interface AvatarStatus {
   lastActiveAt: number
   enabledChannels: string[]
   enabledActions: string[]
-  matchRange: { school: string; distanceKm: number }
+  matchRange: {
+    school: string
+    distanceKm: number
+    autoReplyDailyLimit?: number
+    autoReplyIntervalMinutes?: number
+    autoReplyMinScore?: number
+  }
 }
 
 export interface AvatarProfile {
@@ -66,6 +72,13 @@ export interface AgentAction {
   status: 'draft' | 'published' | 'rejected' | string
   createdAt: number
   updatedAt: number
+}
+
+export interface AutoSurfResult {
+  actions: AgentAction[]
+  publishedCount: number
+  draftCount: number
+  skippedReason: string
 }
 
 // ── 记忆 ──────────────────────────────────────────────────────────
@@ -100,7 +113,16 @@ export async function getAvatarStatus(): Promise<AvatarStatus> {
 
 export async function updateAvatarStatus(fields: Partial<AvatarStatus>): Promise<AvatarStatus> {
   if (USE_MOCK) return mock.updateAvatarStatus(fields)
-  return request<AvatarStatus>({ url: '/avatar/status', method: 'PUT', data: fields })
+  return request<AvatarStatus>({
+    url: '/avatar/status',
+    method: 'PUT',
+    data: {
+      is_active: fields.isActive,
+      enabled_channels: fields.enabledChannels,
+      enabled_actions: fields.enabledActions,
+      match_range: fields.matchRange,
+    },
+  })
 }
 
 // ── 分身侧写 ──────────────────────────────────────────────────────
@@ -140,11 +162,20 @@ export async function getAgentActions(status?: string): Promise<AgentAction[]> {
   return request<AgentAction[]>({ url: `/avatar/actions${query}` })
 }
 
-export async function createPlazaCommentDraft(postId: string): Promise<AgentAction> {
+export async function createPlazaCommentDraft(postId: string, parentCommentId?: string | null): Promise<AgentAction> {
   return request<AgentAction>({
     url: '/avatar/actions/plaza-comment-draft',
     method: 'POST',
-    data: { post_id: postId },
+    data: { post_id: postId, parent_comment_id: parentCommentId },
+  })
+}
+
+export async function runAutoSurf(limit = 1): Promise<AutoSurfResult> {
+  return request<AutoSurfResult>({
+    url: '/avatar/actions/auto-surf',
+    method: 'POST',
+    data: { limit },
+    timeout: 30000,
   })
 }
 

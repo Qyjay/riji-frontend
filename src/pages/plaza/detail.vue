@@ -116,15 +116,21 @@
             v-for="comment in comments"
             :key="comment.id"
             class="comment-item"
-            :style="comment.isAgent ? { background: '#F5F0EB' } : {}"
+            :class="{ 'comment-item--agent': comment.isAgent, 'comment-item--mine': isMyComment(comment) }"
           >
             <image :src="comment.authorAvatar" class="comment-avatar" mode="aspectFill" />
             <view class="comment-body">
               <view class="comment-header">
                 <text class="comment-name">{{ comment.authorName }}</text>
+                <view v-if="isMyComment(comment) && !comment.isAgent" class="mine-badge">
+                  <text class="mine-badge-text">我</text>
+                </view>
                 <view v-if="comment.isAgent" class="agent-badge">
                   <text class="agent-badge-text">分身</text>
                 </view>
+              </view>
+              <view v-if="comment.parentCommentId" class="reply-ref">
+                <text class="reply-ref-text">回复 {{ comment.parentAuthorName || '上一条评论' }}：{{ comment.parentContent || '评论内容已隐藏' }}</text>
               </view>
               <!-- 思考过程折叠 -->
               <view v-if="parseThink(comment.content).think" class="think-block">
@@ -137,7 +143,10 @@
                 </view>
               </view>
               <text class="comment-content">{{ parseThink(comment.content).reply }}</text>
-              <text class="comment-time">{{ formatTime(comment.createdAt) }}</text>
+              <view class="comment-footer">
+                <text class="comment-time">{{ formatTime(comment.createdAt) }}</text>
+                <text class="comment-reply" @click="startReply(comment)">回复</text>
+              </view>
             </view>
           </view>
         </view>
@@ -146,12 +155,16 @@
 
     <!-- 底部评论输入栏（正常流，非 fixed） -->
     <view class="bottom-bar">
+      <view v-if="replyTarget" class="reply-target-bar">
+        <text class="reply-target-text">回复 {{ replyTarget.authorName }}：{{ parseThink(replyTarget.content).reply }}</text>
+        <text class="reply-target-cancel" @click="cancelReply">取消</text>
+      </view>
       <view class="comment-input-wrap">
         <input
           ref="commentInputRef"
           v-model="commentText"
           class="comment-input"
-          placeholder="写评论..."
+          :placeholder="replyTarget ? `回复 ${replyTarget.authorName}...` : '写评论...'"
           placeholder-class="input-placeholder"
           confirm-type="send"
           @confirm="submitComment(false)"
@@ -162,15 +175,16 @@
           <text class="send-btn-text">发送</text>
         </view>
         <view class="agent-reply-btn" :class="{ 'agent-reply-btn--loading': agentLoading }" @click="submitAgentComment">
-          <text class="agent-reply-text">{{ agentLoading ? '生成中...' : '🤖分身回' }}</text>
+          <text class="agent-reply-text">{{ agentLoading ? '生成中...' : (replyTarget ? '🤖分身回评' : '🤖分身回') }}</text>
         </view>
       </view>
     </view>
 
-    <view v-if="draftAction" class="draft-overlay" @click.self="draftAction = null">
+    <view v-if="draftAction" class="draft-overlay" @click.self="closeDraft">
       <view class="draft-panel">
         <text class="draft-kicker">🤖 分身草稿</text>
         <text class="draft-title">公开发出前，先由你确认</text>
+        <text v-if="draftReplyTarget" class="draft-target">回复 {{ draftReplyTarget.authorName }}：{{ parseThink(draftReplyTarget.content).reply }}</text>
         <text class="draft-content">{{ draftAction.outputText }}</text>
         <view class="draft-actions">
           <view class="draft-btn draft-btn--ghost" @click="rejectDraft">丢弃</view>
@@ -223,6 +237,9 @@ const agentMatch = ref<AgentMatch | null>(null)
 const loading = ref(true)
 const liked = ref(false)
 const commentText = ref('')
+const replyTarget = ref<PlazaComment | null>(null)
+const draftReplyTarget = ref<PlazaComment | null>(null)
+const currentUser = uni.getStorageSync('currentUser') || {}
 
 async function loadPost(id: string) {
   loading.value = true
@@ -291,9 +308,10 @@ async function submitComment(isAgent: boolean) {
     return
   }
   try {
-    const newComment = await addComment(post.value.id, commentText.value, isAgent)
+    const newComment = await addComment(post.value.id, commentText.value, isAgent, replyTarget.value?.id)
     comments.value.push(newComment)
     commentText.value = ''
+    replyTarget.value = null
     uni.showToast({ title: '评论成功', icon: 'success' })
   } catch {
     uni.showToast({ title: '评论失败，请重试', icon: 'none' })
@@ -308,9 +326,17 @@ async function submitAgentComment() {
   if (!post.value || agentLoading.value) return
   agentLoading.value = true
   try {
-    const draft = await agentComment(post.value.id)
-    draftAction.value = draft.action
-    uni.showToast({ title: '草稿已生成', icon: 'success' })
+    const target = replyTarget.value
+    const draft = await agentComment(post.value.id, target?.id)
+    if (draft.requiresApproval) {
+      draftAction.value = draft.action
+      draftReplyTarget.value = target
+      uni.showToast({ title: '草稿已生成', icon: 'success' })
+    } else {
+      appendAgentComment(draft.action, target)
+      replyTarget.value = null
+      uni.showToast({ title: '分身已自动发布', icon: 'success' })
+    }
   } catch (e: any) {
     uni.showToast({ title: e?.message || '分身回复失败', icon: 'none' })
   } finally {
@@ -323,22 +349,10 @@ async function approveDraft() {
   draftApproving.value = true
   try {
     const approved = await approveAgentAction(draftAction.value.id)
-    comments.value.push({
-      id: approved.id,
-      postId: post.value.id,
-      authorId: 'me',
-      authorName: '我的分身',
-      authorAvatar: post.value.authorAvatar,
-      content: approved.outputText,
-      isAgent: true,
-      createdAt: Date.now(),
-    })
-    post.value = {
-      ...post.value,
-      comments: post.value.comments + 1,
-      agentResponses: post.value.agentResponses + 1,
-    }
+    appendAgentComment(approved, draftReplyTarget.value)
     draftAction.value = null
+    draftReplyTarget.value = null
+    replyTarget.value = null
     uni.showToast({ title: '分身已发布', icon: 'success' })
   } catch (e: any) {
     uni.showToast({ title: e?.message || '发布失败', icon: 'none' })
@@ -353,6 +367,47 @@ async function rejectDraft() {
     await rejectAgentAction(draftAction.value.id)
   } catch {}
   draftAction.value = null
+  draftReplyTarget.value = null
+}
+
+function appendAgentComment(action: AgentAction, target?: PlazaComment | null) {
+  if (!post.value) return
+  comments.value.push({
+    id: action.id,
+    postId: post.value.id,
+    parentCommentId: target?.id ?? null,
+    authorId: currentUser?.id || 'me',
+    authorName: '我的分身',
+    authorAvatar: currentUser?.avatar || post.value.authorAvatar,
+    content: action.outputText,
+    isAgent: true,
+    createdAt: Date.now(),
+    parentAuthorName: target?.authorName ?? null,
+    parentContent: target ? parseThink(target.content).reply : null,
+  })
+  post.value = {
+    ...post.value,
+    comments: post.value.comments + 1,
+    agentResponses: post.value.agentResponses + 1,
+  }
+}
+
+function closeDraft() {
+  draftAction.value = null
+  draftReplyTarget.value = null
+}
+
+function startReply(comment: PlazaComment) {
+  replyTarget.value = comment
+  commentText.value = ''
+}
+
+function cancelReply() {
+  replyTarget.value = null
+}
+
+function isMyComment(comment: PlazaComment): boolean {
+  return Boolean(currentUser?.id && comment.authorId === currentUser.id)
 }
 
 // 预览图片
@@ -704,6 +759,15 @@ function toggleThink(commentId: string) {
   margin-bottom: 12rpx;
 }
 
+.comment-item--agent {
+  background: #FFF4EA;
+  border: 1px solid rgba(232, 133, 90, 0.14);
+}
+
+.comment-item--mine {
+  background: #FFF9F2;
+}
+
 .comment-avatar {
   width: 64rpx;
   height: 64rpx;
@@ -740,6 +804,30 @@ function toggleThink(commentId: string) {
 .agent-badge-text {
   font-size: 20rpx;
   color: #E8855A;
+}
+
+.mine-badge {
+  padding: 4rpx 12rpx;
+  border-radius: 16rpx;
+  background: rgba(107, 142, 180, 0.14);
+}
+
+.mine-badge-text {
+  font-size: 20rpx;
+  color: #6B8EB4;
+}
+
+.reply-ref {
+  padding: 12rpx 16rpx;
+  border-radius: 14rpx;
+  background: rgba(138, 118, 104, 0.08);
+  border-left: 4rpx solid #E8DDD4;
+}
+
+.reply-ref-text {
+  font-size: 23rpx;
+  color: #8A7668;
+  line-height: 1.5;
 }
 
 /* 思考过程折叠 */
@@ -792,6 +880,18 @@ function toggleThink(commentId: string) {
   color: #C8B8AE;
 }
 
+.comment-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comment-reply {
+  font-size: 23rpx;
+  color: #E8855A;
+  font-weight: 600;
+}
+
 /* 底部评论输入栏 */
 .bottom-bar {
   flex-shrink: 0;
@@ -801,8 +901,37 @@ function toggleThink(commentId: string) {
   padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16rpx;
   box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+}
+
+.reply-target-bar {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12rpx 18rpx;
+  border-radius: 22rpx;
+  background: #FFF1E8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reply-target-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 23rpx;
+  color: #8A7668;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-target-cancel {
+  margin-left: 16rpx;
+  font-size: 23rpx;
+  color: #E8855A;
+  font-weight: 700;
 }
 
 .comment-input-wrap {
@@ -904,6 +1033,17 @@ function toggleThink(commentId: string) {
   color: #4A3628;
   font-size: 29rpx;
   line-height: 1.7;
+}
+
+.draft-target {
+  display: block;
+  margin-bottom: 16rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 18rpx;
+  background: #FFF1E8;
+  color: #8A7668;
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .draft-actions {
