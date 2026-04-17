@@ -1,7 +1,9 @@
 import type { RawMaterial } from '../api/material'
+import { toLocalDateYmd } from '@/utils/date'
 
 const now = Date.now()
 const day = 86400000
+const today = toLocalDateYmd()
 
 const mockMaterials: RawMaterial[] = [
   {
@@ -14,7 +16,7 @@ const mockMaterials: RawMaterial[] = [
     location: {},
     emotion: { label: '开心', score: 0.88, emoji: '😊' },
     tags: ['骑行', '户外'],
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     createdAt: Date.now() - 7200000,
     chatSessionId: 'mock-session-1',
     startTime: Date.now() - 7200000,
@@ -30,7 +32,7 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '南开大学东食堂' },
     emotion: { label: '开心', score: 0.88, emoji: '😊' },
     tags: ['美食', '幸福'],
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     createdAt: now - 3600000,
   },
   {
@@ -43,7 +45,7 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '南开大学图书馆五楼' },
     emotion: { label: '平静', score: 0.72, emoji: '😌' },
     tags: ['风景', '学习'],
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     createdAt: now - 7200000,
   },
   {
@@ -56,7 +58,7 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '宿舍' },
     emotion: { label: '激动', score: 0.91, emoji: '🎉' },
     tags: ['学习', '成就'],
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     createdAt: now - 1800000,
   },
   {
@@ -69,7 +71,7 @@ const mockMaterials: RawMaterial[] = [
     location: { address: '天津大学旁甜品店', lat: 39.1082, lng: 117.1593 },
     emotion: { label: '幸福', score: 0.85, emoji: '🥰' },
     tags: ['美食', '社交'],
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     createdAt: now - 5400000,
   },
 ]
@@ -90,7 +92,7 @@ export function createMaterial(data: {
     location: {},
     emotion: { label: '平静', score: 0.5, emoji: '😐' },
     tags: [],
-    date: data.date ?? new Date().toISOString().slice(0, 10),
+    date: data.date ?? toLocalDateYmd(),
     createdAt: Date.now(),
   }
   mockMaterials.unshift(newMaterial)

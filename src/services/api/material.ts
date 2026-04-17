@@ -20,6 +20,30 @@ export interface RawMaterial {
   endTime?: number
 }
 
+const DEFAULT_EMOTION = { label: '平静', score: 0.5, emoji: '😐' }
+
+function pickFirstUrl(value: unknown): string {
+  if (Array.isArray(value)) {
+    const first = value.find((item) => typeof item === 'string' && item.trim().length > 0)
+    return typeof first === 'string' ? first : ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  return ''
+}
+
+function normalizeMaterial(raw: any): RawMaterial {
+  return {
+    ...raw,
+    mediaUrl: pickFirstUrl(raw?.mediaUrl),
+    thumbnailUrl: pickFirstUrl(raw?.thumbnailUrl),
+    location: raw?.location || {},
+    emotion: raw?.emotion || DEFAULT_EMOTION,
+    tags: Array.isArray(raw?.tags) ? raw.tags : [],
+  } as RawMaterial
+}
+
 export interface PolishRequest {
   style: '文艺' | '幽默' | '简洁' | '温暖'
 }
@@ -28,25 +52,40 @@ export async function createMaterial(data: {
   type: 'image' | 'voice' | 'text'
   content?: string
   mediaUrl?: string
+  emotion?: { label: string; score: number; emoji: string }
   date?: string
 }): Promise<RawMaterial> {
   if (USE_MOCK) return mock.createMaterial(data)
-  return request<RawMaterial>({ url: '/materials', method: 'POST', data })
+  const payload = {
+    ...data,
+    // 传入默认情绪，避免后端在创建接口内同步等待 AI 情绪提取导致前端超时误判。
+    emotion: data.emotion ?? DEFAULT_EMOTION,
+  }
+  const result = await request<RawMaterial>({
+    url: '/materials',
+    method: 'POST',
+    data: payload,
+    timeout: 30000,
+  })
+  return normalizeMaterial(result)
 }
 
 export async function getMaterials(date: string): Promise<RawMaterial[]> {
   if (USE_MOCK) return mock.getMaterials(date)
-  return request<RawMaterial[]>({ url: `/materials?date=${date}` })
+  const result = await request<RawMaterial[]>({ url: `/materials?date=${date}` })
+  return (result || []).map(normalizeMaterial)
 }
 
 export async function getMaterialDetail(id: string): Promise<RawMaterial> {
   if (USE_MOCK) return mock.getMaterialDetail(id)
-  return request<RawMaterial>({ url: `/materials/${id}` })
+  const result = await request<RawMaterial>({ url: `/materials/${id}` })
+  return normalizeMaterial(result)
 }
 
 export async function updateMaterial(id: string, data: Partial<RawMaterial>): Promise<RawMaterial> {
   if (USE_MOCK) return mock.updateMaterial(id, data)
-  return request<RawMaterial>({ url: `/materials/${id}`, method: 'PUT', data })
+  const result = await request<RawMaterial>({ url: `/materials/${id}`, method: 'PUT', data })
+  return normalizeMaterial(result)
 }
 
 export async function deleteMaterial(id: string): Promise<void> {

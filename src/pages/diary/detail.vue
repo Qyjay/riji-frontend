@@ -129,6 +129,11 @@
               <text class="tool-label">分享</text>
               <text class="tool-name">卡片</text>
             </view>
+            <view class="tool-item" @click="handleTool('comic')">
+              <DoodleIcon name="palette" :size="48" color="#E8855A" class="tool-icon" />
+              <text class="tool-label">生成</text>
+              <text class="tool-name">漫画</text>
+            </view>
             <view class="tool-item" @click="handleTool('novel')">
               <DoodleIcon name="pen" :size="48" color="#6B8EC4" class="tool-icon" />
               <text class="tool-label">生成</text>
@@ -374,10 +379,18 @@ async function handleGenerateDerivative(type: 'comic' | 'novel' | 'share_card') 
   if (!diary.value) return
   uni.showLoading({ title: 'AI 生成中...', mask: true })
   try {
-    await generateDerivative(diary.value.id, type)
+    const derivative = await generateDerivative(diary.value.id, type)
     uni.hideLoading()
     const labels: Record<string, string> = { comic: '漫画', novel: '小说', share_card: '分享卡片' }
     uni.showToast({ title: `${labels[type]}生成成功 ✨`, icon: 'success' })
+    if (type === 'comic') {
+      uni.navigateTo({ url: `/pages/diary/comic?id=${diary.value.id}&derivativeId=${derivative.id}` })
+      return
+    }
+    if (type === 'novel') {
+      uni.navigateTo({ url: `/pages/novel/reader?diaryId=${diary.value.id}&derivativeId=${derivative.id}` })
+      return
+    }
     if (type === 'share_card') {
       uni.navigateTo({ url: `/pages/diary/share-card?id=${diary.value.id}` })
     }
@@ -407,6 +420,8 @@ function handleTool(type: string) {
 
   if (type === 'share') {
     handleGenerateDerivative('share_card')
+  } else if (type === 'comic') {
+    handleGenerateDerivative('comic')
   } else if (type === 'novel') {
     handleGenerateDerivative('novel')
   } else if (type === 'style') {

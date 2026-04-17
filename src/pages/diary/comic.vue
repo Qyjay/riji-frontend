@@ -90,9 +90,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
-import { getDiaryDetail } from '@/services/api/diary'
-import type { Diary } from '@/services/api/diary'
+import { getDiaryDetail, generateDerivative, getDerivatives } from '@/services/api/diary'
+import type { Diary, DiaryDerivative } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import { API_BASE_URL } from '@/services/config'
 
 const comicStyles = [
   { id: 'jp-fresh',   iconName: 'sparkle',  iconColor: '#E8A4B8', name: '日漫清新', desc: '治愈系少女风' },
@@ -139,27 +140,66 @@ function generateCaptions(content: string): string[] {
   return captions
 }
 
+function toFullMediaUrl(path: string): string {
+  if (!path) return ''
+  if (path.startsWith('/')) {
+    if (path.startsWith('/uploads/')) {
+      const host = API_BASE_URL.replace(/\/api$/, '')
+      return `${host}${path}`
+    }
+    return `${API_BASE_URL}${path}`
+  }
+  return path
+}
+
+function applyComicDerivative(derivative: DiaryDerivative): boolean {
+  const imageUrl = toFullMediaUrl(derivative.mediaUrl || '')
+  if (!imageUrl) return false
+
+  const caption = derivative.content?.trim() || diary.value?.title || 'AI 漫画分镜'
+  comicPanels.value = [{ image: imageUrl, caption }]
+  hasGenerated.value = true
+  return true
+}
+
+async function loadExistingComicDerivative(diaryId: string, derivativeId?: string) {
+  const derivatives = await getDerivatives(diaryId)
+
+  if (derivativeId) {
+    const exact = derivatives.find(item => item.id === derivativeId)
+    if (exact && exact.type === 'comic' && applyComicDerivative(exact)) {
+      return
+    }
+  }
+
+  const latestComic = derivatives.find(item => item.type === 'comic')
+  if (latestComic) {
+    applyComicDerivative(latestComic)
+  }
+}
+
 async function handleGenerate() {
   if (isGenerating.value) return
+  if (!diary.value) {
+    uni.showToast({ title: '日记未加载完成', icon: 'none' })
+    return
+  }
+
   isGenerating.value = true
   hasGenerated.value = false
   comicPanels.value = []
 
-  await new Promise(resolve => setTimeout(resolve, 2000))
-
-  const diaryId = diary.value?.id ?? '1'
-  const style = selectedStyle.value
-  const captions = generateCaptions(diary.value?.content ?? '今天是个好日子')
-
-  comicPanels.value = [
-    { image: `https://picsum.photos/seed/${diaryId}${style}1/400/300`, caption: captions[0] },
-    { image: `https://picsum.photos/seed/${diaryId}${style}2/400/300`, caption: captions[1] },
-    { image: `https://picsum.photos/seed/${diaryId}${style}3/400/300`, caption: captions[2] },
-    { image: `https://picsum.photos/seed/${diaryId}${style}4/400/300`, caption: captions[3] },
-  ]
-
-  isGenerating.value = false
-  hasGenerated.value = true
+  try {
+    const derivative = await generateDerivative(diary.value.id, 'comic')
+    if (!applyComicDerivative(derivative)) {
+      // 兼容后端异步写入延迟：补查一次列表
+      await loadExistingComicDerivative(diary.value.id, derivative.id)
+    }
+  } catch {
+    uni.showToast({ title: '生成失败，请重试', icon: 'none' })
+  } finally {
+    isGenerating.value = false
+  }
 }
 
 async function handleRegenerate() {
@@ -189,8 +229,10 @@ onMounted(async () => {
   const current = pages[pages.length - 1] as any
   const options = current?.$page?.options ?? current?.options ?? {}
   const id = (options as any).id ?? '1'
+  const derivativeId = (options as any).derivativeId as string | undefined
   try {
     diary.value = await getDiaryDetail(id)
+    await loadExistingComicDerivative(diary.value.id, derivativeId)
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }

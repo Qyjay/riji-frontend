@@ -195,6 +195,7 @@ import type { RawMaterial } from '@/services/api/material'
 import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
 import ChatDetailSheet from '@/components/ChatDetailSheet.vue'
 import { getAssistantPreview } from '@/utils/chat-message'
+import { toLocalDateYmd } from '@/utils/date'
 
 // ── 布局 ──
 const navPlaceholderHeight = ref(64)
@@ -208,6 +209,9 @@ const locationText = ref('获取位置中...')
 const todayMaterials = ref<RawMaterial[]>([])
 const loadingMaterials = ref(false)
 const saving = ref(false)
+const lastSubmitSignature = ref('')
+const lastSubmitAt = ref(0)
+const DUPLICATE_GUARD_MS = 15000
 
 // 语音 — 按住说话
 const isRecording = ref(false)
@@ -233,7 +237,24 @@ function stopRecording() {
   }, 800)
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = toLocalDateYmd()
+
+function buildSubmitSignature(): string {
+  const content = textInput.value.trim()
+  const photosPart = photos.value.join('|')
+  return `${today}|${content}|${photosPart}`
+}
+
+function markRecentSubmit(signature: string) {
+  lastSubmitSignature.value = signature
+  lastSubmitAt.value = Date.now()
+}
+
+function isLikelyDuplicateSubmit(signature: string): boolean {
+  if (!lastSubmitSignature.value) return false
+  if (signature !== lastSubmitSignature.value) return false
+  return (Date.now() - lastSubmitAt.value) < DUPLICATE_GUARD_MS
+}
 
 // 是否可保存：至少有文字 OR 照片
 const canSave = computed(() => {
@@ -304,6 +325,13 @@ function removePhoto(idx: number) {
 // ── 保存 ──
 async function handleSave() {
   if (!canSave.value || saving.value) return
+
+  const submitSignature = buildSubmitSignature()
+  if (isLikelyDuplicateSubmit(submitSignature)) {
+    uni.showToast({ title: '请勿重复提交，稍后刷新查看', icon: 'none' })
+    return
+  }
+
   saving.value = true
 
   try {
@@ -333,6 +361,7 @@ async function handleSave() {
     // 重置输入
     textInput.value = ''
     photos.value = []
+    markRecentSubmit(submitSignature)
 
     uni.showToast({ title: '已记录 ✓', icon: 'success' })
 
@@ -348,8 +377,15 @@ async function handleSave() {
     setTimeout(() => {
       uni.navigateBack()
     }, 800)
-  } catch {
-    uni.showToast({ title: '记录失败，请重试', icon: 'none' })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : ''
+    if (/timeout|超时/i.test(msg)) {
+      // 超时时后端可能已落库，先阻止用户立刻重复提交。
+      markRecentSubmit(submitSignature)
+      uni.showToast({ title: '请求超时，素材可能已保存，请刷新确认', icon: 'none', duration: 2400 })
+    } else {
+      uni.showToast({ title: msg || '记录失败，请重试', icon: 'none' })
+    }
   } finally {
     saving.value = false
   }

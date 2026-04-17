@@ -75,6 +75,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { createMaterial, extractEmotion, uploadDiaryImage } from '@/services/api/material'
+import { toLocalDateYmd } from '@/utils/date'
 
 const navPlaceholderHeight = ref(64)
 const contentHeight = ref(600)
@@ -82,8 +83,26 @@ const photos = ref<string[]>([])
 const caption = ref('')
 const saving = ref(false)
 const isRecording = ref(false)
+const lastSubmitSignature = ref('')
+const lastSubmitAt = ref(0)
+const DUPLICATE_GUARD_MS = 15000
 
-const today = new Date().toISOString().slice(0, 10)
+const today = toLocalDateYmd()
+
+function buildSubmitSignature(): string {
+  return `${today}|${caption.value.trim()}|${photos.value.join('|')}`
+}
+
+function markRecentSubmit(signature: string) {
+  lastSubmitSignature.value = signature
+  lastSubmitAt.value = Date.now()
+}
+
+function isLikelyDuplicateSubmit(signature: string): boolean {
+  if (!lastSubmitSignature.value) return false
+  if (signature !== lastSubmitSignature.value) return false
+  return (Date.now() - lastSubmitAt.value) < DUPLICATE_GUARD_MS
+}
 
 onLoad((query: Record<string, string> | undefined) => {
   // 兼容新格式（多张 JSON）和旧格式（单张）
@@ -141,6 +160,13 @@ function removePhoto(idx: number) {
 // ── 保存 ──
 async function handleSave() {
   if (saving.value || photos.value.length === 0) return
+
+  const submitSignature = buildSubmitSignature()
+  if (isLikelyDuplicateSubmit(submitSignature)) {
+    uni.showToast({ title: '请勿重复提交，稍后刷新查看', icon: 'none' })
+    return
+  }
+
   saving.value = true
 
   try {
@@ -154,6 +180,8 @@ async function handleSave() {
       date: today,
     })
 
+    markRecentSubmit(submitSignature)
+
     uni.showToast({ title: '已记录 ✓', icon: 'success' })
 
     // 后台提取情绪
@@ -162,8 +190,15 @@ async function handleSave() {
     setTimeout(() => {
       uni.navigateBack()
     }, 600)
-  } catch {
-    uni.showToast({ title: '记录失败，请重试', icon: 'none' })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : ''
+    if (/timeout|超时/i.test(msg)) {
+      // 超时时后端可能已落库，先阻止用户立刻重复提交。
+      markRecentSubmit(submitSignature)
+      uni.showToast({ title: '请求超时，素材可能已保存，请刷新确认', icon: 'none', duration: 2400 })
+    } else {
+      uni.showToast({ title: msg || '记录失败，请重试', icon: 'none' })
+    }
   } finally {
     saving.value = false
   }

@@ -29,7 +29,7 @@
               @confirm="confirmEditTitle"
             />
           </view>
-          <text class="diary-meta">{{ diaryDate }} · 多云 18°C</text>
+          <text class="diary-meta">{{ diaryDate }} · {{ weatherText }}</text>
         </view>
 
         <!-- ── 编辑计数 ── -->
@@ -84,7 +84,7 @@
               <view class="chart-bar-wrap">
                 <view
                   class="chart-bar"
-                  :style="{ height: (point.score * 80) + 'rpx', background: getEmotionColor(point.label) }"
+                  :style="{ height: normalizedBarHeight(point.score) + 'rpx', background: getEmotionColor(point.label) }"
                 />
               </view>
               <text class="chart-label">{{ point.hour }}:00</text>
@@ -129,7 +129,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
-import { updateDiary, generateDerivative } from '@/services/api/diary'
+import { updateDiary, generateDerivative, getDiaryDetail, getEmotionTrend } from '@/services/api/diary'
 
 const statusBarHeight = ref(20)
 const scrollHeight = ref(600)
@@ -144,9 +144,11 @@ const editCount = ref(0)
 const maxEdits = ref(3)
 const contentChanged = ref(false)
 const saving = ref(false)
+const weatherText = ref('未记录天气')
+const diaryDateRaw = ref('')
 
 const diaryDate = computed(() => {
-  const d = new Date()
+  const d = diaryDateRaw.value ? new Date(diaryDateRaw.value) : new Date()
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -155,16 +157,12 @@ const diaryDate = computed(() => {
 
 const remainingEdits = computed(() => Math.max(0, maxEdits.value - editCount.value))
 
-// 情绪趋势数据（Mock）
-const trend = ref([
-  { hour: 9, label: '开心', score: 0.85 },
-  { hour: 12, label: '幸福', score: 0.92 },
-  { hour: 15, label: '平静', score: 0.70 },
-  { hour: 18, label: '疲惫', score: 0.65 },
-  { hour: 21, label: '满足', score: 0.80 },
-])
+// 情绪趋势（后端真实数据）
+const trend = ref<Array<{ hour: number; label: string; score: number }>>([])
+const dominant = ref('')
 
 const dominantLabel = computed(() => {
+  if (dominant.value) return dominant.value
   if (trend.value.length === 0) return '开心'
   const sorted = [...trend.value].sort((a, b) => b.score - a.score)
   return sorted[0].label
@@ -188,7 +186,12 @@ function getEmotionColor(label: string): string {
   return map[label] ?? '#E8855A'
 }
 
-onMounted(() => {
+function normalizedBarHeight(score: number): number {
+  const clamped = Math.max(0, Math.min(100, Number(score) || 0))
+  return Math.round(8 + (clamped / 100) * 72)
+}
+
+onMounted(async () => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
   scrollHeight.value = info.windowHeight - statusBarHeight.value - 44
@@ -202,6 +205,28 @@ onMounted(() => {
   if (options.content) content.value = decodeURIComponent(options.content)
   if (options.editCount) editCount.value = Number(options.editCount)
   if (options.maxEdits) maxEdits.value = Number(options.maxEdits)
+
+  if (!diaryId.value) return
+
+  try {
+    const diary = await getDiaryDetail(diaryId.value)
+    title.value = diary.title || title.value
+    content.value = diary.content || content.value
+    weatherText.value = diary.weather || '未记录天气'
+    diaryDateRaw.value = diary.date || ''
+    editCount.value = diary.editCount ?? editCount.value
+    maxEdits.value = diary.maxEdits ?? maxEdits.value
+  } catch {
+    // ignore and keep route fallback data
+  }
+
+  try {
+    const emotion = await getEmotionTrend(diaryId.value)
+    trend.value = emotion.trend || []
+    dominant.value = emotion.dominant || ''
+  } catch {
+    trend.value = []
+  }
 })
 
 function startEditTitle() {
@@ -239,15 +264,21 @@ async function handleSave() {
 }
 
 async function handleDerivative(type: 'comic' | 'novel' | 'share_card') {
+  if (!diaryId.value) {
+    uni.showToast({ title: '日记ID缺失', icon: 'none' })
+    return
+  }
   uni.showLoading({ title: 'AI 生成中...', mask: true })
   try {
-    await generateDerivative(diaryId.value || '1', type)
+    const derivative = await generateDerivative(diaryId.value, type)
     uni.hideLoading()
     const labels: Record<string, string> = { comic: '漫画', novel: '小说', share_card: '分享卡片' }
     uni.showToast({ title: `${labels[type]}生成成功 ✨`, icon: 'success' })
 
     if (type === 'comic') {
-      uni.navigateTo({ url: `/pages/diary/comic?id=${diaryId.value}` })
+      uni.navigateTo({ url: `/pages/diary/comic?id=${diaryId.value}&derivativeId=${derivative.id}` })
+    } else if (type === 'novel') {
+      uni.navigateTo({ url: `/pages/novel/reader?diaryId=${diaryId.value}&derivativeId=${derivative.id}` })
     } else if (type === 'share_card') {
       uni.navigateTo({ url: `/pages/diary/share-card?id=${diaryId.value}` })
     }

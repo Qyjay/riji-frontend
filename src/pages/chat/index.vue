@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { onUnload } from '@dcloudio/uni-app'
+import { onHide, onUnload } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
 
 import CustomNavBar from '@/components/CustomNavBar.vue'
@@ -50,6 +50,7 @@ const lastScrollTop = ref(0)
 let recordTimer: ReturnType<typeof setInterval> | null = null
 let recorderManager: UniApp.RecorderManager | null = null
 let cancelRecordingFlag = false
+let closingSession = false
 
 const interestCount = computed(() => profile.value.styleTags?.length || 23)
 const canSend = computed(() => Boolean(draftText.value.trim()) || pendingAttachments.value.length > 0)
@@ -76,7 +77,9 @@ watch(
   { flush: 'post' },
 )
 
-onUnload(async () => {
+async function closeSessionOnLeave() {
+  if (closingSession) return
+  closingSession = true
   stopRecordTimer()
   try {
     const result = await chatStore.closeCurrentSession()
@@ -85,7 +88,17 @@ onUnload(async () => {
     }
   } catch {
     // ignore
+  } finally {
+    closingSession = false
   }
+}
+
+onHide(() => {
+  void closeSessionOnLeave()
+})
+
+onUnload(() => {
+  void closeSessionOnLeave()
 })
 
 onMounted(async () => {

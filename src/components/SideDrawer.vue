@@ -6,13 +6,13 @@
           <view class="user-card">
             <image
               class="user-avatar"
-              src="https://picsum.photos/seed/draweravatar/160/160"
+              :src="userAvatar"
               mode="aspectFill"
             />
             <view class="user-info">
-              <text class="user-name">Kylin</text>
-              <text class="user-school">南开大学 · 软件工程</text>
-              <text class="user-stats">📔 127篇日记  🔥 23天连续</text>
+              <text class="user-name">{{ userName }}</text>
+              <text class="user-school">{{ userSchool }}</text>
+              <text class="user-stats">{{ userStats }}</text>
             </view>
           </view>
 
@@ -64,6 +64,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { getUserProfile, type UserProfile } from '@/services/api/user'
+import { API_BASE_URL } from '@/services/config'
+
 const props = defineProps<{
   visible: boolean
 }>()
@@ -71,6 +75,79 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:visible': [boolean]
 }>()
+
+const fallbackProfile: UserProfile = {
+  name: '同学',
+  school: '',
+  major: '',
+  level: 1,
+  diaryCount: 0,
+  streakDays: 0,
+  pomodoroCount: 0,
+  avatar: '',
+}
+
+const profile = ref<UserProfile>({ ...fallbackProfile })
+const loadingProfile = ref(false)
+
+const userName = computed(() => {
+  const name = String(profile.value.name || '').trim()
+  return name || '同学'
+})
+
+const userSchool = computed(() => {
+  const school = String(profile.value.school || '').trim()
+  const major = String(profile.value.major || '').trim()
+  if (school && major) return `${school} · ${major}`
+  return school || major || '欢迎回来'
+})
+
+const userStats = computed(() => {
+  const diaryCount = Number(profile.value.diaryCount || 0)
+  const streakDays = Number(profile.value.streakDays || 0)
+  return `📔 ${diaryCount}篇日记  🔥 ${streakDays}天连续`
+})
+
+const userAvatar = computed(() => {
+  const avatar = String(profile.value.avatar || '').trim()
+  if (!avatar) {
+    return 'https://picsum.photos/seed/draweravatar/160/160'
+  }
+  if (/^https?:\/\//.test(avatar)) {
+    return avatar
+  }
+  if (avatar.startsWith('/')) {
+    const host = API_BASE_URL.replace(/\/api\/?$/, '')
+    return `${host}${avatar}`
+  }
+  return avatar
+})
+
+async function loadProfile() {
+  if (loadingProfile.value) return
+  loadingProfile.value = true
+  try {
+    const data = await getUserProfile()
+    profile.value = {
+      ...fallbackProfile,
+      ...data,
+    }
+  } catch {
+    // 忽略加载失败，保留兜底信息。
+  } finally {
+    loadingProfile.value = false
+  }
+}
+
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) {
+      void loadProfile()
+    }
+  },
+  { immediate: true },
+)
 
 function close() {
   emit('update:visible', false)

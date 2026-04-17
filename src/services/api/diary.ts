@@ -77,7 +77,12 @@ export async function extractInfo(id: string): Promise<{ anniversaries: any[]; r
 
 export async function generateDerivative(id: string, type: 'comic' | 'novel' | 'share_card'): Promise<DiaryDerivative> {
   if (USE_MOCK) return mock.generateDerivative(id, type)
-  return request<DiaryDerivative>({ url: `/diaries/${id}/derivative`, method: 'POST', data: { type } })
+  return request<DiaryDerivative>({
+    url: `/diaries/${id}/derivative`,
+    method: 'POST',
+    data: { type },
+    timeout: 120000,
+  })
 }
 
 export async function getDerivatives(diaryId?: string): Promise<DiaryDerivative[]> {
@@ -118,5 +123,37 @@ export interface SearchQuery {
 
 export async function searchDiaries(query: SearchQuery): Promise<Diary[]> {
   if (USE_MOCK) return mock.searchDiaries(query)
-  return request<Diary[]>({ url: '/diaries/search', method: 'POST', data: query })
+
+  const params: string[] = []
+  const push = (key: string, value?: string) => {
+    const v = (value ?? '').trim()
+    if (!v) return
+    params.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`)
+  }
+
+  push('q', query.keyword)
+
+  if (query.dateRange) {
+    push('from', query.dateRange[0])
+    push('to', query.dateRange[1])
+  }
+
+  if (query.emotions && query.emotions.length > 0) {
+    push('emotion', query.emotions.join(','))
+  }
+
+  if (query.tags && query.tags.length > 0) {
+    push('tag', query.tags.join(','))
+  }
+
+  if (query.weathers && query.weathers.length > 0) {
+    push('weather', query.weathers.join(','))
+  }
+
+  const queryString = params.length > 0 ? `?${params.join('&')}` : ''
+  const res = await request<{ items: Diary[] }>({
+    url: `/diaries/search${queryString}`,
+    method: 'GET',
+  })
+  return res.items || []
 }

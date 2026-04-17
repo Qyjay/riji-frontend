@@ -201,7 +201,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import SideDrawer from '@/components/SideDrawer.vue'
 import DiaryCard from '@/components/DiaryCard.vue'
@@ -212,6 +213,7 @@ import type { Diary, TodaySummary } from '@/services/api/diary'
 import { getTodayAnniversaries } from '@/services/api/anniversary'
 import type { Anniversary } from '@/services/api/anniversary'
 import { getAssistantPreview } from '@/utils/chat-message'
+import { toLocalDateYmd } from '@/utils/date'
 
 const drawerVisible = ref(false)
 const diaries = ref<Diary[]>([])
@@ -228,6 +230,7 @@ const todayHistory = ref<Array<{ diary: any; yearsAgo: number }>>([])
 const todaySummary = ref<TodaySummary | null>(null)
 const generatingDiary = ref(false)
 const regeneratingDiary = ref(false)
+const currentDateKey = ref(toLocalDateYmd())
 
 // 状态栏 + NavBar 占位高度（px）
 const navPlaceholderHeight = ref(64) // 默认值，onMounted 后更新
@@ -304,21 +307,62 @@ const greetingActionArrow = computed(() => {
   return '去记录素材 →'
 })
 
+let dayRefreshTimer: ReturnType<typeof setInterval> | null = null
+let dayRefreshPending = false
+
+async function refreshForNewDay(nextDate: string) {
+  if (dayRefreshPending) return
+  dayRefreshPending = true
+  try {
+    page.value = 1
+    noMore.value = false
+    await Promise.all([loadDiaries(1), loadAnniversaryData(nextDate)])
+    currentDateKey.value = nextDate
+  } finally {
+    dayRefreshPending = false
+  }
+}
+
+function startDayRefreshWatcher() {
+  if (dayRefreshTimer) clearInterval(dayRefreshTimer)
+  dayRefreshTimer = setInterval(() => {
+    const today = toLocalDateYmd()
+    if (today === currentDateKey.value) return
+    void refreshForNewDay(today)
+  }, 30000)
+}
+
+function stopDayRefreshWatcher() {
+  if (!dayRefreshTimer) return
+  clearInterval(dayRefreshTimer)
+  dayRefreshTimer = null
+}
+
 // ── 加载数据 ──
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 50
   await loadDiaries(1)
-  loadAnniversaryData()
+  await loadAnniversaryData(currentDateKey.value)
+  startDayRefreshWatcher()
 })
 
-async function loadAnniversaryData() {
+onShow(async () => {
+  const today = toLocalDateYmd()
+  if (today === currentDateKey.value) return
+  await refreshForNewDay(today)
+})
+
+onUnmounted(() => {
+  stopDayRefreshWatcher()
+})
+
+async function loadAnniversaryData(date: string = toLocalDateYmd()) {
   try {
-    const today = new Date().toISOString().slice(0, 10)
     const [todayData, summary] = await Promise.all([
       getTodayAnniversaries(),
-      getTodaySummary(today),
+      getTodaySummary(date),
     ])
     todayAnniversaries.value = todayData?.anniversaries || []
     todayHistory.value = todayData?.thisDateInHistory || []
@@ -335,7 +379,7 @@ async function handleGenerateDiary() {
   generatingDiary.value = true
   uni.showLoading({ title: 'AI 生成日记中...', mask: true })
   try {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toLocalDateYmd()
     const diary = await generateDiary(today, '多云 18°C')
     uni.hideLoading()
     generatingDiary.value = false
@@ -363,7 +407,7 @@ async function handleRegenerateDiary() {
   regeneratingDiary.value = true
   uni.showLoading({ title: '重写中...', mask: true })
   try {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toLocalDateYmd()
     // 先删除旧日记
     if (todaySummary.value?.diary_id) {
       await deleteDiary(todaySummary.value.diary_id)
@@ -404,7 +448,8 @@ async function onRefresh() {
   refreshing.value = true
   page.value = 1
   noMore.value = false
-  await Promise.all([loadDiaries(1), loadAnniversaryData()])
+  await Promise.all([loadDiaries(1), loadAnniversaryData(toLocalDateYmd())])
+  currentDateKey.value = toLocalDateYmd()
   refreshing.value = false
   uni.showToast({ title: '刷新成功', icon: 'success' })
 }

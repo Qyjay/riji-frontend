@@ -182,6 +182,7 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 import { searchDiaries } from '@/services/api/diary'
 import type { Diary } from '@/services/api/diary'
 import { mockDiaries } from '@/services/mock/diary'
+import { toLocalDateYmd, shiftLocalDateYmd } from '@/utils/date'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -404,18 +405,18 @@ async function performSearch() {
   let dateRange: [string, string] | undefined
   if (selectedQuickDate.value) {
     const now = new Date()
-    const today = now.toISOString().slice(0, 10)
+    const today = toLocalDateYmd(now)
 
     if (selectedQuickDate.value === 'today') {
       dateRange = [today, today]
     } else if (selectedQuickDate.value === 'week') {
-      const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10)
+      const weekAgo = shiftLocalDateYmd(now, -7)
       dateRange = [weekAgo, today]
     } else if (selectedQuickDate.value === 'month') {
-      const monthAgo = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10)
+      const monthAgo = shiftLocalDateYmd(now, -30)
       dateRange = [monthAgo, today]
     } else if (selectedQuickDate.value === 'threeMonths') {
-      const threeMonthsAgo = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10)
+      const threeMonthsAgo = shiftLocalDateYmd(now, -90)
       dateRange = [threeMonthsAgo, today]
     }
   } else if (customDateRange.value[0] || customDateRange.value[1]) {
