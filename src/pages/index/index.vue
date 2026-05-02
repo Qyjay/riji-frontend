@@ -139,7 +139,7 @@
       </view>
 
       <!-- ── 日记列表 ── -->
-      <view v-if="!loading || diaries.length > 0">
+      <view v-if="!loading || hasDiaryListItems">
         <template v-for="(group, gIndex) in groupedDiaries" :key="gIndex">
           <!-- 日期分隔符 -->
           <view class="date-separator">
@@ -162,7 +162,27 @@
               <text class="insight-text">{{ getInsightText(gIndex, dIndex) }}</text>
             </view>
 
+            <view v-if="isPendingDiary(diary)" class="pending-diary-card">
+              <view class="pending-card-top">
+                <view class="pending-title-row">
+                  <text class="pending-emoji">✨</text>
+                  <text class="pending-title">{{ diary.mode === 'regenerate' ? '正在重写今日日记' : '正在生成今日日记' }}</text>
+                </view>
+                <text class="pending-time">{{ formatTime(diary.createdAt) }}</text>
+              </view>
+              <view class="pending-content">
+                <view class="pending-spinner" />
+                <view class="pending-copy">
+                  <text class="pending-main">AI 正在整理今天的素材</text>
+                  <text class="pending-sub">生成完成后会自动显示在这里</text>
+                </view>
+              </view>
+              <view class="pending-skeleton pending-skeleton-long" />
+              <view class="pending-skeleton pending-skeleton-short" />
+            </view>
+
             <DiaryCard
+              v-else
               :diary="diary"
               @click="goDetail"
               @tag-click="onTagClick"
@@ -181,7 +201,7 @@
       </view>
 
       <!-- ── 空状态 ── -->
-      <view v-if="!loading && diaries.length === 0" class="empty-state">
+      <view v-if="!loading && !hasDiaryListItems" class="empty-state">
         <view class="empty-icon-wrap doodle-box func-color-diary">
           <DoodleIcon name="camera" color="#E8855A" :size="48" />
         </view>
@@ -231,6 +251,18 @@ const todaySummary = ref<TodaySummary | null>(null)
 const generatingDiary = ref(false)
 const regeneratingDiary = ref(false)
 const currentDateKey = ref(toLocalDateYmd())
+
+interface PendingDiary {
+  id: string
+  mode: 'generate' | 'regenerate'
+  date: string
+  createdAt: number
+}
+
+type DiaryListItem = Diary | PendingDiary
+
+const pendingDiaries = ref<PendingDiary[]>([])
+const hasDiaryListItems = computed(() => diaries.value.length > 0 || pendingDiaries.value.length > 0)
 
 // 状态栏 + NavBar 占位高度（px）
 const navPlaceholderHeight = ref(64) // 默认值，onMounted 后更新
@@ -338,6 +370,50 @@ function stopDayRefreshWatcher() {
   dayRefreshTimer = null
 }
 
+function isPendingDiary(diary: DiaryListItem): diary is PendingDiary {
+  return diary.id.startsWith('pending_diary_')
+}
+
+function formatTime(ts: number): string {
+  const d = new Date(ts)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+function addPendingDiary(mode: PendingDiary['mode']): string {
+  const pending: PendingDiary = {
+    id: `pending_diary_${mode}_${Date.now()}`,
+    mode,
+    date: toLocalDateYmd(),
+    createdAt: Date.now(),
+  }
+  pendingDiaries.value = [pending, ...pendingDiaries.value]
+  return pending.id
+}
+
+function removePendingDiary(id: string) {
+  pendingDiaries.value = pendingDiaries.value.filter(item => item.id !== id)
+}
+
+function replacePendingDiary(id: string, diary: Diary) {
+  removePendingDiary(id)
+  diaries.value = [diary, ...diaries.value.filter(item => item.id !== diary.id)]
+}
+
+async function refreshTodayState() {
+  page.value = 1
+  noMore.value = false
+  await Promise.all([loadDiaries(1), loadAnniversaryData(toLocalDateYmd())])
+  currentDateKey.value = toLocalDateYmd()
+}
+
+function handleMaterialsChanged(payload?: { date?: string }) {
+  const date = payload?.date || toLocalDateYmd()
+  if (date !== toLocalDateYmd()) return
+  void loadAnniversaryData(date)
+}
+
 // ── 加载数据 ──
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
@@ -345,6 +421,7 @@ onMounted(async () => {
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 50
   await loadDiaries(1)
   await loadAnniversaryData(currentDateKey.value)
+  uni.$on('materials:changed', handleMaterialsChanged)
   startDayRefreshWatcher()
 })
 
@@ -355,6 +432,7 @@ onShow(async () => {
 })
 
 onUnmounted(() => {
+  uni.$off('materials:changed', handleMaterialsChanged)
   stopDayRefreshWatcher()
 })
 
@@ -374,22 +452,27 @@ async function loadAnniversaryData(date: string = toLocalDateYmd()) {
   }
 }
 
-async function handleGenerateDiary() {
+function handleGenerateDiary() {
   if (generatingDiary.value) return
   generatingDiary.value = true
-  uni.showLoading({ title: 'AI 生成日记中...', mask: true })
+  const pendingId = addPendingDiary('generate')
+  uni.showToast({ title: '已开始生成', icon: 'none' })
+  void generateDiaryInBackground(pendingId)
+}
+
+async function generateDiaryInBackground(pendingId: string) {
   try {
     const today = toLocalDateYmd()
     const diary = await generateDiary(today, '多云 18°C')
-    uni.hideLoading()
-    generatingDiary.value = false
-    uni.navigateTo({
-      url: `/pages/diary/preview?id=${diary.id}&title=${encodeURIComponent(diary.title)}&content=${encodeURIComponent(diary.content)}&editCount=${diary.editCount}&maxEdits=${diary.maxEdits}`
-    })
+    replacePendingDiary(pendingId, diary)
+    await loadAnniversaryData(today)
+    currentDateKey.value = today
+    uni.showToast({ title: '日记已生成', icon: 'success' })
   } catch {
-    uni.hideLoading()
-    generatingDiary.value = false
+    removePendingDiary(pendingId)
     uni.showToast({ title: '生成失败，请重试', icon: 'none' })
+  } finally {
+    generatingDiary.value = false
   }
 }
 
@@ -405,24 +488,32 @@ async function handleRegenerateDiary() {
   if (res.confirm !== true) return
 
   regeneratingDiary.value = true
-  uni.showLoading({ title: '重写中...', mask: true })
+  const pendingId = addPendingDiary('regenerate')
+  const oldDiaryId = todaySummary.value?.diary_id
+  if (oldDiaryId) {
+    diaries.value = diaries.value.filter(diary => diary.id !== oldDiaryId)
+  }
+  uni.showToast({ title: '已开始重写', icon: 'none' })
+  void regenerateDiaryInBackground(pendingId, oldDiaryId)
+}
+
+async function regenerateDiaryInBackground(pendingId: string, oldDiaryId?: string | null) {
   try {
     const today = toLocalDateYmd()
-    // 先删除旧日记
-    if (todaySummary.value?.diary_id) {
-      await deleteDiary(todaySummary.value.diary_id)
+    if (oldDiaryId) {
+      await deleteDiary(oldDiaryId)
     }
-    // 再生成新日记
     const diary = await generateDiary(today, '多云 18°C')
-    uni.hideLoading()
-    regeneratingDiary.value = false
-    uni.navigateTo({
-      url: `/pages/diary/preview?id=${diary.id}&title=${encodeURIComponent(diary.title)}&content=${encodeURIComponent(diary.content)}&editCount=${diary.editCount}&maxEdits=${diary.maxEdits}`
-    })
+    replacePendingDiary(pendingId, diary)
+    await loadAnniversaryData(today)
+    currentDateKey.value = today
+    uni.showToast({ title: '日记已重写', icon: 'success' })
   } catch {
-    uni.hideLoading()
-    regeneratingDiary.value = false
+    removePendingDiary(pendingId)
+    await refreshTodayState()
     uni.showToast({ title: '重写失败，请重试', icon: 'none' })
+  } finally {
+    regeneratingDiary.value = false
   }
 }
 
@@ -481,12 +572,13 @@ function getDateLabel(ts: number): string {
 
 interface DiaryGroup {
   label: string
-  diaries: Diary[]
+  diaries: DiaryListItem[]
 }
 
 const groupedDiaries = computed<DiaryGroup[]>(() => {
-  const map = new Map<string, Diary[]>()
-  const sorted = [...diaries.value].sort((a, b) => b.createdAt - a.createdAt)
+  const map = new Map<string, DiaryListItem[]>()
+  const list: DiaryListItem[] = [...pendingDiaries.value, ...diaries.value]
+  const sorted = list.sort((a, b) => b.createdAt - a.createdAt)
 
   for (const diary of sorted) {
     const label = getDateLabel(diary.createdAt)
@@ -965,6 +1057,109 @@ function onActionClick(payload: { action: string; diaryId: string }) {
   color: #4A3628;
   line-height: 1.6;
   display: block;
+}
+
+/* ── 生成中日记卡片 ── */
+.pending-diary-card {
+  margin: 0 24rpx 24rpx;
+  padding: 24rpx;
+  background: #FFFFFF;
+  border: 2rpx dashed rgba(232, 133, 90, 0.38);
+  border-radius: 24rpx 28rpx 20rpx 26rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.pending-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.pending-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.pending-emoji {
+  font-size: 32rpx;
+  flex-shrink: 0;
+}
+
+.pending-title {
+  font-size: 30rpx;
+  color: #4A3628;
+  font-weight: 700;
+}
+
+.pending-time {
+  font-size: 26rpx;
+  color: #AE9D92;
+  flex-shrink: 0;
+}
+
+.pending-content {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin-bottom: 18rpx;
+}
+
+.pending-spinner {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  border: 5rpx solid #F7D9C9;
+  border-top-color: #E8855A;
+  animation: pending-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+.pending-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.pending-main {
+  font-size: 28rpx;
+  color: #4A3628;
+  font-weight: 600;
+}
+
+.pending-sub {
+  font-size: 24rpx;
+  color: #AE9D92;
+}
+
+.pending-skeleton {
+  height: 22rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #F6E9DF 0%, #FFF7F0 50%, #F6E9DF 100%);
+  background-size: 240% 100%;
+  animation: pending-shimmer 1.4s ease-in-out infinite;
+}
+
+.pending-skeleton-long {
+  width: 88%;
+  margin-bottom: 12rpx;
+}
+
+.pending-skeleton-short {
+  width: 58%;
+}
+
+@keyframes pending-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pending-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 /* ── 加载状态 ── */

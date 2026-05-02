@@ -32,6 +32,28 @@
         <view class="char-count-row">
           <text class="char-count">{{ textInput.length }}/500</text>
         </view>
+        <view v-if="voiceNotes.length > 0" class="voice-note-list">
+          <view
+            v-for="note in voiceNotes"
+            :key="note.id"
+            class="voice-note-bubble"
+            :class="`voice-note-bubble--${note.status}`"
+          >
+            <view class="voice-note-main">
+              <text class="voice-note-icon">🎤</text>
+              <view class="voice-wave">
+                <view v-for="bar in 10" :key="bar" class="voice-wave-bar" :style="{ height: `${10 + (bar % 4) * 5}rpx` }" />
+              </view>
+              <text class="voice-note-duration">{{ formatDuration(note.duration) }}</text>
+            </view>
+            <text v-if="note.status === 'transcribing'" class="voice-note-text">正在语音转文字...</text>
+            <text v-else-if="note.status === 'failed'" class="voice-note-text">{{ note.error || '语音转写失败' }}</text>
+            <text v-else class="voice-note-text">{{ note.text }}</text>
+            <view class="voice-note-remove press-feedback" @click="removeVoiceNote(note.id)">
+              <text class="voice-note-remove-icon">×</text>
+            </view>
+          </view>
+        </view>
       </view>
 
       <!-- 照片区域 -->
@@ -192,6 +214,7 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 import { createMaterial, getMaterials, extractEmotion, uploadDiaryImage, deleteMaterial } from '@/services/api/material'
 import { API_BASE_URL } from '@/services/config'
 import type { RawMaterial } from '@/services/api/material'
+import { speechToText, speechToTextFile } from '@/services/api/ai'
 import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
 import ChatDetailSheet from '@/components/ChatDetailSheet.vue'
 import { getAssistantPreview } from '@/utils/chat-message'
@@ -215,34 +238,35 @@ const DUPLICATE_GUARD_MS = 15000
 
 // 语音 — 按住说话
 const isRecording = ref(false)
+const recordDuration = ref(0)
+const voiceNotes = ref<VoiceNote[]>([])
 
-function startRecording() {
-  isRecording.value = true
+interface VoiceNote {
+  id: string
+  src: string
+  duration: number
+  status: 'transcribing' | 'done' | 'failed'
+  text: string
+  error?: string
 }
 
-function stopRecording() {
-  if (!isRecording.value) return
-  isRecording.value = false
-
-  // H5 mock：模拟语音转文字
-  uni.showLoading({ title: '转文字中...', mask: true })
-  setTimeout(() => {
-    uni.hideLoading()
-    const transcription = '刚才录了一段语音...'
-    if (textInput.value && !textInput.value.endsWith('\n')) {
-      textInput.value += '\n'
-    }
-    textInput.value += transcription
-    uni.showToast({ title: '语音已转文字', icon: 'none' })
-  }, 800)
-}
+let recordTimer: ReturnType<typeof setInterval> | null = null
+let recorderManager: UniApp.RecorderManager | null = null
+let h5MediaRecorder: MediaRecorder | null = null
+let h5MediaStream: MediaStream | null = null
+let h5RecordChunks: Blob[] = []
+let cancelRecordingFlag = false
+const voiceTranscriptionTasks = new Map<string, Promise<void>>()
 
 const today = toLocalDateYmd()
 
 function buildSubmitSignature(): string {
-  const content = textInput.value.trim()
+  const content = combinedMaterialContent.value
   const photosPart = photos.value.join('|')
-  return `${today}|${content}|${photosPart}`
+  const voicesPart = voiceNotes.value
+    .map(note => `${note.id}:${note.status}:${note.text}`)
+    .join('|')
+  return `${today}|${content}|${photosPart}|${voicesPart}`
 }
 
 function markRecentSubmit(signature: string) {
@@ -258,7 +282,34 @@ function isLikelyDuplicateSubmit(signature: string): boolean {
 
 // 是否可保存：至少有文字 OR 照片
 const canSave = computed(() => {
-  return !saving.value && (textInput.value.trim().length > 0 || photos.value.length > 0)
+  return !saving.value && (combinedMaterialContent.value.length > 0 || photos.value.length > 0 || hasSavableVoiceNotes.value)
+})
+
+const hasSavableVoiceNotes = computed(() => {
+  return voiceNotes.value.some(note => note.status === 'transcribing' || (note.status === 'done' && note.text.trim()))
+})
+
+const hasPendingVoiceNotes = computed(() => {
+  return voiceNotes.value.some(note => note.status === 'transcribing')
+})
+
+const voiceTranscriptionText = computed(() => {
+  return getVoiceTranscriptionText()
+})
+
+function getVoiceTranscriptionText(noteIds?: string[]) {
+  const idSet = noteIds ? new Set(noteIds) : null
+  return voiceNotes.value
+    .filter(note => !idSet || idSet.has(note.id))
+    .filter(note => note.status === 'done' && note.text.trim())
+    .map(note => note.text.trim())
+    .join('\n')
+}
+
+const combinedMaterialContent = computed(() => {
+  return [textInput.value.trim(), voiceTranscriptionText.value]
+    .filter(Boolean)
+    .join('\n')
 })
 
 onMounted(async () => {
@@ -322,31 +373,214 @@ function removePhoto(idx: number) {
   photos.value.splice(idx, 1)
 }
 
-// ── 保存 ──
-async function handleSave() {
-  if (!canSave.value || saving.value) return
+function genVoiceId() {
+  return `voice-note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
 
-  const submitSignature = buildSubmitSignature()
-  if (isLikelyDuplicateSubmit(submitSignature)) {
-    uni.showToast({ title: '请勿重复提交，稍后刷新查看', icon: 'none' })
+function stopRecordTimer() {
+  if (!recordTimer) return
+  clearInterval(recordTimer)
+  recordTimer = null
+}
+
+function formatDuration(seconds: number): string {
+  const safeSeconds = Math.max(1, Math.round(seconds || 1))
+  return `${safeSeconds}s`
+}
+
+function removeVoiceNote(id: string) {
+  voiceNotes.value = voiceNotes.value.filter(note => note.id !== id)
+}
+
+async function transcribeRecordedVoice(file: string | File, voiceSrc: string, duration: number) {
+  const noteId = genVoiceId()
+  const note: VoiceNote = {
+    id: noteId,
+    src: voiceSrc,
+    duration,
+    status: 'transcribing',
+    text: '',
+  }
+  voiceNotes.value = [...voiceNotes.value, note]
+
+  const task = (async () => {
+    try {
+      const result = typeof File !== 'undefined' && file instanceof File
+        ? await speechToTextFile(file)
+        : await speechToText(file as string)
+      const text = String(result.transcription || result.text || '').trim()
+      const current = voiceNotes.value.find(item => item.id === noteId)
+      if (!current) return
+      if (!text) {
+        current.status = 'failed'
+        current.error = '未识别到语音内容'
+        return
+      }
+      current.status = 'done'
+      current.text = text
+      uni.showToast({ title: '语音已转文字', icon: 'none' })
+    } catch (error) {
+      const current = voiceNotes.value.find(item => item.id === noteId)
+      if (!current) return
+      current.status = 'failed'
+      current.error = error instanceof Error ? error.message : '语音转写失败'
+    } finally {
+      voiceTranscriptionTasks.delete(noteId)
+    }
+  })()
+  voiceTranscriptionTasks.set(noteId, task)
+  await task
+}
+
+function initUniRecorder() {
+  if (recorderManager) return
+  if (typeof uni.getRecorderManager !== 'function') return
+  recorderManager = uni.getRecorderManager()
+  if (!recorderManager) return
+
+  recorderManager.onStop((res: any) => {
+    stopRecordTimer()
+    isRecording.value = false
+    const shouldCancel = cancelRecordingFlag
+    cancelRecordingFlag = false
+    if (shouldCancel || !res.tempFilePath) return
+    void transcribeRecordedVoice(res.tempFilePath, res.tempFilePath, recordDuration.value)
+  })
+
+  recorderManager.onError(() => {
+    stopRecordTimer()
+    cancelRecordingFlag = false
+    isRecording.value = false
+    uni.showToast({ title: '录音失败', icon: 'none' })
+  })
+}
+
+function getH5MimeType() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg']
+  return candidates.find(item => MediaRecorder.isTypeSupported(item)) || ''
+}
+
+async function startH5Recording() {
+  if (!navigator?.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    uni.showToast({ title: '当前浏览器不支持录音', icon: 'none' })
     return
   }
 
-  saving.value = true
-
   try {
-    // 决定类型：有照片→image，否则文字内容是否来自语音已混入 textarea
-    let type: 'image' | 'text' = 'text'
-    let mediaUrl: string | undefined
+    h5MediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    h5RecordChunks = []
+    const mimeType = getH5MimeType()
+    h5MediaRecorder = new MediaRecorder(h5MediaStream, mimeType ? { mimeType } : undefined)
+    h5MediaRecorder.ondataavailable = (event) => {
+      if (event.data?.size) h5RecordChunks.push(event.data)
+    }
+    h5MediaRecorder.onstop = () => {
+      stopRecordTimer()
+      isRecording.value = false
+      h5MediaStream?.getTracks().forEach(track => track.stop())
+      h5MediaStream = null
+      const shouldCancel = cancelRecordingFlag
+      cancelRecordingFlag = false
+      if (shouldCancel || h5RecordChunks.length === 0) return
 
-    if (photos.value.length > 0) {
-      type = 'image'
-      // 先上传图片，获取永久 URL
-      const uploaded = await uploadDiaryImage(photos.value[0])
-      mediaUrl = uploaded.url
+      const type = h5MediaRecorder?.mimeType || mimeType || 'audio/webm'
+      const ext = type.includes('ogg') ? 'ogg' : 'webm'
+      const blob = new Blob(h5RecordChunks, { type })
+      h5RecordChunks = []
+      const file = new File([blob], `material-voice-${Date.now()}.${ext}`, { type })
+      const voiceSrc = URL.createObjectURL(blob)
+      void transcribeRecordedVoice(file, voiceSrc, recordDuration.value)
+    }
+    h5MediaRecorder.onerror = () => {
+      stopRecordTimer()
+      cancelRecordingFlag = false
+      isRecording.value = false
+      h5MediaStream?.getTracks().forEach(track => track.stop())
+      h5MediaStream = null
+      uni.showToast({ title: '录音失败', icon: 'none' })
+    }
+    h5MediaRecorder.start()
+    cancelRecordingFlag = false
+    isRecording.value = true
+    recordDuration.value = 0
+    recordTimer = setInterval(() => {
+      recordDuration.value += 1
+      if (recordDuration.value >= 60) stopRecording()
+    }, 1000)
+  } catch {
+    uni.showToast({ title: '无法访问麦克风', icon: 'none' })
+  }
+}
+
+async function startRecording() {
+  if (isRecording.value) return
+  // #ifdef H5
+  await startH5Recording()
+  return
+  // #endif
+
+  initUniRecorder()
+  if (!recorderManager) {
+    uni.showToast({ title: '当前平台不支持录音', icon: 'none' })
+    return
+  }
+  const manager = recorderManager as UniApp.RecorderManager
+  cancelRecordingFlag = false
+  isRecording.value = true
+  recordDuration.value = 0
+  recordTimer = setInterval(() => {
+    recordDuration.value += 1
+    if (recordDuration.value >= 60) stopRecording()
+  }, 1000)
+  manager.start({ format: 'mp3', sampleRate: 16000, numberOfChannels: 1 })
+}
+
+function stopRecording() {
+  if (!isRecording.value) return
+
+  // #ifdef H5
+  h5MediaRecorder?.stop()
+  return
+  // #endif
+
+  recorderManager?.stop()
+  stopRecordTimer()
+}
+
+async function waitForVoiceNotesReady(noteIds: string[]) {
+  const tasks = noteIds
+    .map(id => voiceTranscriptionTasks.get(id))
+    .filter((task): task is Promise<void> => Boolean(task))
+  if (tasks.length > 0) {
+    await Promise.allSettled(tasks)
+  }
+}
+
+async function saveMaterialAfterVoiceReady(options: {
+  submitSignature: string
+  text: string
+  photoPaths: string[]
+  voiceNoteIds: string[]
+  background: boolean
+}) {
+  try {
+    await waitForVoiceNotesReady(options.voiceNoteIds)
+
+    const voiceText = getVoiceTranscriptionText(options.voiceNoteIds)
+    const content = [options.text, voiceText].filter(Boolean).join('\n')
+    if (!content && options.photoPaths.length === 0) {
+      throw new Error('未识别到语音内容')
     }
 
-    const content = textInput.value.trim()
+    let type: 'image' | 'voice' | 'text' = voiceText && !options.text ? 'voice' : 'text'
+    let mediaUrl: string | undefined
+
+    if (options.photoPaths.length > 0) {
+      type = 'image'
+      const uploaded = await uploadDiaryImage(options.photoPaths[0])
+      mediaUrl = uploaded.url
+    }
 
     const mat = await createMaterial({
       type,
@@ -354,14 +588,16 @@ async function handleSave() {
       mediaUrl,
       date: today,
     })
+    uni.$emit('materials:changed', { date: today })
 
     // 立即追加到今日列表
     todayMaterials.value.unshift(mat)
 
     // 重置输入
-    textInput.value = ''
+    textInput.value = options.text === textInput.value.trim() ? '' : textInput.value
+    voiceNotes.value = voiceNotes.value.filter(note => !options.voiceNoteIds.includes(note.id))
     photos.value = []
-    markRecentSubmit(submitSignature)
+    markRecentSubmit(options.submitSignature)
 
     uni.showToast({ title: '已记录 ✓', icon: 'success' })
 
@@ -373,15 +609,16 @@ async function handleSave() {
       }
     }).catch(() => {})
 
-    // 短暂延迟后返回
-    setTimeout(() => {
-      uni.navigateBack()
-    }, 800)
+    if (!options.background) {
+      setTimeout(() => {
+        uni.navigateBack()
+      }, 800)
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : ''
     if (/timeout|超时/i.test(msg)) {
       // 超时时后端可能已落库，先阻止用户立刻重复提交。
-      markRecentSubmit(submitSignature)
+      markRecentSubmit(options.submitSignature)
       uni.showToast({ title: '请求超时，素材可能已保存，请刷新确认', icon: 'none', duration: 2400 })
     } else {
       uni.showToast({ title: msg || '记录失败，请重试', icon: 'none' })
@@ -389,6 +626,38 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+// ── 保存 ──
+async function handleSave() {
+  if (!canSave.value || saving.value) return
+
+  const submitSignature = buildSubmitSignature()
+  if (isLikelyDuplicateSubmit(submitSignature)) {
+    uni.showToast({ title: '请勿重复提交，稍后刷新查看', icon: 'none' })
+    return
+  }
+
+  saving.value = true
+  const voiceNoteIds = voiceNotes.value.map(note => note.id)
+  const options = {
+    submitSignature,
+    text: textInput.value.trim(),
+    photoPaths: [...photos.value],
+    voiceNoteIds,
+    background: hasPendingVoiceNotes.value,
+  }
+
+  if (options.background) {
+    uni.showToast({ title: '转写完成后自动保存', icon: 'none', duration: 1800 })
+    void saveMaterialAfterVoiceReady(options)
+    setTimeout(() => {
+      uni.navigateBack()
+    }, 300)
+    return
+  }
+
+  await saveMaterialAfterVoiceReady(options)
 }
 
 // ── 对话素材 ──
@@ -524,6 +793,96 @@ function handleBack() {
 .char-count {
   font-size: 22rpx;
   color: #AE9D92;
+}
+
+.voice-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.voice-note-bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  width: fit-content;
+  max-width: 100%;
+  padding: 16rpx 56rpx 16rpx 18rpx;
+  background: #FFF7F0;
+  border: 2rpx solid rgba(232, 133, 90, 0.18);
+  border-radius: 22rpx 24rpx 20rpx 8rpx;
+}
+
+.voice-note-bubble--transcribing {
+  background: #FDF0E8;
+}
+
+.voice-note-bubble--failed {
+  background: #FFF2F0;
+  border-color: rgba(212, 100, 92, 0.28);
+}
+
+.voice-note-main {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.voice-note-icon {
+  font-size: 28rpx;
+}
+
+.voice-wave {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.voice-wave-bar {
+  width: 5rpx;
+  border-radius: 999rpx;
+  background: #E8855A;
+  opacity: 0.75;
+}
+
+.voice-note-duration {
+  font-size: 24rpx;
+  color: #8A7668;
+}
+
+.voice-note-text {
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: #4A3628;
+}
+
+.voice-note-bubble--transcribing .voice-note-text {
+  color: #AE9D92;
+}
+
+.voice-note-bubble--failed .voice-note-text {
+  color: #B55248;
+}
+
+.voice-note-remove {
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  width: 34rpx;
+  height: 34rpx;
+  border-radius: 50%;
+  background: rgba(44, 31, 20, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice-note-remove-icon {
+  font-size: 22rpx;
+  line-height: 1;
+  color: #8A7668;
 }
 
 /* ── 照片区域 ── */
