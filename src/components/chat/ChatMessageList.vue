@@ -22,6 +22,7 @@ const emit = defineEmits<{
   (e: 'reachBottom'): void
   (e: 'jumpBottom'): void
   (e: 'retry', id: string): void
+  (e: 'play-voice', src: string): void
 }>()
 
 const thinkingExpandedState = ref<Record<string, boolean>>({})
@@ -104,6 +105,13 @@ function openWebSource(url: string) {
   uni.setClipboardData({ data: url })
   uni.showToast({ title: '链接已复制', icon: 'none' })
   // #endif
+}
+
+function formatDuration(seconds: number) {
+  const safe = Math.max(0, Math.round(Number(seconds) || 0))
+  const mins = Math.floor(safe / 60)
+  const secs = `${safe % 60}`.padStart(2, '0')
+  return `${mins}:${secs}`
 }
 </script>
 
@@ -194,6 +202,20 @@ function openWebSource(url: string) {
                     />
                   </view>
                   <text v-if="item.message.status === 'streaming'" class="streaming-cursor">|</text>
+                </view>
+                <view v-else-if="item.message.voice" class="voice-message">
+                  <view class="voice-player press-feedback" @click="emit('play-voice', item.message.voice.src)">
+                    <DoodleIcon name="voice" color="#FFFFFF" :size="30" :filtered="false" />
+                    <view class="voice-wave">
+                      <view v-for="bar in 12" :key="bar" class="voice-wave-bar" :style="{ height: `${12 + (bar % 4) * 6}rpx` }" />
+                    </view>
+                    <text class="voice-duration">{{ formatDuration(item.message.voice.duration) }}</text>
+                  </view>
+                  <view class="voice-transcript" :class="`voice-transcript--${item.message.voice.transcriptionStatus}`">
+                    <text v-if="item.message.voice.transcriptionStatus === 'transcribing'" class="voice-transcript-text">正在语音转文字...</text>
+                    <text v-else-if="item.message.voice.transcriptionStatus === 'failed'" class="voice-transcript-text">{{ item.message.error || '语音转写失败' }}</text>
+                    <text v-else class="voice-transcript-text">{{ item.message.voice.transcriptionText }}</text>
+                  </view>
                 </view>
                 <text v-else class="bubble-text bubble-text--user">{{ item.message.content || '附件消息' }}</text>
               </view>
@@ -366,6 +388,59 @@ function openWebSource(url: string) {
 
 .bubble-text--user {
   color: #ffffff;
+}
+
+.voice-message {
+  min-width: 320rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.voice-player {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.voice-wave {
+  flex: 1;
+  height: 42rpx;
+  display: flex;
+  align-items: center;
+  gap: 5rpx;
+}
+
+.voice-wave-bar {
+  width: 5rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.voice-duration {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.voice-transcript {
+  padding: 12rpx 14rpx;
+  border-radius: 8rpx;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.voice-transcript-text {
+  font-size: 24rpx;
+  line-height: 1.55;
+  color: #ffffff;
+  word-break: break-word;
+}
+
+.voice-transcript--transcribing .voice-transcript-text {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.voice-transcript--failed {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .msg-attachments {

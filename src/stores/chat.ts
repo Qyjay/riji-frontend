@@ -1,8 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { speechToText, speechToTextFile } from '@/services/api/ai'
 import { closeSession, type ChatAttachment, type ChatMessage, chatStream, getChatHistory, uploadChatFile } from '@/services/api/chat'
-import { uploadDiaryImage, uploadVoice } from '@/services/api/material'
+import { uploadDiaryImage } from '@/services/api/material'
 import { uniStorage } from './storage'
 
 export interface DraftChatAttachment extends ChatAttachment {
@@ -23,6 +24,12 @@ export interface UiChatMessage {
   status: 'sending' | 'streaming' | 'sent' | 'failed'
   attachments: ChatAttachment[]
   error?: string
+  voice?: {
+    src: string
+    duration: number
+    transcriptionStatus: 'transcribing' | 'done' | 'failed'
+    transcriptionText: string
+  }
 }
 
 function genId(prefix: string) {
@@ -298,8 +305,147 @@ export const useChatStore = defineStore('chat', () => {
     await sendMessage()
   }
 
-  async function transcribeVoice(filePath: string) {
-    return uploadVoice(filePath)
+  async function transcribeVoice(filePath: string | File) {
+    if (typeof File !== 'undefined' && filePath instanceof File) {
+      return speechToTextFile(filePath)
+    }
+    return speechToText(filePath as string)
+  }
+
+  async function sendVoiceMessage(file: string | File, voiceSrc: string, duration: number) {
+    if (isStreaming.value) return
+
+    const clientMessageId = genId('voice-cmsg')
+    const voiceMessageId = genId('voice-user')
+    const assistantMessageId = genId('assistant')
+
+    const voiceMessage: UiChatMessage = {
+      id: voiceMessageId,
+      sessionId: activeSessionId.value,
+      clientMessageId,
+      role: 'user',
+      content: '',
+      createdAt: Date.now(),
+      status: 'sending',
+      attachments: [],
+      voice: {
+        src: voiceSrc,
+        duration,
+        transcriptionStatus: 'transcribing',
+        transcriptionText: '',
+      },
+    }
+
+    messages.value.push(voiceMessage)
+
+    let transcription = ''
+    try {
+      const result = await transcribeVoice(file)
+      transcription = String(result.transcription || result.text || '').trim()
+      const current = messages.value.find((item) => item.id === voiceMessageId)
+      if (current?.voice) {
+        current.content = transcription
+        current.status = transcription ? 'sent' : 'failed'
+        current.voice.transcriptionStatus = transcription ? 'done' : 'failed'
+        current.voice.transcriptionText = transcription
+        if (!transcription) current.error = '未识别到语音内容'
+      }
+      if (!transcription) return
+    } catch (error) {
+      const current = messages.value.find((item) => item.id === voiceMessageId)
+      if (current?.voice) {
+        current.status = 'failed'
+        current.error = error instanceof Error ? error.message : '语音转写失败'
+        current.voice.transcriptionStatus = 'failed'
+        current.voice.transcriptionText = ''
+      }
+      return
+    }
+
+    const assistantMessage: UiChatMessage = {
+      id: assistantMessageId,
+      sessionId: activeSessionId.value,
+      role: 'assistant',
+      content: '',
+      createdAt: Date.now(),
+      status: 'streaming',
+      attachments: [],
+    }
+    messages.value.push(assistantMessage)
+    isStreaming.value = true
+    streamingMessageId.value = assistantMessageId
+
+    let webSearchReturned = false
+    let friendlyError: string | null = null
+    const webSearchRequested = useWebSearch.value
+    try {
+      await chatStream(
+        {
+          message: transcription,
+          clientMessageId,
+          useWebSearch: webSearchRequested,
+          attachments: [],
+        },
+        {
+          onEvent: (event) => {
+            if (event.type === 'web_search') webSearchReturned = true
+          },
+          onSession: (sessionId) => {
+            activeSessionId.value = sessionId
+            const currentUser = messages.value.find((item) => item.id === voiceMessageId)
+            if (currentUser) currentUser.sessionId = sessionId
+            const currentAssistant = messages.value.find((item) => item.id === assistantMessageId)
+            if (currentAssistant) currentAssistant.sessionId = sessionId
+          },
+          onAck: (message) => {
+            const currentUser = messages.value.find((item) => item.id === voiceMessageId)
+            if (currentUser) {
+              currentUser.id = message.id || currentUser.id
+              currentUser.sessionId = message.sessionId ?? currentUser.sessionId
+              currentUser.clientMessageId = message.clientMessageId ?? currentUser.clientMessageId
+              currentUser.status = 'sent'
+            }
+          },
+          onChunk: (textChunk) => {
+            const current = messages.value.find((item) => item.id === assistantMessageId)
+            if (current) current.content += textChunk
+          },
+          onDone: (message) => {
+            const index = messages.value.findIndex((item) => item.id === assistantMessageId)
+            if (index >= 0) {
+              messages.value.splice(index, 1, {
+                ...toUiMessage(message),
+                status: 'sent',
+              })
+            }
+          },
+          onError: (error) => {
+            friendlyError = getReadableChatError(error, {
+              webSearchRequested,
+              webSearchReturned,
+            })
+            const assistant = messages.value.find((item) => item.id === assistantMessageId)
+            if (assistant) {
+              assistant.status = 'failed'
+              assistant.error = friendlyError
+            }
+          },
+        },
+      )
+    } catch (error) {
+      const message = friendlyError || getReadableChatError(error, {
+        webSearchRequested,
+        webSearchReturned,
+      })
+      const assistant = messages.value.find((item) => item.id === assistantMessageId)
+      if (assistant) {
+        assistant.status = 'failed'
+        assistant.error = message
+      }
+    } finally {
+      isStreaming.value = false
+      streamingMessageId.value = null
+    }
   }
 
   async function closeCurrentSession() {
@@ -340,6 +486,7 @@ export const useChatStore = defineStore('chat', () => {
     removePendingAttachment,
     clearPendingAttachments,
     sendMessage,
+    sendVoiceMessage,
     retryMessage,
     transcribeVoice,
     closeCurrentSession,

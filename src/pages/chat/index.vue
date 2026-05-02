@@ -49,8 +49,14 @@ const lastScrollTop = ref(0)
 
 let recordTimer: ReturnType<typeof setInterval> | null = null
 let recorderManager: UniApp.RecorderManager | null = null
+let h5MediaRecorder: MediaRecorder | null = null
+let h5MediaStream: MediaStream | null = null
+let h5RecordChunks: Blob[] = []
+let h5VoiceObjectUrl = ''
 let cancelRecordingFlag = false
 let closingSession = false
+let h5VoicePlayer: HTMLAudioElement | null = null
+let voicePlayer: UniApp.InnerAudioContext | null = null
 
 const interestCount = computed(() => profile.value.styleTags?.length || 23)
 const canSend = computed(() => Boolean(draftText.value.trim()) || pendingAttachments.value.length > 0)
@@ -245,9 +251,17 @@ function handleReachBottom() {
   showScrollToBottom.value = false
 }
 
-function initRecorder() {
+async function handleVoiceMessage(file: string | File, voiceSrc: string) {
+  const duration = recordDuration.value
+  await chatStore.sendVoiceMessage(file, voiceSrc, duration)
+  jumpBottom()
+}
+
+function initUniRecorder() {
   if (recorderManager) return
+  if (typeof uni.getRecorderManager !== 'function') return
   recorderManager = uni.getRecorderManager()
+  if (!recorderManager) return
   recorderManager.onStop(async (res: any) => {
     stopRecordTimer()
     chatStore.setRecording(false)
@@ -255,20 +269,7 @@ function initRecorder() {
     cancelRecordingFlag = false
     if (shouldCancel || !res.tempFilePath) return
 
-    uni.showLoading({ title: '语音转文字中...', mask: true })
-    try {
-      const result = await chatStore.transcribeVoice(res.tempFilePath)
-      uni.hideLoading()
-      if (result.transcription) {
-        chatStore.setDraftText(`${draftText.value}${draftText.value ? ' ' : ''}${result.transcription}`)
-        uni.showToast({ title: '语音已转文字', icon: 'success', duration: 1000 })
-      } else {
-        uni.showToast({ title: '未识别到语音内容', icon: 'none' })
-      }
-    } catch {
-      uni.hideLoading()
-      uni.showToast({ title: '语音转写失败', icon: 'none' })
-    }
+    void handleVoiceMessage(res.tempFilePath, res.tempFilePath)
   })
   recorderManager.onError(() => {
     stopRecordTimer()
@@ -278,6 +279,64 @@ function initRecorder() {
   })
 }
 
+function getH5MimeType() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg']
+  return candidates.find((item) => MediaRecorder.isTypeSupported(item)) || ''
+}
+
+async function startH5Recording() {
+  if (!navigator?.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    uni.showToast({ title: '当前浏览器不支持录音', icon: 'none' })
+    return
+  }
+
+  try {
+    h5MediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    h5RecordChunks = []
+    const mimeType = getH5MimeType()
+    h5MediaRecorder = new MediaRecorder(h5MediaStream, mimeType ? { mimeType } : undefined)
+    h5MediaRecorder.ondataavailable = (event) => {
+      if (event.data?.size) h5RecordChunks.push(event.data)
+    }
+    h5MediaRecorder.onstop = async () => {
+      stopRecordTimer()
+      chatStore.setRecording(false)
+      h5MediaStream?.getTracks().forEach((track) => track.stop())
+      h5MediaStream = null
+      const shouldCancel = cancelRecordingFlag
+      cancelRecordingFlag = false
+      if (shouldCancel || h5RecordChunks.length === 0) return
+
+      const type = h5MediaRecorder?.mimeType || mimeType || 'audio/webm'
+      const ext = type.includes('ogg') ? 'ogg' : 'webm'
+      const blob = new Blob(h5RecordChunks, { type })
+      h5RecordChunks = []
+      if (h5VoiceObjectUrl) URL.revokeObjectURL(h5VoiceObjectUrl)
+      h5VoiceObjectUrl = URL.createObjectURL(blob)
+      void handleVoiceMessage(new File([blob], `recording-${Date.now()}.${ext}`, { type }), h5VoiceObjectUrl)
+    }
+    h5MediaRecorder.onerror = () => {
+      stopRecordTimer()
+      cancelRecordingFlag = false
+      chatStore.setRecording(false)
+      h5MediaStream?.getTracks().forEach((track) => track.stop())
+      h5MediaStream = null
+      uni.showToast({ title: '录音失败', icon: 'none' })
+    }
+    h5MediaRecorder.start()
+    cancelRecordingFlag = false
+    chatStore.setRecording(true)
+    recordDuration.value = 0
+    recordTimer = setInterval(() => {
+      recordDuration.value += 1
+      if (recordDuration.value >= 60) stopRecording()
+    }, 1000)
+  } catch {
+    uni.showToast({ title: '无法访问麦克风', icon: 'none' })
+  }
+}
+
 function stopRecordTimer() {
   if (recordTimer) {
     clearInterval(recordTimer)
@@ -285,8 +344,17 @@ function stopRecordTimer() {
   }
 }
 
-function startRecording() {
-  initRecorder()
+async function startRecording() {
+  // #ifdef H5
+  await startH5Recording()
+  return
+  // #endif
+
+  initUniRecorder()
+  if (!recorderManager) {
+    uni.showToast({ title: '当前平台不支持录音', icon: 'none' })
+    return
+  }
   cancelRecordingFlag = false
   chatStore.setRecording(true)
   recordDuration.value = 0
@@ -298,20 +366,32 @@ function startRecording() {
 }
 
 function stopRecording() {
+  // #ifdef H5
+  h5MediaRecorder?.stop()
+  return
+  // #endif
+
   recorderManager?.stop()
   stopRecordTimer()
 }
 
 function cancelRecording() {
   cancelRecordingFlag = true
+  // #ifdef H5
+  h5MediaRecorder?.stop()
+  stopRecordTimer()
+  chatStore.setRecording(false)
+  return
+  // #endif
+
   recorderManager?.stop()
   stopRecordTimer()
   chatStore.setRecording(false)
 }
 
-function toggleRecording() {
+async function toggleRecording() {
   if (isRecording.value) stopRecording()
-  else startRecording()
+  else await startRecording()
 }
 
 function handleMenu() {
@@ -338,6 +418,34 @@ function handleToggleWebSearch() {
     uni.showToast({ title: '已开启联网搜索', icon: 'none', duration: 1200 })
   }
 }
+
+function handlePlayVoice(src: string) {
+  if (!src) return
+
+  // #ifdef H5
+  if (!h5VoicePlayer) h5VoicePlayer = new Audio()
+  h5VoicePlayer.pause()
+  h5VoicePlayer.currentTime = 0
+  h5VoicePlayer.src = src
+  h5VoicePlayer.play().catch(() => {
+    uni.showToast({ title: '播放失败', icon: 'none' })
+  })
+  return
+  // #endif
+
+  // #ifndef H5
+  if (!voicePlayer) {
+    const createdPlayer = uni.createInnerAudioContext()
+    createdPlayer.onError(() => {
+      uni.showToast({ title: '播放失败', icon: 'none' })
+    })
+    voicePlayer = createdPlayer
+  }
+  const player = voicePlayer as UniApp.InnerAudioContext
+  player.src = src
+  player.play()
+  // #endif
+}
 </script>
 
 <template>
@@ -357,6 +465,7 @@ function handleToggleWebSearch() {
         @reach-bottom="handleReachBottom"
         @jump-bottom="jumpBottom"
         @retry="chatStore.retryMessage"
+        @play-voice="handlePlayVoice"
       >
         <template #empty>
           <ChatEmptyState
