@@ -1,17 +1,17 @@
 // 全局开关：运行时可通过设置页「开发者选项」切换 mock 模式
 // 使用 export let + live binding，所有 import { USE_MOCK } 的地方自动读到最新值
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000/api'
+const DEFAULT_API_BASE_URL = 'http://115.190.218.167/api'
 
 function _readMock(): boolean {
   try {
     const saved = uni.getStorageSync('dev_mock_mode')
-    // 只有明确存储了 false 才关闭 mock，其他所有情况都默认关闭
+    if (saved === true) return true
     if (saved === false) return false
-    return false  // 默认关闭 mock，使用真实后端
   } catch {
-    return false
+    // H5 初始化早期可能无法读取 storage，继续读取构建环境变量。
   }
+  return import.meta.env.VITE_USE_MOCK === 'true'
 }
 
 function _readBaseUrl(): string {

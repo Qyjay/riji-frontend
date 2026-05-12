@@ -44,6 +44,8 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
       header,
       timeout: options.timeout ?? 10000,
       success(res) {
+        const body = res.data as ApiResponse<T>
+
         // HTTP 401 → 清除 token，跳转登录页
         if (res.statusCode === 401) {
           uni.removeStorageSync('token')
@@ -53,14 +55,19 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
           return
         }
 
-        // 其他 HTTP 错误
+        // 其他 HTTP 错误：若后端返回了统一错误体，优先透传 message
         if (res.statusCode < 200 || res.statusCode >= 300) {
+          if (body && typeof body === 'object' && 'message' in body) {
+            const err: any = new Error(body.message || `HTTP 错误: ${res.statusCode}`)
+            if ('code' in body) err.code = body.code
+            reject(err)
+            return
+          }
           reject(new Error(`HTTP 错误: ${res.statusCode}`))
           return
         }
 
         // 解析统一响应格式
-        const body = res.data as ApiResponse<T>
         if (body && typeof body === 'object' && 'code' in body) {
           if (body.code === 0) {
             resolve(body.data)

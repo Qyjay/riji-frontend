@@ -1,5 +1,5 @@
 // auth.ts - 认证相关 API 及 Token 管理
-// 注意：auth 始终调用真实后端，不走 mock 分支
+import { USE_MOCK } from '../config'
 import { request } from '../request'
 
 // ==================== 类型定义 ====================
@@ -62,6 +62,21 @@ export function isLoggedIn(): boolean {
   return !!getToken()
 }
 
+function createMockAuthResponse(username: string, profile?: Partial<AuthResponse['user']>): AuthResponse {
+  return {
+    token: `mock-token-${Date.now()}`,
+    user: {
+      id: 'mock-user-1',
+      username,
+      name: profile?.name || 'Mock 用户',
+      school: profile?.school || '日迹学院',
+      major: profile?.major || '生活记录学',
+      avatar: profile?.avatar || '/static/images/avatar-default.png',
+      level: profile?.level || 3,
+    },
+  }
+}
+
 // ==================== 认证 API ====================
 
 /**
@@ -69,6 +84,13 @@ export function isLoggedIn(): boolean {
  * 成功后自动存储 token 和用户信息
  */
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
+  if (USE_MOCK) {
+    const res = createMockAuthResponse(data.username, data)
+    setToken(res.token)
+    setCurrentUser(res.user)
+    return res
+  }
+
   const res = await request<AuthResponse>({
     url: '/auth/register',
     method: 'POST',
@@ -84,6 +106,13 @@ export async function register(data: RegisterRequest): Promise<AuthResponse> {
  * 成功后自动存储 token 和用户信息
  */
 export async function login(username: string, password: string): Promise<AuthResponse> {
+  if (USE_MOCK) {
+    const res = createMockAuthResponse(username)
+    setToken(res.token)
+    setCurrentUser(res.user)
+    return res
+  }
+
   const res = await request<AuthResponse>({
     url: '/auth/login',
     method: 'POST',
@@ -100,10 +129,12 @@ export async function login(username: string, password: string): Promise<AuthRes
  * 即使网络失败也强制清除本地 token 完成登出
  */
 export async function logout(): Promise<void> {
-  try {
-    await request({ url: '/auth/logout', method: 'POST' })
-  } catch {
-    // 网络失败也继续清除本地状态
+  if (!USE_MOCK) {
+    try {
+      await request({ url: '/auth/logout', method: 'POST' })
+    } catch {
+      // 网络失败也继续清除本地状态
+    }
   }
   removeToken()
   uni.removeStorageSync('currentUser')

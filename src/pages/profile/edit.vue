@@ -158,6 +158,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getUserProfile, updateUserProfile } from '@/services/api/user'
+import { API_BASE_URL } from '@/services/config'
 import { request } from '@/services/request'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
@@ -166,7 +167,7 @@ import CustomNavBar from '@/components/CustomNavBar.vue'
 async function uploadAvatar(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     uni.uploadFile({
-      url: 'http://localhost:8000/api/upload/avatar',
+      url: `${API_BASE_URL}/upload/avatar`,
       filePath,
       name: 'file',
       header: { Authorization: `Bearer ${uni.getStorageSync('token')}` },

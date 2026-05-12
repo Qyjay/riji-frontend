@@ -114,15 +114,18 @@ import { getAchievements } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
 import type { Achievement } from '@/services/api/user'
 import { logout } from '@/services/api/auth'
+import { API_BASE_URL } from '@/services/config'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 
 // 头像需要拼接后端地址
+const assetBaseUrl = API_BASE_URL.replace(/\/api$/, '')
+
 const avatarUrl = computed(() => {
   if (!profile.value.avatar) return '/static/brand/logo-d-mascot.png'
   if (profile.value.avatar.startsWith('http')) return profile.value.avatar
-  return 'http://localhost:8000' + profile.value.avatar
+  return assetBaseUrl + profile.value.avatar
 })
 
 const navPlaceholderHeight = ref(64)
