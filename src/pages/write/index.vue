@@ -575,17 +575,23 @@ async function saveMaterialAfterVoiceReady(options: {
 
     let type: 'image' | 'voice' | 'text' = voiceText && !options.text ? 'voice' : 'text'
     let mediaUrl: string | undefined
+    let thumbnailUrl: string | undefined
+    let location: { lat?: number; lng?: number; address?: string } | null | undefined
 
     if (options.photoPaths.length > 0) {
       type = 'image'
       const uploaded = await uploadDiaryImage(options.photoPaths[0])
       mediaUrl = uploaded.url
+      thumbnailUrl = uploaded.thumbnailUrl
+      location = uploaded.location
     }
 
     const mat = await createMaterial({
       type,
       content: content || undefined,
       mediaUrl,
+      thumbnailUrl,
+      location,
       date: today,
     })
     uni.$emit('materials:changed', { date: today })

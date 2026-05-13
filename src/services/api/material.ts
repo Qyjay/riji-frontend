@@ -52,6 +52,8 @@ export async function createMaterial(data: {
   type: 'image' | 'voice' | 'text'
   content?: string
   mediaUrl?: string
+  thumbnailUrl?: string
+  location?: { lat?: number; lng?: number; address?: string } | null
   emotion?: { label: string; score: number; emoji: string }
   date?: string
 }): Promise<RawMaterial> {

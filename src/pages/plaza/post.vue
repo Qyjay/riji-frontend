@@ -119,6 +119,7 @@
 import { ref, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { createPost } from '@/services/api/plaza'
+import { uploadDiaryImage } from '@/services/api/material'
 import type { PlazaPost } from '@/services/api/plaza'
 
 // 导航栏高度
@@ -149,6 +150,24 @@ const tagInput = ref('')
 const tags = ref<string[]>([])
 const allowAgentReply = ref(false)
 const schoolOnly = ref(false)
+const isPublishing = ref(false)
+
+function isUploadedImageUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url) || url.startsWith('/uploads/')
+}
+
+async function uploadPostImages(): Promise<string[]> {
+  const uploaded: string[] = []
+  for (const image of images.value) {
+    if (isUploadedImageUrl(image)) {
+      uploaded.push(image)
+      continue
+    }
+    const result = await uploadDiaryImage(image)
+    uploaded.push(result.url)
+  }
+  return uploaded
+}
 
 // 选择图片
 function chooseImage() {
@@ -205,16 +224,19 @@ function removeTag(idx: number) {
 
 // 发布
 async function handlePublish() {
+  if (isPublishing.value) return
   if (!content.value.trim()) {
     uni.showToast({ title: '请输入内容', icon: 'none' })
     return
   }
   try {
+    isPublishing.value = true
     uni.showLoading({ title: '发布中...' })
+    const uploadedImages = await uploadPostImages()
     await createPost({
       type: selectedType.value,
       content: content.value,
-      images: images.value,
+      images: uploadedImages,
       location: location.value,
       tags: tags.value,
       allowAgentReply: allowAgentReply.value,
@@ -228,6 +250,8 @@ async function handlePublish() {
   } catch (e) {
     uni.hideLoading()
     uni.showToast({ title: '发布失败，请重试', icon: 'none' })
+  } finally {
+    isPublishing.value = false
   }
 }
 </script>

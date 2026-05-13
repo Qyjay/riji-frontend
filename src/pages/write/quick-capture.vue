@@ -396,6 +396,8 @@ async function savePhotoMaterialAfterVoiceReady(options: {
       type: 'image',
       content: content || undefined,
       mediaUrl: uploaded.url,
+      thumbnailUrl: uploaded.thumbnailUrl,
+      location: uploaded.location,
       date: today,
     })
     uni.$emit('materials:changed', { date: today })
