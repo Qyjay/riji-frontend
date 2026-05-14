@@ -21,6 +21,15 @@ export interface RawMaterial {
 }
 
 const DEFAULT_EMOTION = { label: '平静', score: 0.5, emoji: '😐' }
+const IMAGE_UPLOAD_MAX_SIDE = 1600
+const IMAGE_UPLOAD_QUALITY = 0.82
+const IMAGE_UPLOAD_SKIP_COMPRESS_SIZE = 900 * 1024
+
+type UploadImageSource = {
+  filePath: string
+  file?: File
+  cleanup?: () => void
+}
 
 function pickFirstUrl(value: unknown): string {
   if (Array.isArray(value)) {
@@ -114,7 +123,7 @@ export async function uploadVoice(filePath: string): Promise<{ url: string; tran
       filePath,
       name: 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
-      success: (res) => {
+      success: (res: { data: string }) => {
         try {
           const parsed = JSON.parse(res.data)
           if (parsed.code === 0) resolve(parsed.data)
@@ -126,19 +135,125 @@ export async function uploadVoice(filePath: string): Promise<{ url: string; tran
   })
 }
 
+function isRemoteOrDataUrl(path: string): boolean {
+  return /^(https?:)?\/\//i.test(path) || /^data:/i.test(path)
+}
+
+function getFileNameFromPath(path: string, fallbackExt = 'jpg'): string {
+  const cleanPath = String(path || '').split('?')[0].split('#')[0]
+  const name = cleanPath.split('/').filter(Boolean).pop() || ''
+  return /\.[a-z0-9]+$/i.test(name) ? name : `diary-image-${Date.now()}.${fallbackExt}`
+}
+
+function loadImageElement(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('图片读取失败'))
+    img.src = src
+  })
+}
+
+async function compressImageOnH5(filePath: string): Promise<UploadImageSource> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { filePath }
+  }
+  if (isRemoteOrDataUrl(filePath) && !filePath.startsWith('blob:')) {
+    return { filePath }
+  }
+
+  const sourceBlob = await fetch(filePath).then((res) => res.blob())
+  if (!sourceBlob.type.startsWith('image/') || sourceBlob.type === 'image/gif') {
+    return { filePath }
+  }
+
+  const objectUrl = URL.createObjectURL(sourceBlob)
+  try {
+    const img = await loadImageElement(objectUrl)
+    const width = img.naturalWidth || img.width
+    const height = img.naturalHeight || img.height
+    if (!width || !height) {
+      return { filePath }
+    }
+
+    const scale = Math.min(1, IMAGE_UPLOAD_MAX_SIDE / Math.max(width, height))
+    if (scale >= 1 && sourceBlob.size <= IMAGE_UPLOAD_SKIP_COMPRESS_SIZE) {
+      return { filePath }
+    }
+
+    const targetWidth = Math.max(1, Math.round(width * scale))
+    const targetHeight = Math.max(1, Math.round(height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      return { filePath }
+    }
+    ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
+
+    const compressedBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', IMAGE_UPLOAD_QUALITY)
+    })
+    if (!compressedBlob || compressedBlob.size >= sourceBlob.size) {
+      return { filePath }
+    }
+
+    const compressedFile = new File(
+      [compressedBlob],
+      getFileNameFromPath(filePath, 'jpg').replace(/\.[a-z0-9]+$/i, '.jpg'),
+      { type: 'image/jpeg' },
+    )
+    const compressedUrl = URL.createObjectURL(compressedFile)
+    return {
+      filePath: compressedUrl,
+      file: compressedFile,
+      cleanup: () => URL.revokeObjectURL(compressedUrl),
+    }
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+async function compressImageForUpload(filePath: string): Promise<UploadImageSource> {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    try {
+      return await compressImageOnH5(filePath)
+    } catch {
+      return { filePath }
+    }
+  }
+
+  const compressor = (uni as any).compressImage
+  if (typeof compressor !== 'function' || isRemoteOrDataUrl(filePath)) {
+    return { filePath }
+  }
+
+  return new Promise((resolve) => {
+    compressor({
+      src: filePath,
+      quality: Math.round(IMAGE_UPLOAD_QUALITY * 100),
+      success: (res: { tempFilePath?: string }) => {
+        resolve({ filePath: res.tempFilePath || filePath })
+      },
+      fail: () => resolve({ filePath }),
+    })
+  })
+}
+
 export async function uploadDiaryImage(filePath: string): Promise<{ url: string; thumbnailUrl: string; location: any }> {
   if (USE_MOCK) {
     // Mock 模式直接返回本地路径
     return { url: filePath, thumbnailUrl: filePath, location: null }
   }
+  const uploadSource = await compressImageForUpload(filePath)
   return new Promise((resolve, reject) => {
     const token = uni.getStorageSync('token')
-    uni.uploadFile({
+    const uploadOptions: any = {
       url: `${API_BASE_URL}/upload/diary-image`,
-      filePath,
       name: 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
-      success: (res) => {
+      success: (res: { data: string }) => {
         try {
           const parsed = JSON.parse(res.data)
           if (parsed.code === 0) resolve(parsed.data)
@@ -146,6 +261,13 @@ export async function uploadDiaryImage(filePath: string): Promise<{ url: string;
         } catch { reject(new Error('解析响应失败')) }
       },
       fail: () => reject(new Error('上传失败')),
-    })
+      complete: () => uploadSource.cleanup?.(),
+    }
+    if (uploadSource.file) {
+      uploadOptions.file = uploadSource.file
+    } else {
+      uploadOptions.filePath = uploadSource.filePath
+    }
+    uni.uploadFile(uploadOptions)
   })
 }
