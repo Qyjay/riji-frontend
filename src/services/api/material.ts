@@ -241,12 +241,35 @@ async function compressImageForUpload(filePath: string): Promise<UploadImageSour
   })
 }
 
+async function uploadDiaryImageFile(file: File): Promise<{ url: string; thumbnailUrl: string; location: any }> {
+  const token = uni.getStorageSync('token')
+  const formData = new FormData()
+  formData.append('file', file, file.name || `diary-image-${Date.now()}.jpg`)
+  const response = await fetch(`${API_BASE_URL}/upload/diary-image`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  })
+  const parsed = await response.json().catch(() => null)
+  if (!response.ok || !parsed || parsed.code !== 0) {
+    throw new Error(parsed?.message || '上传失败')
+  }
+  return parsed.data
+}
+
 export async function uploadDiaryImage(filePath: string): Promise<{ url: string; thumbnailUrl: string; location: any }> {
   if (USE_MOCK) {
     // Mock 模式直接返回本地路径
     return { url: filePath, thumbnailUrl: filePath, location: null }
   }
   const uploadSource = await compressImageForUpload(filePath)
+  if (uploadSource.file) {
+    try {
+      return await uploadDiaryImageFile(uploadSource.file)
+    } finally {
+      uploadSource.cleanup?.()
+    }
+  }
   return new Promise((resolve, reject) => {
     const token = uni.getStorageSync('token')
     const uploadOptions: any = {
