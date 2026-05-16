@@ -111,18 +111,18 @@
         </view>
       </view>
 
-      <!-- ── AI 早安/晚安卡片 ── -->
+      <!-- ── AI 问候卡片 ── -->
       <view v-if="greetingCardVisible" class="greeting-card stagger-item">
-        <view class="greeting-inner" :class="isMorning ? 'greeting-morning' : 'greeting-night'">
+        <view class="greeting-inner" :class="greetingVisualClass">
           <view class="greeting-header">
-            <DoodleIcon :name="isMorning ? 'sun' : 'moon'" :color="isMorning ? '#C8A86B' : '#9B72C8'" :size="22" />
+            <DoodleIcon :name="greetingIconName" :color="greetingIconColor" :size="22" />
             <text class="greeting-title">{{ greetingTitle }}</text>
             <view class="greeting-close press-feedback" @click="greetingCardVisible = false">
               <DoodleIcon name="cross" color="#AE9D92" :size="16" />
             </view>
           </view>
 
-          <template v-if="isMorning">
+          <template v-if="showGreetingAction">
             <text class="greeting-desc">{{ greetingDesc }}</text>
             <view class="greeting-todo press-feedback" @click="handleGreetingAction">
               <DoodleIcon name="list" color="#E8855A" :size="36" />
@@ -269,9 +269,29 @@ const navPlaceholderHeight = ref(64) // 默认值，onMounted 后更新
 const scrollHeight = ref(600)
 
 // ── 时间判断 ──
-const now = new Date()
-const hour = now.getHours()
-const isMorning = hour >= 6 && hour < 12
+type GreetingPeriod = 'morning' | 'afternoon' | 'evening' | 'night'
+
+const currentTime = ref(new Date())
+const currentHour = computed(() => currentTime.value.getHours())
+const greetingPeriod = computed<GreetingPeriod>(() => {
+  const hour = currentHour.value
+  if (hour >= 5 && hour < 12) return 'morning'
+  if (hour >= 12 && hour < 18) return 'afternoon'
+  if (hour >= 18 && hour < 23) return 'evening'
+  return 'night'
+})
+const showGreetingAction = computed(() => greetingPeriod.value !== 'night')
+const greetingVisualClass = computed(() => (
+  greetingPeriod.value === 'evening' || greetingPeriod.value === 'night'
+    ? 'greeting-night'
+    : 'greeting-morning'
+))
+const greetingIconName = computed(() => (
+  greetingPeriod.value === 'evening' || greetingPeriod.value === 'night' ? 'moon' : 'sun'
+))
+const greetingIconColor = computed(() => (
+  greetingPeriod.value === 'evening' || greetingPeriod.value === 'night' ? '#9B72C8' : '#C8A86B'
+))
 const greetingCardVisible = ref(true)
 
 const greetingUserName = computed(() => {
@@ -280,20 +300,30 @@ const greetingUserName = computed(() => {
 })
 
 const greetingTitle = computed(() => {
-  return isMorning ? `早上好 ${greetingUserName.value}！` : `晚安 ${greetingUserName.value}`
+  const titleMap: Record<GreetingPeriod, string> = {
+    morning: '早上好',
+    afternoon: '下午好',
+    evening: '晚上好',
+    night: '晚安',
+  }
+  return `${titleMap[greetingPeriod.value]} ${greetingUserName.value}${greetingPeriod.value === 'night' ? '' : '！'}`
 })
 
 const greetingDesc = computed(() => {
   const summary = todaySummary.value
   if (!summary) {
-    return isMorning ? '新的一天，记得记录生活里的小闪光' : '今天辛苦了，给自己一个微笑'
+    return greetingPeriod.value === 'night'
+      ? '今天辛苦了，给自己一个微笑'
+      : '记得记录生活里的小闪光'
   }
 
-  if (isMorning) {
+  if (showGreetingAction.value) {
     if (summary.material_count > 0) {
       return `今天已记录 ${summary.material_count} 条素材，继续保持`
     }
-    return '新的一天，记得记录生活里的小闪光'
+    return greetingPeriod.value === 'morning'
+      ? '新的一天，记得记录生活里的小闪光'
+      : '现在记录一点，晚点写日记会更轻松'
   }
 
   const diaryCount = summary.diary_count ?? (summary.has_diary ? 1 : 0)
@@ -358,6 +388,7 @@ async function refreshForNewDay(nextDate: string) {
 function startDayRefreshWatcher() {
   if (dayRefreshTimer) clearInterval(dayRefreshTimer)
   dayRefreshTimer = setInterval(() => {
+    currentTime.value = new Date()
     const today = toLocalDateYmd()
     if (today === currentDateKey.value) return
     void refreshForNewDay(today)
@@ -426,6 +457,7 @@ onMounted(async () => {
 })
 
 onShow(async () => {
+  currentTime.value = new Date()
   const today = toLocalDateYmd()
   if (today === currentDateKey.value) return
   await refreshForNewDay(today)
