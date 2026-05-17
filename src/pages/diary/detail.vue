@@ -87,15 +87,43 @@
             <view class="header-line" />
           </view>
           <view class="emotion-trend-card">
-            <view class="emotion-chart">
-              <view v-for="(point, i) in emotionTrend" :key="i" class="chart-col">
-                <view class="chart-bar-wrap">
-                  <view class="chart-bar" :style="{ height: normalizedBarHeight(point.score) + 'rpx' }" />
-                </view>
-                <text class="chart-time">{{ point.hour }}时</text>
-                <text class="chart-emoji-icon">{{ getEmotionEmoji(point.label) }}</text>
-              </view>
+            <view class="trend-meta-row">
+              <text class="trend-meta">分钟级趋势，越高代表心情越好</text>
+              <text class="trend-range">-10 ~ 10</text>
             </view>
+            <scroll-view class="trend-scroll" scroll-x>
+              <view class="line-chart-canvas" :style="{ width: chartCanvasWidth + 'rpx' }">
+                <view class="y-grid y-grid-top"><text class="y-label">+10</text></view>
+                <view class="y-grid y-grid-mid"><text class="y-label">0</text></view>
+                <view class="y-grid y-grid-bottom"><text class="y-label">-10</text></view>
+
+                <view
+                  v-for="(_, i) in emotionTrendSegments"
+                  :key="`segment-${i}`"
+                  class="trend-segment"
+                  :style="trendSegmentStyle(i)"
+                />
+                <view
+                  v-for="(point, i) in emotionTrend"
+                  :key="`${point.time ?? point.hour}-${i}`"
+                  class="trend-point-wrap"
+                  :style="trendPointStyle(i, point.score)"
+                >
+                  <text class="trend-point-emoji">{{ getEmotionEmoji(point.label) }}</text>
+                  <view class="trend-dot" :style="{ background: getEmotionColor(point.label) }" />
+                </view>
+
+                <view
+                  v-for="(point, i) in emotionTrend"
+                  :key="`label-${point.time ?? point.hour}-${i}`"
+                  class="trend-x-label"
+                  :style="{ left: trendPointX(i) + 'rpx' }"
+                >
+                  <text class="trend-time">{{ formatTrendTime(point) }}</text>
+                  <text class="trend-label">{{ point.label }} {{ formatTrendScore(point.score) }}</text>
+                </view>
+              </view>
+            </scroll-view>
             <text class="dominant-info">主要情绪：{{ diary.emotionSummary?.dominant ?? '开心' }}</text>
           </view>
         </view>
@@ -161,7 +189,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend } from '@/services/api/diary'
-import type { Diary } from '@/services/api/diary'
+import type { Diary, EmotionTrendPoint } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { API_BASE_URL } from '@/services/config'
@@ -177,7 +205,18 @@ const editContent = ref('')
 const editSaving = ref(false)
 
 // 情绪趋势
-const emotionTrend = ref<Array<{ hour: number; label: string; score: number }>>([])
+const emotionTrend = ref<EmotionTrendPoint[]>([])
+const CHART_HEIGHT = 180
+const CHART_STEP = 92
+const CHART_MIN_WIDTH = 560
+
+const chartCanvasWidth = computed(() => {
+  return Math.max(CHART_MIN_WIDTH, (emotionTrend.value.length - 1) * CHART_STEP + 96)
+})
+
+const emotionTrendSegments = computed(() => {
+  return emotionTrend.value.slice(0, Math.max(0, emotionTrend.value.length - 1))
+})
 
 // 字体 — 从设置 store 读取
 const settingsStore = useSettingsStore()
@@ -303,15 +342,82 @@ function getEmotionEmoji(label: string): string {
     '开心': '😊', '幸福': '🥰', '平静': '😌', '疲惫': '😴',
     '满足': '😎', '难过': '😢', '烦躁': '😤', '兴奋': '🤩',
     '焦虑': '😰', '专注': '🧐', '沮丧': '😞', '温暖': '🥰',
+    '愤怒': '😠', '感动': '🥹', '期待': '🤩', '无聊': '😑',
   }
   return map[label] ?? '😊'
 }
 
-/** 将 score 归一化到 0~80rpx 范围 */
-function normalizedBarHeight(score: number): number {
-  // score 范围 0~100，映射到 8~80rpx
-  const clamped = Math.max(0, Math.min(100, score))
-  return Math.round(8 + (clamped / 100) * 72)
+function getEmotionColor(label: string): string {
+  const map: Record<string, string> = {
+    '开心': '#E8855A', '幸福': '#E8855A', '期待': '#C8A86B',
+    '感动': '#E9A15F', '平静': '#6B8EC4', '无聊': '#AE9D92',
+    '焦虑': '#D79A52', '难过': '#6B8EC4', '愤怒': '#D4645C',
+  }
+  return map[label] ?? '#E8855A'
+}
+
+function normalizeTrendScore(score: number, label: string): number {
+  const value = Number(score) || 0
+  if (value >= -10 && value <= 10 && (value < 0 || value > 1 || Number.isInteger(value))) {
+    return Math.max(-10, Math.min(10, Math.round(value)))
+  }
+  const intensity = value > 1 && value <= 100 ? value / 100 : value
+  const base: Record<string, number> = {
+    '开心': 8, '幸福': 8, '期待': 6, '感动': 6, '平静': 0,
+    '无聊': -2, '焦虑': -5, '愤怒': -6, '难过': -7, '沮丧': -7, '疲惫': -3,
+  }
+  return Math.max(-10, Math.min(10, Math.round((base[label] ?? 0) * intensity)))
+}
+
+function normalizeTrendPoint(point: EmotionTrendPoint): EmotionTrendPoint {
+  return {
+    ...point,
+    minute: point.minute ?? 0,
+    time: point.time ?? `${String(point.hour).padStart(2, '0')}:00`,
+    score: normalizeTrendScore(point.score, point.label),
+  }
+}
+
+function trendPointX(index: number): number {
+  return 48 + index * CHART_STEP
+}
+
+function trendPointY(score: number): number {
+  const clamped = Math.max(-10, Math.min(10, Number(score) || 0))
+  return Math.round(((10 - clamped) / 20) * CHART_HEIGHT)
+}
+
+function trendPointStyle(index: number, score: number) {
+  return {
+    left: `${trendPointX(index)}rpx`,
+    top: `${trendPointY(score)}rpx`,
+  }
+}
+
+function trendSegmentStyle(index: number) {
+  const current = emotionTrend.value[index]
+  const next = emotionTrend.value[index + 1]
+  const y1 = trendPointY(current.score)
+  const y2 = trendPointY(next.score)
+  const dy = y2 - y1
+  const length = Math.round(Math.sqrt(CHART_STEP ** 2 + dy ** 2))
+  const angle = Math.atan2(dy, CHART_STEP) * 180 / Math.PI
+  return {
+    left: `${trendPointX(index)}rpx`,
+    top: `${y1}rpx`,
+    width: `${length}rpx`,
+    transform: `rotate(${angle}deg)`,
+    background: getEmotionColor(next.label),
+  }
+}
+
+function formatTrendTime(point: EmotionTrendPoint): string {
+  if (point.time) return point.time
+  return `${String(point.hour).padStart(2, '0')}:${String(point.minute ?? 0).padStart(2, '0')}`
+}
+
+function formatTrendScore(score: number): string {
+  return score > 0 ? `+${score}` : `${score}`
 }
 
 onMounted(async () => {
@@ -337,9 +443,9 @@ onMounted(async () => {
   if (diary.value) {
     try {
       const trend = await getEmotionTrend(diary.value.id)
-      emotionTrend.value = trend.trend
+      emotionTrend.value = trend.trend.map(normalizeTrendPoint)
     } catch {
-      emotionTrend.value = diary.value.emotionSummary?.trend ?? []
+      emotionTrend.value = (diary.value.emotionSummary?.trend ?? []).map(normalizeTrendPoint)
     }
   }
 
@@ -631,41 +737,125 @@ function handleTool(type: string) {
 .emotion-trend-card {
   background: #F5F0EB;
   border-radius: 16rpx;
-  padding: 20rpx;
+  padding: 20rpx 20rpx 18rpx;
 }
 
-.emotion-chart {
+.trend-meta-row {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-around;
-  gap: 8rpx;
-  margin-bottom: 12rpx;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
 }
 
-.chart-col {
+.trend-meta {
+  font-size: 24rpx;
+  color: #7A6656;
+}
+
+.trend-range {
+  font-size: 22rpx;
+  color: #E8855A;
+  font-weight: 700;
+  background: rgba(232, 133, 90, 0.1);
+  border-radius: 999rpx;
+  padding: 4rpx 12rpx;
+}
+
+.trend-scroll {
+  width: 100%;
+  padding: 6rpx 0 4rpx;
+}
+
+.line-chart-canvas {
+  position: relative;
+  height: 276rpx;
+  padding-top: 4rpx;
+}
+
+.y-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1rpx;
+  background: rgba(174, 157, 146, 0.35);
+}
+
+.y-grid-top { top: 0; }
+.y-grid-mid {
+  top: 90rpx;
+  background: repeating-linear-gradient(
+    to right,
+    rgba(232, 133, 90, 0.5) 0,
+    rgba(232, 133, 90, 0.5) 10rpx,
+    transparent 10rpx,
+    transparent 18rpx
+  );
+}
+.y-grid-bottom { top: 180rpx; }
+
+.y-label {
+  position: absolute;
+  left: 0;
+  top: -14rpx;
+  font-size: 20rpx;
+  color: #AE9D92;
+}
+
+.trend-segment {
+  position: absolute;
+  height: 4rpx;
+  border-radius: 999rpx;
+  transform-origin: left center;
+  opacity: 0.86;
+}
+
+.trend-point-wrap {
+  position: absolute;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4rpx;
+  z-index: 2;
 }
 
-.chart-bar-wrap {
-  height: 80rpx;
+.trend-point-emoji {
+  font-size: 24rpx;
+  line-height: 1;
+  filter: drop-shadow(0 2rpx 4rpx rgba(74, 54, 40, 0.12));
+}
+
+.trend-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border: 4rpx solid #FFFDF9;
+  border-radius: 50%;
+  box-shadow: 0 4rpx 10rpx rgba(74, 54, 40, 0.16);
+}
+
+.trend-x-label {
+  position: absolute;
+  top: 204rpx;
+  transform: translateX(-50%);
   display: flex;
-  align-items: flex-end;
-  width: 32rpx;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+  width: 88rpx;
 }
 
-.chart-bar {
-  width: 100%;
-  background: linear-gradient(to top, #E8855A, #F2B49B);
-  border-radius: 4rpx 4rpx 0 0;
-  min-height: 8rpx;
-  max-height: 80rpx;
+.trend-time {
+  font-size: 20rpx;
+  color: #7A6656;
+  white-space: nowrap;
 }
 
-.chart-time { font-size: 18rpx; color: #AE9D92; white-space: nowrap; }
-.chart-emoji-icon { font-size: 24rpx; }
+.trend-label {
+  font-size: 18rpx;
+  color: #AE9D92;
+  white-space: nowrap;
+}
+
 .dominant-info { font-size: 26rpx; color: #4A3628; font-weight: 500; }
 
 /* ── Section Header ── */

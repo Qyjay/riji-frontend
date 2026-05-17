@@ -20,7 +20,7 @@ export interface RawMaterial {
   endTime?: number
 }
 
-const DEFAULT_EMOTION = { label: '平静', score: 0.5, emoji: '😐' }
+const DEFAULT_EMOTION = { label: '平静', score: 0, emoji: '😐' }
 const IMAGE_UPLOAD_MAX_SIDE = 1600
 const IMAGE_UPLOAD_QUALITY = 0.82
 const IMAGE_UPLOAD_SKIP_COMPRESS_SIZE = 900 * 1024

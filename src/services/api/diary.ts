@@ -2,6 +2,14 @@ import { USE_MOCK } from '../config'
 import { request } from '../request'
 import * as mock from '../mock/diary'
 
+export interface EmotionTrendPoint {
+  hour: number
+  minute?: number
+  time?: string
+  label: string
+  score: number
+}
+
 export interface Diary {
   id: string
   title: string
@@ -11,7 +19,7 @@ export interface Diary {
   specialDate: string
   emotionSummary: {
     dominant: string
-    trend: Array<{ hour: number; label: string; score: number }>
+    trend: EmotionTrendPoint[]
   }
   materialIds: string[]
   style: string
@@ -65,9 +73,9 @@ export async function deleteDiary(id: string): Promise<void> {
   return request<void>({ url: `/diaries/${id}`, method: 'DELETE' })
 }
 
-export async function getEmotionTrend(id: string): Promise<{ dominant: string; trend: Array<{ hour: number; label: string; score: number }> }> {
+export async function getEmotionTrend(id: string): Promise<{ dominant: string; trend: EmotionTrendPoint[] }> {
   if (USE_MOCK) return mock.getEmotionTrend(id)
-  return request<{ dominant: string; trend: Array<{ hour: number; label: string; score: number }> }>({ url: `/diaries/${id}/emotion-trend` })
+  return request<{ dominant: string; trend: EmotionTrendPoint[] }>({ url: `/diaries/${id}/emotion-trend` })
 }
 
 export async function extractInfo(id: string): Promise<{ anniversaries: any[]; relations: any[]; preferences: any[] }> {

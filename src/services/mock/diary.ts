@@ -1,14 +1,17 @@
-import type { Diary, DiaryDerivative } from '../api/diary'
+import type { Diary, DiaryDerivative, EmotionTrendPoint } from '../api/diary'
 
 const now = Date.now()
 const day = 86400000
 
-function makeTrend(): Array<{ hour: number; label: string; score: number }> {
-  const emotions = ['平静', '开心', '专注', '疲惫', '开心', '幸福', '平静']
+function makeTrend(): EmotionTrendPoint[] {
+  const emotions = ['平静', '开心', '焦虑', '难过', '开心', '感动', '平静']
+  const scores = [0, 6, -4, -6, 8, 5, 1, 0]
   return [7, 9, 11, 13, 15, 17, 20, 22].map((hour, i) => ({
     hour,
+    minute: i % 2 === 0 ? 15 : 42,
+    time: `${String(hour).padStart(2, '0')}:${i % 2 === 0 ? '15' : '42'}`,
     label: emotions[i % emotions.length],
-    score: Math.round(50 + Math.random() * 45),
+    score: scores[i % scores.length],
   }))
 }
 
@@ -438,7 +441,7 @@ export function updateDiary(id: string, content: string): Diary {
   return diary
 }
 
-export function getEmotionTrend(_id: string): { dominant: string; trend: Array<{ hour: number; label: string; score: number }> } {
+export function getEmotionTrend(_id: string): { dominant: string; trend: EmotionTrendPoint[] } {
   const diary = mockDiaries.find(d => d.id === _id) ?? mockDiaries[0]
   return diary.emotionSummary
 }
