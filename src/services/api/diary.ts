@@ -17,6 +17,7 @@ export interface Diary {
   date: string  // "2026-03-25"
   weather: string
   specialDate: string
+  aiComment?: string
   emotionSummary: {
     dominant: string
     trend: EmotionTrendPoint[]
@@ -61,6 +62,11 @@ export async function getDiaries(page = 1, pageSize = 10): Promise<{ list: Diary
 export async function getDiaryDetail(id: string): Promise<Diary> {
   if (USE_MOCK) return mock.getDiaryDetail(id)
   return request<Diary>({ url: `/diaries/${id}` })
+}
+
+export async function generateDiaryAiComment(id: string): Promise<{ aiComment: string }> {
+  if (USE_MOCK) return { aiComment: '' }
+  return request<{ aiComment: string }>({ url: `/diaries/${id}/ai-comment`, method: 'POST', timeout: 60000 })
 }
 
 export async function updateDiary(id: string, content: string): Promise<Diary> {

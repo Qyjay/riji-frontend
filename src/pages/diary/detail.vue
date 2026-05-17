@@ -129,7 +129,7 @@
         </view>
 
         <!-- ── AI 评论 ── -->
-        <view class="ai-comment-section">
+        <view v-if="aiComment || aiCommentLoading" class="ai-comment-section">
           <view class="section-header">
             <view class="header-line" />
             <text class="header-label">AI 评论</text>
@@ -139,7 +139,7 @@
             <DoodleIcon name="robot" :size="56" color="#E8855A" class="ai-avatar-icon" />
             <view class="ai-comment-body">
               <text class="ai-label">AI 说：</text>
-              <text class="ai-comment-text">"{{ aiComment }}"</text>
+              <text class="ai-comment-text">{{ aiCommentLoading ? 'AI 正在读这篇日记...' : aiComment }}</text>
             </view>
           </view>
         </view>
@@ -188,7 +188,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend } from '@/services/api/diary'
+import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend, generateDiaryAiComment } from '@/services/api/diary'
 import type { Diary, EmotionTrendPoint } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -196,6 +196,7 @@ import { API_BASE_URL } from '@/services/config'
 
 const diary = ref<Diary | null>(null)
 const loading = ref(true)
+const aiCommentLoading = ref(false)
 const statusBarHeight = ref(20)
 const scrollHeight = ref(600)
 
@@ -296,19 +297,8 @@ const contentBlocks = computed<ContentBlock[]>(() => {
   return blocks
 })
 
-const aiComments = [
-  '又去吃酸菜鱼了！这已经是本周第3次了哦😄 要不要试试二食堂新出的麻辣烫？',
-  '最近学习强度有点大，记得适当休息～你的情绪曲线最近比较稳定，很好！',
-  '这篇日记洋溢着幸福感，能量值满满！继续保持 ✨',
-  '社交活动记录得越来越多了呢，人际关系指数稳步上升 🌱',
-  '这篇文字好有画面感！配上BGM一定很棒，要不要试试生成一个？',
-  '雅思倒计时43天，时间紧迫但也要注意休息哦 💪 加油！',
-]
-
 const aiComment = computed(() => {
-  if (!diary.value) return ''
-  const idx = Math.abs(Number(diary.value.id)) % aiComments.length
-  return aiComments[idx]
+  return (diary.value?.aiComment ?? '').trim()
 })
 
 const navTitle = computed(() => {
@@ -420,6 +410,23 @@ function formatTrendScore(score: number): string {
   return score > 0 ? `+${score}` : `${score}`
 }
 
+async function ensureAiComment() {
+  if (!diary.value || aiComment.value || aiCommentLoading.value) return
+
+  aiCommentLoading.value = true
+  try {
+    const result = await generateDiaryAiComment(diary.value.id)
+    diary.value = {
+      ...diary.value,
+      aiComment: result.aiComment || '',
+    }
+  } catch {
+    uni.showToast({ title: 'AI 点评生成失败', icon: 'none' })
+  } finally {
+    aiCommentLoading.value = false
+  }
+}
+
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
@@ -447,6 +454,7 @@ onMounted(async () => {
     } catch {
       emotionTrend.value = (diary.value.emotionSummary?.trend ?? []).map(normalizeTrendPoint)
     }
+    void ensureAiComment()
   }
 
   loading.value = false
