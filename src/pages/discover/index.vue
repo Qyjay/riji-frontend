@@ -102,7 +102,7 @@
               <!-- 匹配原因 -->
               <view class="match-reasons">
                 <view
-                  v-for="(reason, ri) in item.matchReasons.slice(0, 3)"
+                  v-for="(reason, ri) in safeSlice(item.matchReasons, 3)"
                   :key="ri"
                   class="match-reason-item"
                 >
@@ -124,7 +124,7 @@
               <!-- 分身对话预览 -->
               <view v-if="item.agentConversation && item.agentConversation.length" class="agent-conv-preview">
                 <view
-                  v-for="(msg, mi) in item.agentConversation.slice(0, 2)"
+                  v-for="(msg, mi) in safeSlice(item.agentConversation, 2)"
                   :key="mi"
                   class="agent-conv-msg"
                   :class="msg.from === 'my_agent' ? 'agent-conv-msg--mine' : 'agent-conv-msg--theirs'"
@@ -175,7 +175,7 @@
             <!-- 图片区（最多3张） -->
             <view v-if="item.images && item.images.length" class="post-images">
               <image
-                v-for="(img, ii) in item.images.slice(0, 3)"
+                v-for="(img, ii) in safeSlice(item.images, 3)"
                 :key="ii"
                 class="post-image"
                 :src="img"
@@ -185,7 +185,7 @@
 
             <!-- 话题 + 位置 -->
             <view v-if="item.tags && item.tags.length || item.location" class="post-meta-row">
-              <text v-for="(tag, ti) in item.tags.slice(0, 3)" :key="ti" class="post-tag">#{{ tag }}</text>
+              <text v-for="(tag, ti) in safeSlice(item.tags, 3)" :key="ti" class="post-tag">#{{ tag }}</text>
               <text v-if="item.location" class="post-location">📍 {{ item.location }}</text>
             </view>
 
@@ -349,6 +349,10 @@ const feedList = computed<FeedItem[]>(() => {
   })
   return result
 })
+
+function safeSlice<T>(value: T[] | null | undefined, limit: number): T[] {
+  return Array.isArray(value) ? value.slice(0, limit) : []
+}
 
 async function loadPosts() {
   if (loading.value || noMore.value) return
