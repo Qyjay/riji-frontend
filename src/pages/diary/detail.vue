@@ -129,7 +129,7 @@
         </view>
 
         <!-- ── AI 评论 ── -->
-        <view v-if="aiComment || aiCommentLoading" class="ai-comment-section">
+        <view class="ai-comment-section">
           <view class="section-header">
             <view class="header-line" />
             <text class="header-label">AI 评论</text>
@@ -139,7 +139,15 @@
             <DoodleIcon name="robot" :size="56" color="#E8855A" class="ai-avatar-icon" />
             <view class="ai-comment-body">
               <text class="ai-label">AI 说：</text>
-              <text class="ai-comment-text">{{ aiCommentLoading ? 'AI 正在读这篇日记...' : aiComment }}</text>
+              <text class="ai-comment-text">
+                {{ aiComment || (aiCommentLoading ? 'AI 正在读这篇日记...' : '这篇日记还没有 AI 点评。') }}
+              </text>
+              <view v-if="!aiComment && !aiCommentLoading" class="ai-comment-action" @click="generateAiCommentStream">
+                <text class="ai-comment-action-text">生成 AI 点评</text>
+              </view>
+              <view v-else-if="aiCommentLoading" class="ai-comment-action disabled">
+                <text class="ai-comment-action-text">生成中...</text>
+              </view>
             </view>
           </view>
         </view>
@@ -188,7 +196,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend, generateDiaryAiComment } from '@/services/api/diary'
+import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend, streamDiaryAiComment } from '@/services/api/diary'
 import type { Diary, EmotionTrendPoint } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -410,16 +418,31 @@ function formatTrendScore(score: number): string {
   return score > 0 ? `+${score}` : `${score}`
 }
 
-async function ensureAiComment() {
+async function generateAiCommentStream() {
   if (!diary.value || aiComment.value || aiCommentLoading.value) return
 
   aiCommentLoading.value = true
+  diary.value = {
+    ...diary.value,
+    aiComment: '',
+  }
   try {
-    const result = await generateDiaryAiComment(diary.value.id)
-    diary.value = {
-      ...diary.value,
-      aiComment: result.aiComment || '',
-    }
+    await streamDiaryAiComment(diary.value.id, {
+      onChunk(text) {
+        if (!diary.value) return
+        diary.value = {
+          ...diary.value,
+          aiComment: `${diary.value.aiComment || ''}${text}`,
+        }
+      },
+      onDone(aiComment) {
+        if (!diary.value) return
+        diary.value = {
+          ...diary.value,
+          aiComment,
+        }
+      },
+    })
   } catch {
     uni.showToast({ title: 'AI 点评生成失败', icon: 'none' })
   } finally {
@@ -454,7 +477,6 @@ onMounted(async () => {
     } catch {
       emotionTrend.value = (diary.value.emotionSummary?.trend ?? []).map(normalizeTrendPoint)
     }
-    void ensureAiComment()
   }
 
   loading.value = false
@@ -904,6 +926,16 @@ function handleTool(type: string) {
 .ai-comment-body { flex: 1; }
 .ai-label { font-size: 26rpx; color: #4A3628; font-weight: 600; display: block; margin-bottom: 4rpx; }
 .ai-comment-text { font-size: 28rpx; color: #4A3628; line-height: 1.7; display: block; }
+.ai-comment-action {
+  align-self: flex-start;
+  margin-top: 14rpx;
+  padding: 10rpx 20rpx;
+  background: linear-gradient(135deg, #E8855A, #F0A882);
+  border-radius: 999rpx;
+}
+.ai-comment-action:active { opacity: 0.82; }
+.ai-comment-action.disabled { background: #D4C4B8; }
+.ai-comment-action-text { color: #fff; font-size: 24rpx; font-weight: 600; }
 
 /* ── 创作工具 ── */
 .tools-section { padding: 24rpx 32rpx 0; }
