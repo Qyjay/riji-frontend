@@ -215,6 +215,7 @@ const editSaving = ref(false)
 
 // 情绪趋势
 const emotionTrend = ref<EmotionTrendPoint[]>([])
+const CHART_TOP_PADDING = 48
 const CHART_HEIGHT = 180
 const CHART_STEP = 92
 const CHART_MIN_WIDTH = 560
@@ -382,7 +383,7 @@ function trendPointX(index: number): number {
 
 function trendPointY(score: number): number {
   const clamped = Math.max(-10, Math.min(10, Number(score) || 0))
-  return Math.round(((10 - clamped) / 20) * CHART_HEIGHT)
+  return CHART_TOP_PADDING + Math.round(((10 - clamped) / 20) * CHART_HEIGHT)
 }
 
 function trendPointStyle(index: number, score: number) {
@@ -798,8 +799,8 @@ function handleTool(type: string) {
 
 .line-chart-canvas {
   position: relative;
-  height: 276rpx;
-  padding-top: 4rpx;
+  height: 326rpx;
+  padding-top: 0;
 }
 
 .y-grid {
@@ -810,9 +811,9 @@ function handleTool(type: string) {
   background: rgba(174, 157, 146, 0.35);
 }
 
-.y-grid-top { top: 0; }
+.y-grid-top { top: 48rpx; }
 .y-grid-mid {
-  top: 90rpx;
+  top: 138rpx;
   background: repeating-linear-gradient(
     to right,
     rgba(232, 133, 90, 0.5) 0,
@@ -821,7 +822,7 @@ function handleTool(type: string) {
     transparent 18rpx
   );
 }
-.y-grid-bottom { top: 180rpx; }
+.y-grid-bottom { top: 228rpx; }
 
 .y-label {
   position: absolute;
@@ -865,7 +866,7 @@ function handleTool(type: string) {
 
 .trend-x-label {
   position: absolute;
-  top: 204rpx;
+  top: 258rpx;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;

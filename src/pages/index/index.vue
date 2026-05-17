@@ -290,7 +290,7 @@ const greetingIconName = computed(() => (
   greetingPeriod.value === 'evening' || greetingPeriod.value === 'night' ? 'moon' : 'sun'
 ))
 const greetingIconColor = computed(() => (
-  greetingPeriod.value === 'evening' || greetingPeriod.value === 'night' ? '#9B72C8' : '#C8A86B'
+  greetingPeriod.value === 'evening' || greetingPeriod.value === 'night' ? '#B98245' : '#C8A86B'
 ))
 const greetingCardVisible = ref(true)
 
@@ -985,16 +985,16 @@ function onActionClick(payload: { action: string; diaryId: string }) {
   border-radius: 32rpx 40rpx 28rpx 36rpx;
   padding: 24rpx;
   position: relative;
-  border: 1px solid rgba(232, 133, 90, 0.12);
-  box-shadow: 2px 3px 0 rgba(232, 133, 90, 0.08);
+  border: 1px solid rgba(196, 132, 70, 0.18);
+  box-shadow: 2px 3px 0 rgba(168, 104, 48, 0.08);
 }
 
 .greeting-morning {
-  background: linear-gradient(135deg, #FDF0E8, #F7CDB5);
+  background: linear-gradient(135deg, #FFF0DE, #F7D6B8);
 }
 
 .greeting-night {
-  background: linear-gradient(135deg, #E8E0F0, #D4C4E8);
+  background: linear-gradient(135deg, #FFF2E4, #F3D5AE);
 }
 
 .greeting-header {
@@ -1026,7 +1026,8 @@ function onActionClick(payload: { action: string; diaryId: string }) {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 253, 249, 0.72);
+  border: 1rpx solid rgba(196, 132, 70, 0.14);
   border-radius: 12rpx;
   padding: 10rpx 16rpx;
 }
