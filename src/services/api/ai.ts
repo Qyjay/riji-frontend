@@ -12,6 +12,37 @@ export interface Fortune {
   luckyNumber: number
 }
 
+export type LlmProviderType =
+  | 'openai_compatible'
+  | 'anthropic_compatible'
+  | 'builtin_vivo'
+  | 'builtin_minimax'
+  | 'builtin_ark'
+
+export interface LlmModel {
+  id: string
+  name: string
+  providerType: LlmProviderType
+  baseUrl: string
+  model: string
+  isBuiltin: boolean
+  isEnabled: boolean
+  hasApiKey: boolean
+}
+
+export interface LlmModelListResult {
+  items: LlmModel[]
+  defaultChatModelId: string
+}
+
+export interface LlmModelPayload {
+  name: string
+  providerType: 'openai_compatible' | 'anthropic_compatible'
+  baseUrl: string
+  model: string
+  apiKey?: string
+}
+
 export async function textToSpeech(text: string, voice?: string): Promise<string> {
   if (USE_MOCK) return mock.textToSpeech(text, voice)
   return request<string>({ url: '/ai/tts', method: 'POST', data: { text, voice } })
@@ -95,4 +126,24 @@ export async function speechToTextFile(file: File): Promise<SpeechToTextResult> 
 export async function generateFortune(): Promise<Fortune> {
   if (USE_MOCK) return mock.generateFortune()
   return request<Fortune>({ url: '/ai/fortune' })
+}
+
+export async function getLlmModels(): Promise<LlmModelListResult> {
+  if (USE_MOCK) return mock.getLlmModels()
+  return request<LlmModelListResult>({ url: '/ai/models' })
+}
+
+export async function createLlmModel(payload: LlmModelPayload): Promise<LlmModel> {
+  if (USE_MOCK) return mock.createLlmModel(payload)
+  return request<LlmModel>({ url: '/ai/models', method: 'POST', data: payload })
+}
+
+export async function updateLlmModel(id: string, payload: Partial<LlmModelPayload>): Promise<LlmModel> {
+  if (USE_MOCK) return mock.updateLlmModel(id, payload)
+  return request<LlmModel>({ url: `/ai/models/${id}`, method: 'PUT', data: payload })
+}
+
+export async function deleteLlmModel(id: string): Promise<void> {
+  if (USE_MOCK) return mock.deleteLlmModel(id)
+  return request<void>({ url: `/ai/models/${id}`, method: 'DELETE' })
 }

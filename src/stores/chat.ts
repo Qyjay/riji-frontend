@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { speechToText, speechToTextFile } from '@/services/api/ai'
+import type { LlmModel } from '@/services/api/ai'
 import { closeSession, type ChatAttachment, type ChatMessage, chatStream, getChatHistory, uploadChatFile } from '@/services/api/chat'
 import { uploadDiaryImage } from '@/services/api/material'
 import { uniStorage } from './storage'
@@ -90,8 +91,11 @@ export const useChatStore = defineStore('chat', () => {
   const streamingMessageId = ref<string | null>(null)
   const isRecording = ref(false)
   const useWebSearch = ref(false)
+  const selectedModelId = ref('')
+  const availableModels = ref<LlmModel[]>([])
   const activeSessionId = ref<string | null>(null)
   const lastPreview = computed(() => messages.value[messages.value.length - 1] || null)
+  const selectedModel = computed(() => availableModels.value.find((item) => item.id === selectedModelId.value) || null)
 
   async function loadHistory(limit = 50) {
     const result = await getChatHistory(limit)
@@ -105,6 +109,18 @@ export const useChatStore = defineStore('chat', () => {
 
   function setRecording(value: boolean) {
     isRecording.value = value
+  }
+
+  function setAvailableModels(models: LlmModel[]) {
+    availableModels.value = models
+    if (!selectedModelId.value && models.length) selectedModelId.value = models[0].id
+    if (selectedModelId.value && models.length && !models.some((item) => item.id === selectedModelId.value)) {
+      selectedModelId.value = models[0].id
+    }
+  }
+
+  function setSelectedModelId(modelId: string) {
+    selectedModelId.value = modelId
   }
 
   function addPendingAttachments(items: DraftChatAttachment[]) {
@@ -216,6 +232,7 @@ export const useChatStore = defineStore('chat', () => {
           clientMessageId,
           useWebSearch: webSearchRequested,
           attachments: uploadedAttachments,
+          modelId: selectedModelId.value || null,
         },
         {
           onEvent: (event) => {
@@ -385,6 +402,7 @@ export const useChatStore = defineStore('chat', () => {
           clientMessageId,
           useWebSearch: webSearchRequested,
           attachments: [],
+          modelId: selectedModelId.value || null,
         },
         {
           onEvent: (event) => {
@@ -477,11 +495,16 @@ export const useChatStore = defineStore('chat', () => {
     streamingMessageId,
     isRecording,
     useWebSearch,
+    selectedModelId,
+    availableModels,
     activeSessionId,
     lastPreview,
+    selectedModel,
     loadHistory,
     setDraftText,
     setRecording,
+    setAvailableModels,
+    setSelectedModelId,
     addPendingAttachments,
     removePendingAttachment,
     clearPendingAttachments,
@@ -498,6 +521,6 @@ export const useChatStore = defineStore('chat', () => {
 }, {
   persist: {
     storage: uniStorage,
-    paths: ['messages', 'draftText', 'activeSessionId', 'useWebSearch'],
+    paths: ['messages', 'draftText', 'activeSessionId', 'useWebSearch', 'selectedModelId'],
   },
 })

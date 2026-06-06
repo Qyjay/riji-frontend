@@ -95,6 +95,7 @@ export function getSettings(): Settings & {
   chatSilenceThreshold: number
   chatMaterialToast: boolean
   chatMinRounds: number
+  chatModelId: string
 } {
   return {
     theme: 'light',
@@ -106,6 +107,7 @@ export function getSettings(): Settings & {
     chatSilenceThreshold: 30,
     chatMaterialToast: true,
     chatMinRounds: 3,
+    chatModelId: 'builtin:vivo',
   }
 }
 

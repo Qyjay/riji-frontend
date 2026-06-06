@@ -38,6 +38,11 @@ export interface Settings {
   autoBGM: boolean
   diaryPrivacy: 'private' | 'friends' | 'public'
   language: string
+  chatMaterialEnabled?: boolean
+  chatSilenceThreshold?: number
+  chatMaterialToast?: boolean
+  chatMinRounds?: number
+  chatModelId?: string
 }
 
 export interface SemesterReport {

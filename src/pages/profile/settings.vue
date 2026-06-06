@@ -258,6 +258,63 @@
           </view>
         </view>
 
+        <!-- ── 聊天模型 ── -->
+        <view class="card">
+          <text class="card-title">── 聊天模型 ──</text>
+
+          <view class="row" @click="showChatModelPicker">
+            <view class="row-label-wrap">
+              <text class="row-label">默认聊天模型</text>
+              <text class="row-hint">聊天页可临时切换，这里保存默认选择</text>
+            </view>
+            <view class="row-right">
+              <text class="row-value">{{ currentChatModelName }}▼</text>
+            </view>
+          </view>
+
+          <view class="model-list">
+            <view
+              v-for="model in llmModels"
+              :key="model.id"
+              class="model-item"
+              :class="{ 'model-item--active': model.id === chatSettings.modelId }"
+              @click="model.isBuiltin ? undefined : editModel(model)"
+            >
+              <view class="model-main">
+                <text class="model-name">{{ model.name }}</text>
+                <text class="model-meta">{{ modelProviderLabel(model.providerType) }} · {{ model.model }}</text>
+              </view>
+              <text class="model-badge">{{ model.isBuiltin ? '内置' : (model.hasApiKey ? '已配置' : '缺少 Key') }}</text>
+            </view>
+          </view>
+
+          <view class="model-form">
+            <input v-model="modelForm.name" class="model-input" placeholder="显示名称，例如 My GPT" placeholder-class="api-url-placeholder" />
+            <input v-model="modelForm.baseUrl" class="model-input" placeholder="Base URL，例如 https://api.openai.com/v1" placeholder-class="api-url-placeholder" />
+            <input v-model="modelForm.model" class="model-input" placeholder="模型名，例如 gpt-4o-mini" placeholder-class="api-url-placeholder" />
+            <input v-model="modelForm.apiKey" class="model-input" password placeholder="API Key（编辑时留空表示不修改）" placeholder-class="api-url-placeholder" />
+            <view class="model-provider-row">
+              <view
+                v-for="option in providerOptions"
+                :key="option.value"
+                class="provider-chip"
+                :class="{ 'provider-chip--active': modelForm.providerType === option.value }"
+                @click="modelForm.providerType = option.value"
+              >
+                <text class="provider-chip-text">{{ option.label }}</text>
+              </view>
+            </view>
+            <view class="api-url-actions">
+              <view class="api-url-btn api-url-btn--save" @click="saveModelForm">
+                <text class="api-url-btn-text">{{ editingModelId ? '保存模型' : '添加模型' }}</text>
+              </view>
+              <view v-if="editingModelId" class="api-url-btn api-url-btn--reset" @click="resetModelForm">
+                <text class="api-url-btn-text api-url-btn-text--reset">取消编辑</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
         <!-- ── 开发者选项 ── -->
         <view class="card dev-card">
           <text class="card-title">── 开发者选项 ──</text>
@@ -351,6 +408,7 @@ import { reactive, ref, onMounted, computed } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { USE_MOCK, setMockMode, API_BASE_URL, setApiBaseUrl, getDefaultApiBaseUrl } from '@/services/config'
 import { useSettingsStore } from '@/stores/settings'
+import { createLlmModel, deleteLlmModel, getLlmModels, updateLlmModel, type LlmModel, type LlmProviderType } from '@/services/api/ai'
 import { getSettings, updateSettings } from '@/services/api/user'
 import { logout } from '@/services/api/auth'
 
@@ -542,6 +600,31 @@ const chatSettings = reactive({
   silenceThreshold: 30,
   minRounds: 3,
   toast: true,
+  modelId: '',
+})
+
+const llmModels = ref<LlmModel[]>([])
+const editingModelId = ref('')
+const providerOptions: Array<{ label: string; value: 'openai_compatible' | 'anthropic_compatible' }> = [
+  { label: 'OpenAI 兼容', value: 'openai_compatible' },
+  { label: 'Anthropic 兼容', value: 'anthropic_compatible' },
+]
+const modelForm = reactive<{
+  name: string
+  providerType: 'openai_compatible' | 'anthropic_compatible'
+  baseUrl: string
+  model: string
+  apiKey: string
+}>({
+  name: '',
+  providerType: 'openai_compatible',
+  baseUrl: '',
+  model: '',
+  apiKey: '',
+})
+
+const currentChatModelName = computed(() => {
+  return llmModels.value.find(item => item.id === chatSettings.modelId)?.name || '系统默认'
 })
 
 // 初始化加载 chat 设置
@@ -552,9 +635,11 @@ onMounted(async () => {
     chatSettings.silenceThreshold = settingsData.chatSilenceThreshold ?? 30
     chatSettings.minRounds = settingsData.chatMinRounds ?? 3
     chatSettings.toast = settingsData.chatMaterialToast ?? true
+    chatSettings.modelId = settingsData.chatModelId ?? ''
   } catch {
     // 使用默认值
   }
+  await loadLlmModels()
 })
 
 async function saveChatSettings() {
@@ -564,9 +649,111 @@ async function saveChatSettings() {
       chat_silence_threshold: chatSettings.silenceThreshold,
       chat_material_toast: chatSettings.toast,
       chat_min_rounds: chatSettings.minRounds,
+      chat_model_id: chatSettings.modelId,
     } as any)
   } catch (e) {
     uni.showToast({ title: '保存失败', icon: 'none' })
+  }
+}
+
+async function loadLlmModels() {
+  try {
+    const data = await getLlmModels()
+    llmModels.value = data.items || []
+    if (!chatSettings.modelId) chatSettings.modelId = data.defaultChatModelId || llmModels.value[0]?.id || ''
+  } catch {
+    llmModels.value = []
+  }
+}
+
+function modelProviderLabel(type: LlmProviderType) {
+  const map: Record<string, string> = {
+    builtin_vivo: 'VIVO',
+    builtin_minimax: 'MiniMax',
+    builtin_ark: '火山方舟',
+    openai_compatible: 'OpenAI',
+    anthropic_compatible: 'Anthropic',
+  }
+  return map[type] || type
+}
+
+function showChatModelPicker() {
+  if (!llmModels.value.length) return
+  uni.showActionSheet({
+    itemList: llmModels.value.map(item => item.name),
+    success: async (res) => {
+      const item = llmModels.value[res.tapIndex]
+      if (!item) return
+      chatSettings.modelId = item.id
+      await saveChatSettings()
+      uni.showToast({ title: `默认模型：${item.name}`, icon: 'none' })
+    },
+  })
+}
+
+function resetModelForm() {
+  editingModelId.value = ''
+  modelForm.name = ''
+  modelForm.providerType = 'openai_compatible'
+  modelForm.baseUrl = ''
+  modelForm.model = ''
+  modelForm.apiKey = ''
+}
+
+function editModel(model: LlmModel) {
+  uni.showActionSheet({
+    itemList: ['编辑模型', '删除模型'],
+    success: async (res) => {
+      if (res.tapIndex === 0) {
+        editingModelId.value = model.id
+        modelForm.name = model.name
+        modelForm.providerType = model.providerType === 'anthropic_compatible' ? 'anthropic_compatible' : 'openai_compatible'
+        modelForm.baseUrl = model.baseUrl
+        modelForm.model = model.model
+        modelForm.apiKey = ''
+        return
+      }
+      const confirm = await uni.showModal({
+        title: '删除模型',
+        content: `确定删除「${model.name}」吗？`,
+        confirmColor: '#D4645C',
+      })
+      if (!confirm.confirm) return
+      try {
+        await deleteLlmModel(model.id)
+        if (chatSettings.modelId === model.id) chatSettings.modelId = ''
+        await loadLlmModels()
+        await saveChatSettings()
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
+      }
+    },
+  })
+}
+
+async function saveModelForm() {
+  const payload = {
+    name: modelForm.name.trim(),
+    providerType: modelForm.providerType,
+    baseUrl: modelForm.baseUrl.trim(),
+    model: modelForm.model.trim(),
+    apiKey: modelForm.apiKey.trim(),
+  }
+  if (!payload.name || !payload.baseUrl || !payload.model || (!editingModelId.value && !payload.apiKey)) {
+    uni.showToast({ title: '请完整填写模型配置', icon: 'none' })
+    return
+  }
+  try {
+    const saved = editingModelId.value
+      ? await updateLlmModel(editingModelId.value, payload.apiKey ? payload : { ...payload, apiKey: undefined })
+      : await createLlmModel(payload)
+    chatSettings.modelId = saved.id
+    resetModelForm()
+    await loadLlmModels()
+    await saveChatSettings()
+    uni.showToast({ title: '模型已保存', icon: 'success' })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '保存失败', icon: 'none' })
   }
 }
 
@@ -914,6 +1101,100 @@ function onLogout() {
   font-size: 22rpx;
   color: #AE9D92;
   line-height: 1.5;
+}
+
+.model-list {
+  border-top: 1rpx solid rgba(174, 157, 146, 0.1);
+  padding: 12rpx 0;
+}
+
+.model-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid rgba(174, 157, 146, 0.08);
+}
+
+.model-item--active .model-name {
+  color: #E8855A;
+}
+
+.model-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-name {
+  display: block;
+  font-size: 28rpx;
+  color: #2C1F14;
+  font-weight: 700;
+}
+
+.model-meta {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #AE9D92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-badge {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #9A765F;
+  background: #FDF0E8;
+  border-radius: 999rpx;
+  padding: 6rpx 14rpx;
+}
+
+.model-form {
+  padding: 12rpx 0 24rpx;
+}
+
+.model-input {
+  width: 100%;
+  height: 72rpx;
+  font-size: 26rpx;
+  color: #2C1F14;
+  background: #FDF8F3;
+  border: 2rpx solid #EAE0D6;
+  border-radius: 12rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  margin-top: 14rpx;
+}
+
+.model-provider-row {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.provider-chip {
+  flex: 1;
+  height: 60rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid #EAE0D6;
+  background: #F5F0EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.provider-chip--active {
+  background: #FDF0E8;
+  border-color: #E8855A;
+}
+
+.provider-chip-text {
+  font-size: 24rpx;
+  color: #4A3628;
+  font-weight: 600;
 }
 
 /* 后端地址输入 */

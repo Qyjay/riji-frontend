@@ -11,12 +11,13 @@ import ChatHeaderCard from '@/components/chat/ChatHeaderCard.vue'
 import ChatMessageList from '@/components/chat/ChatMessageList.vue'
 import ChatQuickActions from '@/components/chat/ChatQuickActions.vue'
 import ChatRecordingBar from '@/components/chat/ChatRecordingBar.vue'
+import { getLlmModels } from '@/services/api/ai'
 import { getUserProfile } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
 import { useChatStore, type DraftChatAttachment } from '@/stores/chat'
 
 const chatStore = useChatStore()
-const { messages, draftText, pendingAttachments, isStreaming, isRecording, useWebSearch } = storeToRefs(chatStore)
+const { messages, draftText, pendingAttachments, isStreaming, isRecording, useWebSearch, selectedModelId, availableModels, selectedModel } = storeToRefs(chatStore)
 
 const quickActions = [
   { iconName: 'pen', iconColor: '#E8855A', label: '记录素材', path: '/pages/write/index' },
@@ -64,6 +65,7 @@ const hasConversation = computed(() => messages.value.length > 0)
 const showCompactActions = computed(
   () => hasConversation.value && !draftText.value.trim() && pendingAttachments.value.length === 0 && !isRecording.value,
 )
+const selectedModelLabel = computed(() => selectedModel.value?.name || '选择模型')
 
 function jumpBottom() {
   manualScrollLocked.value = false
@@ -115,6 +117,16 @@ onMounted(async () => {
     profile.value = await getUserProfile()
   } catch {
     // ignore profile failure
+  }
+
+  try {
+    const modelResult = await getLlmModels()
+    if (!selectedModelId.value && modelResult.defaultChatModelId) {
+      chatStore.setSelectedModelId(modelResult.defaultChatModelId)
+    }
+    chatStore.setAvailableModels(modelResult.items || [])
+  } catch {
+    chatStore.setAvailableModels([])
   }
 
   try {
@@ -419,6 +431,19 @@ function handleToggleWebSearch() {
   }
 }
 
+function handleSelectModel() {
+  if (!availableModels.value.length || isStreaming.value) return
+  uni.showActionSheet({
+    itemList: availableModels.value.map((item) => item.name),
+    success: (res) => {
+      const item = availableModels.value[res.tapIndex]
+      if (!item) return
+      chatStore.setSelectedModelId(item.id)
+      uni.showToast({ title: `已切换为 ${item.name}`, icon: 'none', duration: 1200 })
+    },
+  })
+}
+
 function handlePlayVoice(src: string) {
   if (!src) return
 
@@ -482,6 +507,13 @@ function handlePlayVoice(src: string) {
         <ChatRecordingBar :visible="isRecording" :duration="recordDuration" @cancel="cancelRecording" />
         <view v-if="useWebSearch" class="web-search-tip">
           <text class="web-search-tip__text">已开启联网搜索</text>
+        </view>
+        <view class="model-tip">
+          <view class="model-chip press-feedback" :class="{ 'model-chip--disabled': isStreaming }" @click="handleSelectModel">
+            <text class="model-chip__label">模型</text>
+            <text class="model-chip__value">{{ selectedModelLabel }}</text>
+            <text class="model-chip__arrow">▼</text>
+          </view>
         </view>
         <ChatQuickActions
           v-if="showCompactActions"
@@ -548,5 +580,46 @@ function handlePlayVoice(src: string) {
   border: 1px solid rgba(232, 133, 90, 0.2);
   border-radius: 999rpx;
   padding: 6rpx 14rpx;
+}
+
+.model-tip {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 10rpx 8rpx;
+}
+
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 8rpx;
+  color: #4a3628;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(74, 54, 40, 0.08);
+  border-radius: 999rpx;
+  padding: 8rpx 16rpx;
+}
+
+.model-chip--disabled {
+  opacity: 0.58;
+}
+
+.model-chip__label {
+  font-size: 22rpx;
+  color: #9a765f;
+}
+
+.model-chip__value {
+  max-width: 420rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.model-chip__arrow {
+  font-size: 18rpx;
+  color: #ae9d92;
 }
 </style>

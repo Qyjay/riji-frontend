@@ -59,6 +59,7 @@ export interface ChatSendPayload {
   clientMessageId?: string | null
   useWebSearch?: boolean
   attachments?: ChatAttachment[]
+  modelId?: string | null
 }
 
 export interface ChatSendResult {
