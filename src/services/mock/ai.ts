@@ -41,6 +41,26 @@ let mockModels: LlmModel[] = [
     isEnabled: true,
     hasApiKey: true,
   },
+  {
+    id: 'builtin:ark:doubao-mini',
+    name: 'Doubao Mini',
+    providerType: 'builtin_ark',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    model: 'ep-20260607122404-2m67p',
+    isBuiltin: true,
+    isEnabled: true,
+    hasApiKey: true,
+  },
+  {
+    id: 'builtin:ark:glm-4.7',
+    name: 'GLM 4.7',
+    providerType: 'builtin_ark',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    model: 'ep-20260607122957-8jtq2',
+    isBuiltin: true,
+    isEnabled: true,
+    hasApiKey: true,
+  },
 ]
 
 export function textToSpeech(_text: string, _voice?: string): string {

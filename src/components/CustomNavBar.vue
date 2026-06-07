@@ -6,7 +6,7 @@
         <image
           v-if="leftIcon === 'avatar'"
           class="nav-avatar"
-          src="https://picsum.photos/seed/navavatar/80/80"
+          :src="avatarUrl"
           mode="aspectFill"
         />
         <text v-else-if="leftIcon === 'back'" class="nav-back">←</text>
@@ -30,6 +30,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { getUserProfile } from '@/services/api/user'
+import { getCurrentUser, setCurrentUser } from '@/services/api/auth'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = withDefaults(defineProps<{
   title: string
@@ -46,10 +50,16 @@ const emit = defineEmits<{
 }>()
 
 const statusBarHeight = ref(20)
+const avatarUrl = ref(resolveAvatarUrl(getCurrentUser()?.avatar))
 
 onMounted(() => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
+  void refreshAvatar()
+})
+
+onShow(() => {
+  void refreshAvatar()
 })
 
 // 导出总高度（px），方便父组件计算占位
@@ -62,6 +72,30 @@ function handleLeftClick() {
     uni.navigateBack()
   } else {
     emit('leftClick')
+  }
+}
+
+async function refreshAvatar() {
+  if (props.leftIcon !== 'avatar') return
+  const cachedUser = getCurrentUser()
+  if (cachedUser?.avatar) {
+    avatarUrl.value = resolveAvatarUrl(cachedUser.avatar)
+  }
+  try {
+    const profile = await getUserProfile()
+    avatarUrl.value = resolveAvatarUrl(profile.avatar)
+    if (cachedUser) {
+      setCurrentUser({
+        ...cachedUser,
+        name: profile.name || cachedUser.name,
+        school: profile.school || cachedUser.school,
+        major: profile.major || cachedUser.major,
+        level: profile.level || cachedUser.level,
+        avatar: profile.avatar || '',
+      })
+    }
+  } catch {
+    // 保留缓存头像或默认头像。
   }
 }
 </script>

@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { getUserProfile, type UserProfile } from '@/services/api/user'
-import { API_BASE_URL } from '@/services/config'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{
   visible: boolean
@@ -109,18 +109,7 @@ const userStats = computed(() => {
 })
 
 const userAvatar = computed(() => {
-  const avatar = String(profile.value.avatar || '').trim()
-  if (!avatar) {
-    return 'https://picsum.photos/seed/draweravatar/160/160'
-  }
-  if (/^https?:\/\//.test(avatar)) {
-    return avatar
-  }
-  if (avatar.startsWith('/')) {
-    const host = API_BASE_URL.replace(/\/api\/?$/, '')
-    return `${host}${avatar}`
-  }
-  return avatar
+  return resolveAvatarUrl(profile.value.avatar)
 })
 
 async function loadProfile() {

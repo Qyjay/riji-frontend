@@ -258,7 +258,7 @@
           </view>
         </view>
 
-        <!-- ── 聊天模型 ── -->
+        <!-- ── 聊天模型（暂时屏蔽）
         <view class="card">
           <text class="card-title">── 聊天模型 ──</text>
 
@@ -314,8 +314,9 @@
             </view>
           </view>
         </view>
+        -->
 
-        <!-- ── 开发者选项 ── -->
+        <!-- ── 开发者选项（暂时屏蔽）
         <view class="card dev-card">
           <text class="card-title">── 开发者选项 ──</text>
 
@@ -359,6 +360,7 @@
             <text class="api-url-current">当前：{{ currentApiUrl }}</text>
           </view>
         </view>
+        -->
 
         <!-- 退出登录 -->
         <view class="logout-wrap">
@@ -406,11 +408,13 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
-import { USE_MOCK, setMockMode, API_BASE_URL, setApiBaseUrl, getDefaultApiBaseUrl } from '@/services/config'
 import { useSettingsStore } from '@/stores/settings'
-import { createLlmModel, deleteLlmModel, getLlmModels, updateLlmModel, type LlmModel, type LlmProviderType } from '@/services/api/ai'
 import { getSettings, updateSettings } from '@/services/api/user'
 import { logout } from '@/services/api/auth'
+// 开发者选项暂时屏蔽，保留代码便于后续恢复。
+// import { USE_MOCK, setMockMode, API_BASE_URL, setApiBaseUrl, getDefaultApiBaseUrl } from '@/services/config'
+// 聊天模型设置暂时屏蔽，AI 聊天页改为后端自动路由。
+// import { createLlmModel, deleteLlmModel, getLlmModels, updateLlmModel, type LlmModel, type LlmProviderType } from '@/services/api/ai'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -603,29 +607,30 @@ const chatSettings = reactive({
   modelId: '',
 })
 
-const llmModels = ref<LlmModel[]>([])
-const editingModelId = ref('')
-const providerOptions: Array<{ label: string; value: 'openai_compatible' | 'anthropic_compatible' }> = [
-  { label: 'OpenAI 兼容', value: 'openai_compatible' },
-  { label: 'Anthropic 兼容', value: 'anthropic_compatible' },
-]
-const modelForm = reactive<{
-  name: string
-  providerType: 'openai_compatible' | 'anthropic_compatible'
-  baseUrl: string
-  model: string
-  apiKey: string
-}>({
-  name: '',
-  providerType: 'openai_compatible',
-  baseUrl: '',
-  model: '',
-  apiKey: '',
-})
-
-const currentChatModelName = computed(() => {
-  return llmModels.value.find(item => item.id === chatSettings.modelId)?.name || '系统默认'
-})
+// 聊天模型设置暂时屏蔽，保留原实现便于后续恢复。
+// const llmModels = ref<LlmModel[]>([])
+// const editingModelId = ref('')
+// const providerOptions: Array<{ label: string; value: 'openai_compatible' | 'anthropic_compatible' }> = [
+//   { label: 'OpenAI 兼容', value: 'openai_compatible' },
+//   { label: 'Anthropic 兼容', value: 'anthropic_compatible' },
+// ]
+// const modelForm = reactive<{
+//   name: string
+//   providerType: 'openai_compatible' | 'anthropic_compatible'
+//   baseUrl: string
+//   model: string
+//   apiKey: string
+// }>({
+//   name: '',
+//   providerType: 'openai_compatible',
+//   baseUrl: '',
+//   model: '',
+//   apiKey: '',
+// })
+//
+// const currentChatModelName = computed(() => {
+//   return llmModels.value.find(item => item.id === chatSettings.modelId)?.name || '系统默认'
+// })
 
 // 初始化加载 chat 设置
 onMounted(async () => {
@@ -639,7 +644,8 @@ onMounted(async () => {
   } catch {
     // 使用默认值
   }
-  await loadLlmModels()
+  // 聊天模型设置暂时屏蔽，后端自动路由模型。
+  // await loadLlmModels()
 })
 
 async function saveChatSettings() {
@@ -649,113 +655,114 @@ async function saveChatSettings() {
       chat_silence_threshold: chatSettings.silenceThreshold,
       chat_material_toast: chatSettings.toast,
       chat_min_rounds: chatSettings.minRounds,
-      chat_model_id: chatSettings.modelId,
+      // 聊天模型设置暂时屏蔽，避免设置页继续写默认模型。
+      // chat_model_id: chatSettings.modelId,
     } as any)
   } catch (e) {
     uni.showToast({ title: '保存失败', icon: 'none' })
   }
 }
 
-async function loadLlmModels() {
-  try {
-    const data = await getLlmModels()
-    llmModels.value = data.items || []
-    if (!chatSettings.modelId) chatSettings.modelId = data.defaultChatModelId || llmModels.value[0]?.id || ''
-  } catch {
-    llmModels.value = []
-  }
-}
-
-function modelProviderLabel(type: LlmProviderType) {
-  const map: Record<string, string> = {
-    builtin_vivo: 'VIVO',
-    builtin_minimax: 'MiniMax',
-    builtin_ark: '火山方舟',
-    openai_compatible: 'OpenAI',
-    anthropic_compatible: 'Anthropic',
-  }
-  return map[type] || type
-}
-
-function showChatModelPicker() {
-  if (!llmModels.value.length) return
-  uni.showActionSheet({
-    itemList: llmModels.value.map(item => item.name),
-    success: async (res) => {
-      const item = llmModels.value[res.tapIndex]
-      if (!item) return
-      chatSettings.modelId = item.id
-      await saveChatSettings()
-      uni.showToast({ title: `默认模型：${item.name}`, icon: 'none' })
-    },
-  })
-}
-
-function resetModelForm() {
-  editingModelId.value = ''
-  modelForm.name = ''
-  modelForm.providerType = 'openai_compatible'
-  modelForm.baseUrl = ''
-  modelForm.model = ''
-  modelForm.apiKey = ''
-}
-
-function editModel(model: LlmModel) {
-  uni.showActionSheet({
-    itemList: ['编辑模型', '删除模型'],
-    success: async (res) => {
-      if (res.tapIndex === 0) {
-        editingModelId.value = model.id
-        modelForm.name = model.name
-        modelForm.providerType = model.providerType === 'anthropic_compatible' ? 'anthropic_compatible' : 'openai_compatible'
-        modelForm.baseUrl = model.baseUrl
-        modelForm.model = model.model
-        modelForm.apiKey = ''
-        return
-      }
-      const confirm = await uni.showModal({
-        title: '删除模型',
-        content: `确定删除「${model.name}」吗？`,
-        confirmColor: '#D4645C',
-      })
-      if (!confirm.confirm) return
-      try {
-        await deleteLlmModel(model.id)
-        if (chatSettings.modelId === model.id) chatSettings.modelId = ''
-        await loadLlmModels()
-        await saveChatSettings()
-      } catch (error) {
-        uni.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
-      }
-    },
-  })
-}
-
-async function saveModelForm() {
-  const payload = {
-    name: modelForm.name.trim(),
-    providerType: modelForm.providerType,
-    baseUrl: modelForm.baseUrl.trim(),
-    model: modelForm.model.trim(),
-    apiKey: modelForm.apiKey.trim(),
-  }
-  if (!payload.name || !payload.baseUrl || !payload.model || (!editingModelId.value && !payload.apiKey)) {
-    uni.showToast({ title: '请完整填写模型配置', icon: 'none' })
-    return
-  }
-  try {
-    const saved = editingModelId.value
-      ? await updateLlmModel(editingModelId.value, payload.apiKey ? payload : { ...payload, apiKey: undefined })
-      : await createLlmModel(payload)
-    chatSettings.modelId = saved.id
-    resetModelForm()
-    await loadLlmModels()
-    await saveChatSettings()
-    uni.showToast({ title: '模型已保存', icon: 'success' })
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '保存失败', icon: 'none' })
-  }
-}
+// async function loadLlmModels() {
+//   try {
+//     const data = await getLlmModels()
+//     llmModels.value = data.items || []
+//     if (!chatSettings.modelId) chatSettings.modelId = data.defaultChatModelId || llmModels.value[0]?.id || ''
+//   } catch {
+//     llmModels.value = []
+//   }
+// }
+//
+// function modelProviderLabel(type: LlmProviderType) {
+//   const map: Record<string, string> = {
+//     builtin_vivo: 'VIVO',
+//     builtin_minimax: 'MiniMax',
+//     builtin_ark: '火山方舟',
+//     openai_compatible: 'OpenAI',
+//     anthropic_compatible: 'Anthropic',
+//   }
+//   return map[type] || type
+// }
+//
+// function showChatModelPicker() {
+//   if (!llmModels.value.length) return
+//   uni.showActionSheet({
+//     itemList: llmModels.value.map(item => item.name),
+//     success: async (res) => {
+//       const item = llmModels.value[res.tapIndex]
+//       if (!item) return
+//       chatSettings.modelId = item.id
+//       await saveChatSettings()
+//       uni.showToast({ title: `默认模型：${item.name}`, icon: 'none' })
+//     },
+//   })
+// }
+//
+// function resetModelForm() {
+//   editingModelId.value = ''
+//   modelForm.name = ''
+//   modelForm.providerType = 'openai_compatible'
+//   modelForm.baseUrl = ''
+//   modelForm.model = ''
+//   modelForm.apiKey = ''
+// }
+//
+// function editModel(model: LlmModel) {
+//   uni.showActionSheet({
+//     itemList: ['编辑模型', '删除模型'],
+//     success: async (res) => {
+//       if (res.tapIndex === 0) {
+//         editingModelId.value = model.id
+//         modelForm.name = model.name
+//         modelForm.providerType = model.providerType === 'anthropic_compatible' ? 'anthropic_compatible' : 'openai_compatible'
+//         modelForm.baseUrl = model.baseUrl
+//         modelForm.model = model.model
+//         modelForm.apiKey = ''
+//         return
+//       }
+//       const confirm = await uni.showModal({
+//         title: '删除模型',
+//         content: `确定删除「${model.name}」吗？`,
+//         confirmColor: '#D4645C',
+//       })
+//       if (!confirm.confirm) return
+//       try {
+//         await deleteLlmModel(model.id)
+//         if (chatSettings.modelId === model.id) chatSettings.modelId = ''
+//         await loadLlmModels()
+//         await saveChatSettings()
+//       } catch (error) {
+//         uni.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
+//       }
+//     },
+//   })
+// }
+//
+// async function saveModelForm() {
+//   const payload = {
+//     name: modelForm.name.trim(),
+//     providerType: modelForm.providerType,
+//     baseUrl: modelForm.baseUrl.trim(),
+//     model: modelForm.model.trim(),
+//     apiKey: modelForm.apiKey.trim(),
+//   }
+//   if (!payload.name || !payload.baseUrl || !payload.model || (!editingModelId.value && !payload.apiKey)) {
+//     uni.showToast({ title: '请完整填写模型配置', icon: 'none' })
+//     return
+//   }
+//   try {
+//     const saved = editingModelId.value
+//       ? await updateLlmModel(editingModelId.value, payload.apiKey ? payload : { ...payload, apiKey: undefined })
+//       : await createLlmModel(payload)
+//     chatSettings.modelId = saved.id
+//     resetModelForm()
+//     await loadLlmModels()
+//     await saveChatSettings()
+//     uni.showToast({ title: '模型已保存', icon: 'success' })
+//   } catch (error) {
+//     uni.showToast({ title: error instanceof Error ? error.message : '保存失败', icon: 'none' })
+//   }
+// }
 
 function onChatEnabledChange(event: any) {
   chatSettings.enabled = getSwitchValue(event)
@@ -803,69 +810,69 @@ function onOpenSource() {
   uni.showToast({ title: '即将跳转到开源许可', icon: 'none' })
 }
 
-// ── 开发者选项 ──
-const mockMode = ref(USE_MOCK)
-const apiBaseUrl = ref('')
-const defaultApiUrl = getDefaultApiBaseUrl()
-const currentApiUrl = ref(API_BASE_URL)
-
-// 初始化时读取已保存的地址
-onMounted(() => {
-  // 如果当前地址不是默认地址，显示在输入框中
-  if (API_BASE_URL !== defaultApiUrl) {
-    apiBaseUrl.value = API_BASE_URL
-  }
-})
-
-function onMockToggle(e: any) {
-  const val = e.detail.value as boolean
-  mockMode.value = val
-  setMockMode(val)
-  uni.showToast({
-    title: val ? 'Mock 模式已开启' : 'Mock 模式已关闭',
-    icon: 'none',
-  })
-}
-
-function saveApiUrl() {
-  const url = apiBaseUrl.value.trim()
-  if (url && !url.startsWith('http')) {
-    uni.showToast({ title: '地址必须以 http:// 或 https:// 开头', icon: 'none' })
-    return
-  }
-  setApiBaseUrl(url)
-  currentApiUrl.value = API_BASE_URL
-  uni.showToast({ title: url ? '后端地址已保存' : '已恢复默认地址', icon: 'success' })
-}
-
-function resetApiUrl() {
-  apiBaseUrl.value = ''
-  setApiBaseUrl('')
-  currentApiUrl.value = API_BASE_URL
-  uni.showToast({ title: '已恢复默认地址', icon: 'success' })
-}
-
-async function testApiUrl() {
-  const testUrl = apiBaseUrl.value.trim() || defaultApiUrl
-  uni.showLoading({ title: '测试连接中...' })
-  uni.request({
-    url: `${testUrl.replace(/\/+$/, '')}/auth/health`,
-    method: 'GET',
-    timeout: 5000,
-    success(res) {
-      uni.hideLoading()
-      if (res.statusCode >= 200 && res.statusCode < 500) {
-        uni.showToast({ title: `✅ 连接成功 (${res.statusCode})`, icon: 'none' })
-      } else {
-        uni.showToast({ title: `⚠️ HTTP ${res.statusCode}`, icon: 'none' })
-      }
-    },
-    fail(err) {
-      uni.hideLoading()
-      uni.showToast({ title: '❌ 无法连接，检查地址和网络', icon: 'none', duration: 3000 })
-    },
-  })
-}
+// ── 开发者选项（暂时屏蔽，保留原实现便于后续恢复） ──
+// const mockMode = ref(USE_MOCK)
+// const apiBaseUrl = ref('')
+// const defaultApiUrl = getDefaultApiBaseUrl()
+// const currentApiUrl = ref(API_BASE_URL)
+//
+// // 初始化时读取已保存的地址
+// onMounted(() => {
+//   // 如果当前地址不是默认地址，显示在输入框中
+//   if (API_BASE_URL !== defaultApiUrl) {
+//     apiBaseUrl.value = API_BASE_URL
+//   }
+// })
+//
+// function onMockToggle(e: any) {
+//   const val = e.detail.value as boolean
+//   mockMode.value = val
+//   setMockMode(val)
+//   uni.showToast({
+//     title: val ? 'Mock 模式已开启' : 'Mock 模式已关闭',
+//     icon: 'none',
+//   })
+// }
+//
+// function saveApiUrl() {
+//   const url = apiBaseUrl.value.trim()
+//   if (url && !url.startsWith('http')) {
+//     uni.showToast({ title: '地址必须以 http:// 或 https:// 开头', icon: 'none' })
+//     return
+//   }
+//   setApiBaseUrl(url)
+//   currentApiUrl.value = API_BASE_URL
+//   uni.showToast({ title: url ? '后端地址已保存' : '已恢复默认地址', icon: 'success' })
+// }
+//
+// function resetApiUrl() {
+//   apiBaseUrl.value = ''
+//   setApiBaseUrl('')
+//   currentApiUrl.value = API_BASE_URL
+//   uni.showToast({ title: '已恢复默认地址', icon: 'success' })
+// }
+//
+// async function testApiUrl() {
+//   const testUrl = apiBaseUrl.value.trim() || defaultApiUrl
+//   uni.showLoading({ title: '测试连接中...' })
+//   uni.request({
+//     url: `${testUrl.replace(/\/+$/, '')}/auth/health`,
+//     method: 'GET',
+//     timeout: 5000,
+//     success(res) {
+//       uni.hideLoading()
+//       if (res.statusCode >= 200 && res.statusCode < 500) {
+//         uni.showToast({ title: `✅ 连接成功 (${res.statusCode})`, icon: 'none' })
+//       } else {
+//         uni.showToast({ title: `⚠️ HTTP ${res.statusCode}`, icon: 'none' })
+//       }
+//     },
+//     fail(err) {
+//       uni.hideLoading()
+//       uni.showToast({ title: '❌ 无法连接，检查地址和网络', icon: 'none', duration: 3000 })
+//     },
+//   })
+// }
 
 // ── 退出登录 ──
 function onLogout() {

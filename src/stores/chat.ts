@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { speechToText, speechToTextFile } from '@/services/api/ai'
 import type { LlmModel } from '@/services/api/ai'
-import { closeSession, type ChatAttachment, type ChatMessage, chatStream, getChatHistory, uploadChatFile } from '@/services/api/chat'
+import { closeSession, type ChatAttachment, type ChatMessage, type ChatQueueStatus, chatStream, getChatHistory, getChatQueueStatus, uploadChatFile } from '@/services/api/chat'
 import { uploadDiaryImage } from '@/services/api/material'
 import { uniStorage } from './storage'
 
@@ -93,6 +93,13 @@ export const useChatStore = defineStore('chat', () => {
   const useWebSearch = ref(false)
   const selectedModelId = ref('')
   const availableModels = ref<LlmModel[]>([])
+  const queueStatus = ref<ChatQueueStatus>({
+    globalLimit: 20,
+    activeTotal: 0,
+    queuedCount: 0,
+    modelActive: {},
+    modelLimits: {},
+  })
   const activeSessionId = ref<string | null>(null)
   const lastPreview = computed(() => messages.value[messages.value.length - 1] || null)
   const selectedModel = computed(() => availableModels.value.find((item) => item.id === selectedModelId.value) || null)
@@ -121,6 +128,11 @@ export const useChatStore = defineStore('chat', () => {
 
   function setSelectedModelId(modelId: string) {
     selectedModelId.value = modelId
+  }
+
+  async function refreshQueueStatus() {
+    queueStatus.value = await getChatQueueStatus()
+    return queueStatus.value
   }
 
   function addPendingAttachments(items: DraftChatAttachment[]) {
@@ -232,7 +244,6 @@ export const useChatStore = defineStore('chat', () => {
           clientMessageId,
           useWebSearch: webSearchRequested,
           attachments: uploadedAttachments,
-          modelId: selectedModelId.value || null,
         },
         {
           onEvent: (event) => {
@@ -402,7 +413,6 @@ export const useChatStore = defineStore('chat', () => {
           clientMessageId,
           useWebSearch: webSearchRequested,
           attachments: [],
-          modelId: selectedModelId.value || null,
         },
         {
           onEvent: (event) => {
@@ -497,6 +507,7 @@ export const useChatStore = defineStore('chat', () => {
     useWebSearch,
     selectedModelId,
     availableModels,
+    queueStatus,
     activeSessionId,
     lastPreview,
     selectedModel,
@@ -505,6 +516,7 @@ export const useChatStore = defineStore('chat', () => {
     setRecording,
     setAvailableModels,
     setSelectedModelId,
+    refreshQueueStatus,
     addPendingAttachments,
     removePendingAttachment,
     clearPendingAttachments,
@@ -521,6 +533,6 @@ export const useChatStore = defineStore('chat', () => {
 }, {
   persist: {
     storage: uniStorage,
-    paths: ['messages', 'draftText', 'activeSessionId', 'useWebSearch', 'selectedModelId'],
+    paths: ['messages', 'draftText', 'activeSessionId', 'useWebSearch'],
   },
 })

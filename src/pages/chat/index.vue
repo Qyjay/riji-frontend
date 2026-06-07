@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { onHide, onUnload } from '@dcloudio/uni-app'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onHide, onShow, onUnload } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
 
 import CustomNavBar from '@/components/CustomNavBar.vue'
@@ -11,13 +11,12 @@ import ChatHeaderCard from '@/components/chat/ChatHeaderCard.vue'
 import ChatMessageList from '@/components/chat/ChatMessageList.vue'
 import ChatQuickActions from '@/components/chat/ChatQuickActions.vue'
 import ChatRecordingBar from '@/components/chat/ChatRecordingBar.vue'
-import { getLlmModels } from '@/services/api/ai'
 import { getUserProfile } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
 import { useChatStore, type DraftChatAttachment } from '@/stores/chat'
 
 const chatStore = useChatStore()
-const { messages, draftText, pendingAttachments, isStreaming, isRecording, useWebSearch, selectedModelId, availableModels, selectedModel } = storeToRefs(chatStore)
+const { messages, draftText, pendingAttachments, isStreaming, isRecording, useWebSearch, queueStatus } = storeToRefs(chatStore)
 
 const quickActions = [
   { iconName: 'pen', iconColor: '#E8855A', label: '记录素材', path: '/pages/write/index' },
@@ -58,6 +57,7 @@ let cancelRecordingFlag = false
 let closingSession = false
 let h5VoicePlayer: HTMLAudioElement | null = null
 let voicePlayer: UniApp.InnerAudioContext | null = null
+let queueStatusTimer: ReturnType<typeof setInterval> | null = null
 
 const interestCount = computed(() => profile.value.styleTags?.length || 23)
 const canSend = computed(() => Boolean(draftText.value.trim()) || pendingAttachments.value.length > 0)
@@ -65,7 +65,30 @@ const hasConversation = computed(() => messages.value.length > 0)
 const showCompactActions = computed(
   () => hasConversation.value && !draftText.value.trim() && pendingAttachments.value.length === 0 && !isRecording.value,
 )
-const selectedModelLabel = computed(() => selectedModel.value?.name || '选择模型')
+const queueUsageText = computed(() => `${queueStatus.value.activeTotal}/${queueStatus.value.globalLimit}`)
+const showQueueCard = computed(() => queueStatus.value.queuedCount > 0)
+
+async function refreshQueueStatusSilently() {
+  try {
+    await chatStore.refreshQueueStatus()
+  } catch {
+    // 队列状态只用于展示，失败时保留上次状态。
+  }
+}
+
+function startQueueStatusPolling() {
+  if (queueStatusTimer) return
+  void refreshQueueStatusSilently()
+  queueStatusTimer = setInterval(() => {
+    void refreshQueueStatusSilently()
+  }, 1000)
+}
+
+function stopQueueStatusPolling() {
+  if (!queueStatusTimer) return
+  clearInterval(queueStatusTimer)
+  queueStatusTimer = null
+}
 
 function jumpBottom() {
   manualScrollLocked.value = false
@@ -102,11 +125,21 @@ async function closeSessionOnLeave() {
 }
 
 onHide(() => {
+  stopQueueStatusPolling()
   void closeSessionOnLeave()
 })
 
+onShow(() => {
+  startQueueStatusPolling()
+})
+
 onUnload(() => {
+  stopQueueStatusPolling()
   void closeSessionOnLeave()
+})
+
+onUnmounted(() => {
+  stopQueueStatusPolling()
 })
 
 onMounted(async () => {
@@ -119,15 +152,7 @@ onMounted(async () => {
     // ignore profile failure
   }
 
-  try {
-    const modelResult = await getLlmModels()
-    if (!selectedModelId.value && modelResult.defaultChatModelId) {
-      chatStore.setSelectedModelId(modelResult.defaultChatModelId)
-    }
-    chatStore.setAvailableModels(modelResult.items || [])
-  } catch {
-    chatStore.setAvailableModels([])
-  }
+  startQueueStatusPolling()
 
   try {
     await chatStore.loadHistory()
@@ -139,7 +164,9 @@ onMounted(async () => {
 
 async function handleSend() {
   try {
+    await refreshQueueStatusSilently()
     await chatStore.sendMessage()
+    await refreshQueueStatusSilently()
     jumpBottom()
   } catch (error) {
     uni.showToast({
@@ -431,19 +458,6 @@ function handleToggleWebSearch() {
   }
 }
 
-function handleSelectModel() {
-  if (!availableModels.value.length || isStreaming.value) return
-  uni.showActionSheet({
-    itemList: availableModels.value.map((item) => item.name),
-    success: (res) => {
-      const item = availableModels.value[res.tapIndex]
-      if (!item) return
-      chatStore.setSelectedModelId(item.id)
-      uni.showToast({ title: `已切换为 ${item.name}`, icon: 'none', duration: 1200 })
-    },
-  })
-}
-
 function handlePlayVoice(src: string) {
   if (!src) return
 
@@ -481,6 +495,14 @@ function handlePlayVoice(src: string) {
     <view class="page-content">
       <ChatHeaderCard :diary-count="profile.diaryCount" :interest-count="interestCount" />
 
+      <view v-if="showQueueCard" class="queue-card">
+        <view class="queue-card__main">
+          <text class="queue-card__label">正在排队</text>
+          <text class="queue-card__value">{{ queueStatus.queuedCount }}</text>
+        </view>
+        <text class="queue-card__meta">当前处理 {{ queueUsageText }}，空闲后自动继续</text>
+      </view>
+
       <ChatMessageList
         :messages="messages"
         :scroll-top="scrollTopVal"
@@ -507,13 +529,6 @@ function handlePlayVoice(src: string) {
         <ChatRecordingBar :visible="isRecording" :duration="recordDuration" @cancel="cancelRecording" />
         <view v-if="useWebSearch" class="web-search-tip">
           <text class="web-search-tip__text">已开启联网搜索</text>
-        </view>
-        <view class="model-tip">
-          <view class="model-chip press-feedback" :class="{ 'model-chip--disabled': isStreaming }" @click="handleSelectModel">
-            <text class="model-chip__label">模型</text>
-            <text class="model-chip__value">{{ selectedModelLabel }}</text>
-            <text class="model-chip__arrow">▼</text>
-          </view>
         </view>
         <ChatQuickActions
           v-if="showCompactActions"
@@ -582,44 +597,46 @@ function handlePlayVoice(src: string) {
   padding: 6rpx 14rpx;
 }
 
-.model-tip {
+.queue-card {
   display: flex;
-  justify-content: flex-start;
-  padding: 0 10rpx 8rpx;
-}
-
-.model-chip {
-  display: inline-flex;
   align-items: center;
-  max-width: 100%;
-  gap: 8rpx;
-  color: #4a3628;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(74, 54, 40, 0.08);
-  border-radius: 999rpx;
-  padding: 8rpx 16rpx;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin: 0 24rpx 14rpx;
+  padding: 18rpx 22rpx;
+  border: 1px solid rgba(232, 133, 90, 0.18);
+  border-radius: 28rpx;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(232, 133, 90, 0.16), transparent 34%),
+    rgba(255, 255, 255, 0.84);
+  box-shadow: 0 10rpx 28rpx rgba(74, 54, 40, 0.06);
 }
 
-.model-chip--disabled {
-  opacity: 0.58;
+.queue-card__main {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  flex-shrink: 0;
 }
 
-.model-chip__label {
-  font-size: 22rpx;
+.queue-card__label {
+  font-size: 24rpx;
   color: #9a765f;
 }
 
-.model-chip__value {
-  max-width: 420rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 24rpx;
-  font-weight: 700;
+.queue-card__value {
+  font-size: 42rpx;
+  line-height: 1;
+  font-weight: 800;
+  color: #e8855a;
 }
 
-.model-chip__arrow {
-  font-size: 18rpx;
-  color: #ae9d92;
+.queue-card__meta {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 22rpx;
+  line-height: 1.35;
+  color: #6f5544;
 }
 </style>

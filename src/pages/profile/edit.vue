@@ -16,7 +16,7 @@
         <view class="avatar-wrap" @click="chooseAvatar">
           <image
             class="avatar-img"
-            :src="form.avatar || '/static/brand/logo-d-mascot.png'"
+            :src="avatarPreviewUrl"
             mode="aspectFill"
           />
           <view class="avatar-camera-badge">
@@ -156,10 +156,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { getUserProfile, updateUserProfile } from '@/services/api/user'
 import { API_BASE_URL } from '@/services/config'
-import { request } from '@/services/request'
+import { getCurrentUser, setCurrentUser } from '@/services/api/auth'
+import { resolveAvatarUrl } from '@/utils/avatar'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 
@@ -206,6 +207,8 @@ const form = reactive({
   grade: '',
   avatar: '',
 })
+
+const avatarPreviewUrl = computed(() => resolveAvatarUrl(form.avatar))
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
@@ -257,12 +260,24 @@ async function handleSave() {
   }
   saving.value = true
   try {
-    await updateUserProfile({
+    const updatedProfile = await updateUserProfile({
       name: form.name.trim(),
       school: form.school.trim(),
       major: form.major.trim(),
       avatar: form.avatar,
     })
+    form.avatar = updatedProfile.avatar
+    const cachedUser = getCurrentUser()
+    if (cachedUser) {
+      setCurrentUser({
+        ...cachedUser,
+        name: updatedProfile.name || cachedUser.name,
+        school: updatedProfile.school || cachedUser.school,
+        major: updatedProfile.major || cachedUser.major,
+        level: updatedProfile.level || cachedUser.level,
+        avatar: updatedProfile.avatar || '',
+      })
+    }
     uni.showToast({ title: '保存成功', icon: 'success' })
     setTimeout(() => uni.navigateBack(), 1200)
   } catch {

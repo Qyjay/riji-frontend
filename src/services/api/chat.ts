@@ -70,6 +70,14 @@ export interface ChatSendResult {
   materialId: string | null
 }
 
+export interface ChatQueueStatus {
+  globalLimit: number
+  activeTotal: number
+  queuedCount: number
+  modelActive: Record<string, number>
+  modelLimits: Record<string, number>
+}
+
 export interface UploadChatFileResult {
   url: string
   name: string
@@ -154,6 +162,23 @@ export async function getChatHistory(limit = 50): Promise<ChatHistoryResult> {
     items: (result.items || []).map(normalizeMessage),
     total: result.total || 0,
   }
+}
+
+export async function getChatQueueStatus(): Promise<ChatQueueStatus> {
+  if (USE_MOCK) {
+    return {
+      globalLimit: 20,
+      activeTotal: 0,
+      queuedCount: 0,
+      modelActive: {},
+      modelLimits: {
+        'builtin:ark:deepseekv4-flash': 5,
+        'builtin:ark:doubao-mini': 10,
+        'builtin:ark:glm-4.7': 5,
+      },
+    }
+  }
+  return request<ChatQueueStatus>({ url: '/chat/queue-status' })
 }
 
 export async function sendChat(payload: ChatSendPayload): Promise<ChatSendResult> {
