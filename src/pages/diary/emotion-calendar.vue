@@ -1,7 +1,7 @@
 <template>
   <view class="page">
 
-    <CustomNavBar title="情绪日历" left-icon="back" />
+    <CustomNavBar title="情绪日记" left-icon="back" />
 
     <!-- NavBar 占位 -->
     <view class="nav-placeholder" :style="{ height: navPlaceholderHeight + 'px' }" />
@@ -96,7 +96,7 @@ import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DiaryCard from '@/components/DiaryCard.vue'
 import type { Diary } from '@/services/api/diary'
-import { mockDiaries } from '@/services/mock/diary'
+import { getDiaries } from '@/services/api/diary'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -104,6 +104,7 @@ onMounted(() => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
+  loadDiaries()
 })
 
 const SectionTitle = {
@@ -153,30 +154,31 @@ function isToday(day: number): boolean {
 }
 
 // ── 日记数据 ──
-const diaries = ref<Diary[]>(mockDiaries)
+const diaries = ref<Diary[]>([])
+
+async function loadDiaries() {
+  try {
+    const res = await getDiaries(1, 366)
+    diaries.value = res.list || []
+  } catch (e) {
+    diaries.value = []
+  }
+}
 
 function getDiaryForDay(day: number): Diary | null {
   return diaries.value.find(d => {
-    const d2 = new Date(d.createdAt)
+    const d2 = new Date(d.date || d.createdAt)
     return d2.getFullYear() === year.value &&
            d2.getMonth() === month.value &&
            d2.getDate() === day
   }) ?? null
 }
 
-const emotionColors: Record<string, string> = {
-  '😊': '#5BBF8E',
-  '🥰': '#F2B49B',
-  '😢': '#6B8EC4',
-  '😤': '#E8A94E',
-  '😴': '#D4C4B8',
-  '😂': '#E8855A',
-}
-
 function getDayStyle(day: number) {
   const diary = getDiaryForDay(day)
   if (diary) {
-    const color = emotionColors[diary.emotion.emoji] ?? '#E8855A'
+    const stat = emotionStats.value.find(s => s.emoji === diary.emotion?.emoji)
+    const color = stat?.color ?? '#E8855A'
     return { background: color + '33' }
   }
   return {}
@@ -192,21 +194,23 @@ const selectedDiary = computed(() => {
 })
 
 // ── 情绪统计 ──
+const palette = ['#5BBF8E', '#F2B49B', '#6B8EC4', '#E8A94E', '#D4C4B8', '#E8855A', '#9B72C8', '#6BA87B']
+
 const emotionStats = computed(() => {
-  const map: Record<string, { label: string; count: number; color: string }> = {
-    '😊': { label: '开心', count: 0, color: '#5BBF8E' },
-    '🥰': { label: '幸福', count: 0, color: '#F2B49B' },
-    '😢': { label: '焦虑', count: 0, color: '#6B8EC4' },
-    '😤': { label: '激动', count: 0, color: '#E8A94E' },
-    '😴': { label: '疲惫', count: 0, color: '#D4C4B8' },
-    '😂': { label: '搞笑', count: 0, color: '#E8855A' },
-  }
+  const map: Record<string, { label: string; count: number; color: string }> = {}
+  let colorIdx = 0
   diaries.value.forEach(d => {
-    const e = d.emotion.emoji
-    if (map[e]) map[e].count++
+    const emoji = d.emotion?.emoji
+    if (!emoji) return
+    if (!map[emoji]) {
+      map[emoji] = { label: d.emotion?.label || '', count: 0, color: palette[colorIdx % palette.length] }
+      colorIdx++
+    }
+    map[emoji].count++
   })
   return Object.entries(map)
     .filter(([_, v]) => v.count > 0)
+    .sort((a, b) => b[1].count - a[1].count)
     .map(([emoji, v]) => ({ emoji, ...v }))
 })
 
@@ -214,7 +218,7 @@ const maxEmotionCount = computed(() => Math.max(...emotionStats.value.map(s => s
 
 const avgScore = computed(() => {
   if (diaries.value.length === 0) return '0'
-  const avg = diaries.value.reduce((sum, d) => sum + d.emotion.score, 0) / diaries.value.length
+  const avg = diaries.value.reduce((sum, d) => sum + (d.emotion?.score ?? 0), 0) / diaries.value.length
   return avg.toFixed(1)
 })
 

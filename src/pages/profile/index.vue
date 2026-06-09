@@ -109,10 +109,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getUserProfile } from '@/services/api/user'
+import { getGrowthData, getUserProfile } from '@/services/api/user'
 import { getAchievements } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
-import type { Achievement } from '@/services/api/user'
+import type { Achievement, GrowthData } from '@/services/api/user'
 import { logout } from '@/services/api/auth'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import DoodleIcon from '@/components/DoodleIcon.vue'
@@ -138,20 +138,30 @@ const profile = ref<UserProfile>({
 })
 
 const achievements = ref<Achievement[]>([])
+const growth = ref<GrowthData | null>(null)
 const buddyCount = ref(23)
 
 const achievementCount = computed(() =>
-  achievements.value.filter(a => a.unlocked).length
+  growth.value?.stats.achievementCount ?? achievements.value.filter(a => a.unlocked).length
 )
 
-const currentXP = computed(() => 2450)
-const nextLevelXP = computed(() => 3000)
-const expPercent = computed(() => Math.round((currentXP.value / nextLevelXP.value) * 100))
-const expHint = computed(() => `再写 ${nextLevelXP.value - currentXP.value} XP 升至 Lv.${profile.value.level + 1} 🌟`)
+const currentXP = computed(() => growth.value?.xpInCurrentLevel ?? 0)
+const nextLevelXP = computed(() => {
+  if (!growth.value) return 100
+  return Math.max(1, growth.value.nextLevelXp - growth.value.currentLevelXp)
+})
+const expPercent = computed(() => growth.value?.progressPercent ?? 0)
+const expHint = computed(() => growth.value
+  ? `还差 ${growth.value.xpToNextLevel} XP 升至 Lv.${growth.value.level + 1} 🌟`
+  : '继续记录生活，经验会随真实行为增长'
+)
 
 const menuItems = [
+  { key: 'calendar', iconName: 'calendar', iconColor: '#E8855A', name: '情绪日记',   iconBg: 'rgba(232, 133, 90, 0.12)', path: '/pages/diary/emotion-calendar' },
+  { key: 'growth',   iconName: 'star',     iconColor: '#C8A86B', name: '成长轨迹',   iconBg: 'rgba(200, 168, 107, 0.12)', path: '/pages/growth/index' },
+  { key: 'achievements', iconName: 'trophy', iconColor: '#E8C44E', name: '我的成就', iconBg: 'rgba(230, 184, 112, 0.12)', path: '/pages/growth/achievements' },
+  { key: 'novel',    iconName: 'bookopen', iconColor: '#6B8EC4', name: '我的小传',   iconBg: 'rgba(123, 142, 196, 0.12)', path: '/pages/novel/index' },
   { key: 'avatar',  iconName: 'robot',    iconColor: '#E8855A', name: '我的分身',   iconBg: 'rgba(232, 133, 90, 0.12)', path: '/pages/profile/avatar-memory' },
-  { key: 'report',  iconName: 'book',     iconColor: '#6B8EC4', name: '学期报告',   iconBg: 'rgba(123, 184, 212, 0.12)', path: '/pages/novel/index' },
   { key: 'about',   iconName: 'settings', iconColor: '#E8C44E', name: '关于 App',   iconBg: 'rgba(230, 184, 112, 0.12)', path: '/pages/settings/about' },
 ]
 
@@ -210,6 +220,20 @@ async function loadProfile() {
     profile.value = await getUserProfile()
   } catch {
     // keep default values
+  }
+  try {
+    const data = await getGrowthData()
+    growth.value = data
+    profile.value = {
+      ...profile.value,
+      level: data.level,
+      diaryCount: data.stats.diaryCount,
+      streakDays: data.stats.streakDays,
+      pomodoroCount: data.stats.pomodoroCount,
+    }
+    buddyCount.value = data.stats.acceptedMatchCount
+  } catch {
+    growth.value = null
   }
   try {
     achievements.value = await getAchievements()

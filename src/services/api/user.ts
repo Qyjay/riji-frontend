@@ -25,6 +25,37 @@ export interface Achievement {
 }
 
 export interface GrowthData {
+  level: number
+  title: string
+  totalXp: number
+  currentLevelXp: number
+  nextLevelXp: number
+  xpInCurrentLevel: number
+  xpToNextLevel: number
+  progressPercent: number
+  stats: {
+    diaryCount: number
+    materialCount: number
+    wordCount: number
+    streakDays: number
+    longestStreak: number
+    pomodoroCount: number
+    todoCount: number
+    completedTodoCount: number
+    chatRounds: number
+    derivativeCount: number
+    comicCount: number
+    achievementCount: number
+    plazaPostCount: number
+    plazaCommentCount: number
+    acceptedMatchCount: number
+  }
+  skills: { key: string; name: string; value: number; basis: string }[]
+  chart: { date: string; label: string; xp: number; diaries: number; materials: number; pomodoros: number }[]
+  milestones: { id: string; name: string; done: boolean; date: string }[]
+  timeline: { date: string; type: string; title: string; description: string; xp: number; sourceId: string }[]
+  todayXp: number
+  xpBreakdown: { label: string; xp: number }[]
   diaries: { date: string; count: number }[]
   emotions: { label: string; count: number }[]
   tags: { label: string; count: number }[]

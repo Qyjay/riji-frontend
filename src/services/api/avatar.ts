@@ -143,7 +143,11 @@ export async function getAvatarProfile(): Promise<AvatarProfile> {
 
 export async function regenerateProfile(): Promise<AvatarProfile> {
   if (USE_MOCK) return stripThinkTags(mock.regenerateProfile())
-  const res = await request<AvatarProfile>({ url: '/avatar/profile/regenerate', method: 'POST' })
+  const res = await request<AvatarProfile>({
+    url: '/avatar/profile/regenerate',
+    method: 'POST',
+    timeout: 90000,
+  })
   return stripThinkTags(res)
 }
 

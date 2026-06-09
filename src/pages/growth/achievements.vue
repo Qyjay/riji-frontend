@@ -14,7 +14,7 @@
               <DoodleIcon name="trophy" color="#C8A86B" :size="40" />
               <text class="summary-title">已解锁</text>
             </view>
-            <text class="summary-count"><text class="count-num">15</text> / 42</text>
+            <text class="summary-count"><text class="count-num">{{ unlockedAch }}</text> / {{ totalAch }}</text>
           </view>
           <view class="progress-bar-bg">
             <view class="progress-bar-fill" :style="{ width: unlockPercent + '%' }"></view>
@@ -43,8 +43,7 @@
               class="ach-card press-feedback"
               :class="{
                 'ach-unlocked': ach.unlocked,
-                'ach-locked': !ach.unlocked && !ach.hidden,
-                'ach-hidden': ach.hidden
+                'ach-locked': !ach.unlocked
               }"
               @click="handleAchClick(ach)"
             >
@@ -55,22 +54,14 @@
 
               <!-- Icon -->
               <view class="ach-icon-wrap" :class="ach.unlocked ? 'ach-icon-unlocked' : 'ach-icon-locked'">
-                <DoodleIcon
-                  v-if="!ach.hidden"
-                  :name="ach.iconName || 'star'"
-                  :color="ach.unlocked ? ach.iconColor : '#AE9D92'"
-                  :size="56"
-                />
-                <DoodleIcon v-else name="search" color="#AE9D92" :size="56" />
+                <text class="ach-emoji" :class="{ 'ach-emoji-locked': !ach.unlocked }">{{ ach.icon }}</text>
               </view>
 
               <!-- 名称 -->
-              <text class="ach-name">{{ ach.hidden ? '???' : ach.name }}</text>
+              <text class="ach-name">{{ ach.title }}</text>
 
-              <!-- 描述 / 条件 -->
-              <text class="ach-desc">
-                {{ ach.hidden ? '？？？' : (ach.unlocked ? ach.desc : (ach.condition ?? ach.desc)) }}
-              </text>
+              <!-- 描述 -->
+              <text class="ach-desc">{{ ach.description }}</text>
             </view>
           </view>
         </view>
@@ -85,6 +76,7 @@
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import { getAchievements, type Achievement as ApiAchievement } from '@/services/api/user'
 
 // ===== 滚动高度 =====
 const navPlaceholderHeight = ref(64)
@@ -93,25 +85,16 @@ onMounted(() => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
+  loadAchievements()
 })
 
-// ===== 统计 =====
-const totalAch = 42
-const unlockedAch = 15
-const unlockPercent = computed(() => Math.round((unlockedAch / totalAch) * 100))
-
-// ===== 成就数据类型 =====
 interface Achievement {
   id: string
-  emoji: string
-  iconName: string
-  iconColor: string
-  name: string
-  desc: string
+  icon: string
+  title: string
+  description: string
   unlocked: boolean
-  date?: string
-  condition?: string
-  hidden?: boolean
+  unlockedAt?: number
 }
 
 interface Category {
@@ -119,87 +102,63 @@ interface Category {
   achievements: Achievement[]
 }
 
-// ===== 成就数据 =====
-const categories: Category[] = [
-  {
-    name: '日记达人',
-    achievements: [
-      { id: 'diary_1',   emoji: '📝', iconName: 'book',    iconColor: '#E8855A', name: '第一篇',  desc: '写下第一篇日记',  unlocked: true,  date: '3月1日'  },
-      { id: 'diary_7d',  emoji: '📝', iconName: 'fire',    iconColor: '#E8855A', name: '连续7天',  desc: '连续7天写日记',   unlocked: true,  date: '3月7日'  },
-      { id: 'diary_50',  emoji: '📝', iconName: 'book',    iconColor: '#E8855A', name: '半百',     desc: '累计50篇日记',   unlocked: true,  date: '3月10日' },
-      { id: 'diary_100', emoji: '📝', iconName: 'book',    iconColor: '#E8855A', name: '百篇',     desc: '累计100篇',     unlocked: true,  date: '3月18日' },
-      { id: 'diary_200', emoji: '📝', iconName: 'novel',   iconColor: '#9B72C8', name: '作家',     desc: '累计200篇',     unlocked: false, condition: '再写73篇'   },
-      { id: 'diary_365', emoji: '📝', iconName: 'calendar',iconColor: '#C8A86B', name: '年鉴',     desc: '连续365天',     unlocked: false, condition: '坚持一年'   },
-    ],
-  },
-  {
-    name: '学习之星',
-    achievements: [
-      { id: 'pomo_10',   emoji: '🍅', iconName: 'tomato',   iconColor: '#E8855A', name: '10个番茄', desc: '完成10个番茄钟', unlocked: true  },
-      { id: 'pomo_50',   emoji: '🍅', iconName: 'tomato',   iconColor: '#E8855A', name: '50个番茄', desc: '完成50个番茄钟', unlocked: true  },
-      { id: 'pomo_100',  emoji: '🍅', iconName: 'tomato',   iconColor: '#C8A86B', name: '100个番茄', desc: '完成100个番茄钟', unlocked: false, condition: '再完成50个' },
-      { id: 'todo_10',   emoji: '📋', iconName: 'list',     iconColor: '#6BA87B', name: '完成10个', desc: '完成10个待办事项', unlocked: true  },
-      { id: 'todo_50',   emoji: '📋', iconName: 'list',     iconColor: '#C8A86B', name: '完成50个', desc: '完成50个待办事项', unlocked: false, condition: '再完成35个' },
-      { id: 'study_7d',  emoji: '📚', iconName: 'bookopen', iconColor: '#6BA87B', name: '学霸周',   desc: '连续7天学习',   unlocked: true  },
-    ],
-  },
-  {
-    name: '社交蝴蝶',
-    achievements: [
-      { id: 'friend_1',  emoji: '👥', iconName: 'handshake', iconColor: '#6B8EB4', name: '第一个搭子', desc: '添加第一个学习搭子', unlocked: true  },
-      { id: 'friend_5',  emoji: '👥', iconName: 'handshake', iconColor: '#6B8EB4', name: '5个搭子',   desc: '拥有5个搭子',   unlocked: false, condition: '再找4个'   },
-      { id: 'friend_10', emoji: '👥', iconName: 'handshake', iconColor: '#C8A86B', name: '10个搭子',  desc: '拥有10个搭子',  unlocked: false, condition: '再找9个'   },
-      { id: 'msg_50',    emoji: '💬', iconName: 'chat',      iconColor: '#6B8EB4', name: '话痨',      desc: '发送50条消息',  unlocked: true  },
-      { id: 'share_5',   emoji: '📤', iconName: 'share',     iconColor: '#D4728A', name: '分享达人',  desc: '分享5次日记',   unlocked: false, condition: '再分享3次' },
-      { id: 'match_3',   emoji: '🤝', iconName: 'heart',     iconColor: '#D4728A', name: '最佳拍档',  desc: '与搭子互动30天', unlocked: false, condition: '再互动20天' },
-    ],
-  },
-  {
-    name: '创意达人',
-    achievements: [
-      { id: 'comic_1',   emoji: '🎬', iconName: 'grid',    iconColor: '#5CA06E', name: '第一幅漫画',   desc: '生成第一幅漫画',     unlocked: true  },
-      { id: 'share_1',   emoji: '📤', iconName: 'share',   iconColor: '#D4728A', name: '第一张分享卡', desc: '生成第一张分享卡',   unlocked: true  },
-      { id: 'style_5',   emoji: '✍️', iconName: 'wand',    iconColor: '#9B72C8', name: '5种文风',      desc: '使用5种不同文风',    unlocked: false, condition: '再解锁3种'   },
-      { id: 'bgm_1',     emoji: '🎵', iconName: 'music',   iconColor: '#9B72C8', name: '第一首BGM',    desc: '为日记配上第一首BGM', unlocked: false, condition: '使用BGM功能' },
-      { id: 'tts_1',     emoji: '🎙️', iconName: 'voice',   iconColor: '#9B72C8', name: '有声日记',     desc: '录制第一条语音日记', unlocked: false, condition: '使用语音功能' },
-      { id: 'novel_1',   emoji: '📖', iconName: 'novel',   iconColor: '#9B72C8', name: '第一章自传',   desc: '生成第一章自传',     unlocked: true  },
-    ],
-  },
-  {
-    name: '情绪探索',
-    achievements: [
-      { id: 'emo_all',      emoji: '🎭', iconName: 'palette',  iconColor: '#D4728A', name: '全情绪',   desc: '使用过所有8种情绪',  unlocked: true  },
-      { id: 'emo_happy_7',  emoji: '😊', iconName: 'heart',    iconColor: '#D4728A', name: '快乐周',   desc: '连续7天好心情',     unlocked: true  },
-      { id: 'emo_recover',  emoji: '💪', iconName: 'target',   iconColor: '#6BA87B', name: '走出低谷', desc: '记录一次情绪回升',  unlocked: true  },
-      { id: 'emo_zen',      emoji: '🧘', iconName: 'moon',     iconColor: '#9B72C8', name: '情绪平衡', desc: '连续30天情绪稳定',  unlocked: false, condition: '再坚持23天'  },
-      { id: 'emo_insight',  emoji: '🔮', iconName: 'crystal',  iconColor: '#D4728A', name: '情绪洞察', desc: '查看情绪洞察报告',  unlocked: false, condition: '解锁洞察功能' },
-      { id: 'emo_map',      emoji: '🗺️', iconName: 'calendar', iconColor: '#6B8EB4', name: '情绪地图', desc: '查看情绪地图',      unlocked: false, condition: '记录30天'    },
-    ],
-  },
-  {
-    name: '运势大师',
-    achievements: [
-      { id: 'fortune_1',     emoji: '🔮', iconName: 'crystal', iconColor: '#D4728A', name: '初次占卜', desc: '第一次AI运势',   unlocked: true  },
-      { id: 'fortune_30',    emoji: '🔮', iconName: 'crystal', iconColor: '#9B72C8', name: '月度占卜', desc: '累计30次运势',  unlocked: false, condition: '再查28次'    },
-      { id: 'fortune_5star', emoji: '⭐', iconName: 'star',    iconColor: '#C8A86B', name: '满星运势', desc: '获得5次五星运势', unlocked: false, condition: '获取五星运势' },
-    ],
-  },
-  {
-    name: '隐藏成就',
-    achievements: [
-      { id: 'hidden_1', emoji: '❓', iconName: 'lock', iconColor: '#AE9D92', name: '???', desc: '？？？', unlocked: false, hidden: true },
-      { id: 'hidden_2', emoji: '❓', iconName: 'lock', iconColor: '#AE9D92', name: '???', desc: '？？？', unlocked: false, hidden: true },
-      { id: 'hidden_3', emoji: '❓', iconName: 'lock', iconColor: '#AE9D92', name: '???', desc: '？？？', unlocked: false, hidden: true },
-    ],
-  },
-]
+// 成就 ID → 分类映射
+const CATEGORY_OF: Record<string, string> = {
+  first_diary: '日记达人', diary_7: '日记达人', diary_30: '日记达人', diary_100: '日记达人',
+  streak_14: '日记达人', streak_30: '日记达人', night_owl: '日记达人', early_bird: '日记达人',
+  first_material: '素材收集', material_50: '素材收集', first_extract: '素材收集',
+  first_pomodoro: '学习之星', pomodoro_10: '学习之星', pomodoro_50: '学习之星',
+  first_comic: '创意达人', first_novel: '创意达人', first_share: '创意达人', style_variety: '创意达人',
+  emotion_happy: '情绪探索',
+  social_match: '社交蝴蝶', ai_chat_10: '社交蝴蝶',
+  first_anniversary: '生活记录', portrait_complete: '生活记录', semester_report: '生活记录',
+}
+const CATEGORY_ORDER = ['日记达人', '学习之星', '素材收集', '创意达人', '情绪探索', '社交蝴蝶', '生活记录', '其他']
+
+const allAchievements = ref<Achievement[]>([])
+
+const totalAch = computed(() => allAchievements.value.length)
+const unlockedAch = computed(() => allAchievements.value.filter(a => a.unlocked).length)
+const unlockPercent = computed(() =>
+  totalAch.value === 0 ? 0 : Math.round((unlockedAch.value / totalAch.value) * 100)
+)
+
+const categories = computed<Category[]>(() => {
+  const map: Record<string, Achievement[]> = {}
+  allAchievements.value.forEach(a => {
+    const cat = CATEGORY_OF[a.id] ?? '其他'
+    ;(map[cat] ||= []).push(a)
+  })
+  return CATEGORY_ORDER
+    .filter(name => map[name]?.length)
+    .map(name => ({ name, achievements: map[name] }))
+})
+
+async function loadAchievements() {
+  try {
+    const list = await getAchievements()
+    allAchievements.value = list.map((a: ApiAchievement) => ({
+      id: a.id,
+      icon: a.icon,
+      title: a.title,
+      description: a.description,
+      unlocked: a.unlocked,
+      unlockedAt: a.unlockedAt,
+    }))
+  } catch (e) {
+    allAchievements.value = []
+  }
+}
 
 // ===== 点击成就 =====
 function handleAchClick(ach: Achievement) {
-  if (!ach.unlocked || ach.hidden) return
+  if (!ach.unlocked) return
+  const dateStr = ach.unlockedAt
+    ? new Date(ach.unlockedAt * 1000).toLocaleDateString('zh-CN')
+    : ''
   uni.showModal({
-    title: ach.name,
-    content: `${ach.desc}\n🗓️ 解锁于 ${ach.date ?? ''}`,
+    title: ach.title,
+    content: dateStr ? `${ach.description}\n🗓️ 解锁于 ${dateStr}` : ach.description,
     confirmText: '知道了',
     showCancel: false,
   })
@@ -386,6 +345,16 @@ function handleAchClick(ach: Achievement) {
 
 .ach-icon-locked {
   background: #F0EAE4;
+}
+
+.ach-emoji {
+  font-size: 40rpx;
+  line-height: 1;
+}
+
+.ach-emoji-locked {
+  filter: grayscale(1);
+  opacity: 0.6;
 }
 
 /* 成就名 */

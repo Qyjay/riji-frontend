@@ -10,7 +10,7 @@ export interface RawMaterial {
   mediaUrl: string
   thumbnailUrl: string
   location: { lat?: number; lng?: number; address?: string }
-  emotion: { label: string; score: number; emoji: string }
+  emotion: { label: string; score: number; emoji: string } | null
   tags: string[]
   date: string  // "2026-03-25"
   createdAt: number
@@ -20,7 +20,6 @@ export interface RawMaterial {
   endTime?: number
 }
 
-const DEFAULT_EMOTION = { label: '平静', score: 0, emoji: '😐' }
 const IMAGE_UPLOAD_MAX_SIDE = 1600
 const IMAGE_UPLOAD_QUALITY = 0.82
 const IMAGE_UPLOAD_SKIP_COMPRESS_SIZE = 900 * 1024
@@ -48,7 +47,7 @@ function normalizeMaterial(raw: any): RawMaterial {
     mediaUrl: pickFirstUrl(raw?.mediaUrl),
     thumbnailUrl: pickFirstUrl(raw?.thumbnailUrl),
     location: raw?.location || {},
-    emotion: raw?.emotion || DEFAULT_EMOTION,
+      emotion: raw?.emotion || null,
     tags: Array.isArray(raw?.tags) ? raw.tags : [],
   } as RawMaterial
 }
@@ -63,19 +62,14 @@ export async function createMaterial(data: {
   mediaUrl?: string
   thumbnailUrl?: string
   location?: { lat?: number; lng?: number; address?: string } | null
-  emotion?: { label: string; score: number; emoji: string }
+  emotion?: { label: string; score: number; emoji: string } | null
   date?: string
 }): Promise<RawMaterial> {
-  if (USE_MOCK) return mock.createMaterial(data)
-  const payload = {
-    ...data,
-    // 传入默认情绪，避免后端在创建接口内同步等待 AI 情绪提取导致前端超时误判。
-    emotion: data.emotion ?? DEFAULT_EMOTION,
-  }
+    if (USE_MOCK) return mock.createMaterial(data)
   const result = await request<RawMaterial>({
     url: '/materials',
     method: 'POST',
-    data: payload,
+      data,
     timeout: 30000,
   })
   return normalizeMaterial(result)

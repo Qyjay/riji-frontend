@@ -6,12 +6,11 @@
 
     <scroll-view scroll-y class="scroll-area" :style="{ height: scrollHeight + 'px' }">
       <view class="content">
-
         <!-- ===== 等级卡片 ===== -->
         <view class="card level-card">
           <view class="level-header">
             <DoodleIcon name="star" :size="56" color="#E8855A" class="level-star" />
-            <text class="level-title">探索者 Lv.12</text>
+            <text class="level-title">{{ growth?.title || '探索者' }} Lv.{{ growth?.level || 1 }}</text>
           </view>
 
           <!-- XP 进度条 -->
@@ -19,22 +18,37 @@
             <view class="xp-bar-bg">
               <view class="xp-bar-fill" :style="{ width: xpPercent + '%' }"></view>
             </view>
-            <text class="xp-text">2450 / 3000 XP</text>
+            <text class="xp-text">{{ currentXP }} / {{ nextLevelXP }} XP</text>
           </view>
-          <text class="xp-hint">再写 18 篇日记升至 Lv.13</text>
+          <text class="xp-hint">还差 {{ growth?.xpToNextLevel || 0 }} XP 升至 Lv.{{ (growth?.level || 1) + 1 }}</text>
 
           <!-- 底部统计 -->
           <view class="level-stats">
             <view class="stat-group">
-              <text class="stat-item">总日记 <text class="stat-val">127</text></text>
+              <text class="stat-item">总日记 <text class="stat-val">{{ growth?.stats.diaryCount || 0 }}</text></text>
               <text class="stat-sep">·</text>
-              <text class="stat-item">总字数 <text class="stat-val">45.2k</text></text>
+              <text class="stat-item">总字数 <text class="stat-val">{{ formatNumber(growth?.stats.wordCount || 0) }}</text></text>
             </view>
             <view class="stat-divider"></view>
             <view class="stat-group">
-              <text class="stat-item">连续打卡 <text class="stat-val">7 天</text></text>
+              <text class="stat-item">连续打卡 <text class="stat-val">{{ growth?.stats.streakDays || 0 }} 天</text></text>
               <text class="stat-sep">·</text>
-              <text class="stat-item">最长 <text class="stat-val">23 天</text></text>
+              <text class="stat-item">最长 <text class="stat-val">{{ growth?.stats.longestStreak || 0 }} 天</text></text>
+            </view>
+          </view>
+        </view>
+
+        <!-- ===== 今日成长 ===== -->
+        <view class="section-title">── 今日成长 ──</view>
+        <view class="card today-card">
+          <view class="today-main">
+            <text class="today-xp">+{{ growth?.todayXp || 0 }} XP</text>
+            <text class="today-label">来自今天的真实记录、学习、创作和互动</text>
+          </view>
+          <view class="breakdown-grid">
+            <view v-for="item in visibleBreakdown" :key="item.label" class="breakdown-chip">
+              <text class="breakdown-name">{{ item.label }}</text>
+              <text class="breakdown-xp">{{ item.xp }} XP</text>
             </view>
           </view>
         </view>
@@ -70,14 +84,44 @@
               :key="week.label"
               class="bar-col"
             >
-              <text class="bar-pct">{{ week.pct }}%</text>
+              <text class="bar-pct">{{ week.xp }}</text>
               <view class="bar-outer">
                 <view
                   class="bar-inner"
-                  :style="{ height: (week.pct / maxPct * 100) + '%' }"
+                  :style="{ height: (week.xp / maxChartXp * 100) + '%' }"
                 ></view>
               </view>
               <text class="bar-label">{{ week.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- ===== 成长轨迹 ===== -->
+        <view class="section-title">── 成长轨迹 ──</view>
+        <view class="card timeline-card">
+          <view v-if="timeline.length === 0" class="empty-hint">还没有成长事件。继续记录后，这里会自动出现真实轨迹。</view>
+          <view
+            v-for="item in pagedTimeline"
+            :key="`${item.type}-${item.sourceId}-${item.date}`"
+            class="timeline-row"
+          >
+            <view class="timeline-dot" />
+            <view class="timeline-body">
+              <view class="timeline-title-row">
+                <text class="timeline-title">{{ item.title }}</text>
+                <text class="timeline-xp">+{{ item.xp }} XP</text>
+              </view>
+              <text class="timeline-desc">{{ item.description }}</text>
+              <text class="timeline-date">{{ item.date }}</text>
+            </view>
+          </view>
+          <view v-if="totalTimelinePages > 1" class="timeline-pager">
+            <view class="timeline-page-btn" :class="{ disabled: timelinePage === 1 }" @click="goPrevTimelinePage">
+              <text>上一组</text>
+            </view>
+            <text class="timeline-page-count">{{ timelinePage }} / {{ totalTimelinePages }}</text>
+            <view class="timeline-page-btn" :class="{ disabled: timelinePage === totalTimelinePages }" @click="goNextTimelinePage">
+              <text>下一组</text>
             </view>
           </view>
         </view>
@@ -121,21 +165,23 @@
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import { getGrowthData } from '@/services/api/user'
+import type { GrowthData } from '@/services/api/user'
 
 // ===== XP / 等级 =====
-const currentXP = 2450
-const nextLevelXP = 3000
-const xpPercent = computed(() => Math.round((currentXP / nextLevelXP) * 100))
+const growth = ref<GrowthData | null>(null)
+const currentXP = computed(() => growth.value?.xpInCurrentLevel || 0)
+const nextLevelXP = computed(() => growth.value
+  ? Math.max(1, growth.value.nextLevelXp - growth.value.currentLevelXp)
+  : 100
+)
+const xpPercent = computed(() => growth.value?.progressPercent || 0)
 
 // ===== 技能数据 =====
-const skills = [
-  { name: '写作', value: 85 },
-  { name: '学习', value: 72 },
-  { name: '社交', value: 45 },
-  { name: '运动', value: 38 },
-  { name: '创造', value: 65 },
-  { name: '情感', value: 78 },
-]
+const skills = computed(() => growth.value?.skills || [])
+const visibleBreakdown = computed(() => {
+  return (growth.value?.xpBreakdown || []).filter(item => item.xp > 0)
+})
 
 function skillColor(v: number): string {
   if (v > 80) return '#E8855A'
@@ -144,31 +190,54 @@ function skillColor(v: number): string {
 }
 
 // ===== 成长曲线 =====
-const weeks = [
-  { label: 'W1', pct: 80 },
-  { label: 'W2', pct: 95 },
-  { label: 'W3', pct: 60 },
-  { label: 'W4', pct: 75 },
-]
-const maxPct = computed(() => Math.max(...weeks.map(w => w.pct)))
+const weeks = computed(() => {
+  const chart = growth.value?.chart || []
+  return chart.slice(-7)
+})
+const maxChartXp = computed(() => Math.max(1, ...weeks.value.map(w => w.xp)))
 
 // ===== 里程碑 =====
-const milestones = [
-  { name: '第 1 篇日记',  done: true,  date: '3月1日'  },
-  { name: '连续 7 天',    done: true,  date: '3月7日'  },
-  { name: '第 50 篇',     done: true,  date: '3月10日' },
-  { name: '第 100 篇',    done: true,  date: '3月18日' },
-  { name: '第 200 篇',    done: false, date: ''        },
-  { name: 'Lv.20',        done: false, date: ''        },
-]
+const milestones = computed(() => growth.value?.milestones || [])
+const timeline = computed(() => growth.value?.timeline || [])
+const TIMELINE_PAGE_SIZE = 5
+const timelinePage = ref(1)
+const totalTimelinePages = computed(() => Math.max(1, Math.ceil(timeline.value.length / TIMELINE_PAGE_SIZE)))
+const pagedTimeline = computed(() => {
+  const start = (timelinePage.value - 1) * TIMELINE_PAGE_SIZE
+  return timeline.value.slice(start, start + TIMELINE_PAGE_SIZE)
+})
+
+function formatNumber(value: number): string {
+  if (value >= 10000) return `${(value / 10000).toFixed(1)}w`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`
+  return String(value)
+}
+
+function goPrevTimelinePage() {
+  if (timelinePage.value > 1) {
+    timelinePage.value -= 1
+  }
+}
+
+function goNextTimelinePage() {
+  if (timelinePage.value < totalTimelinePages.value) {
+    timelinePage.value += 1
+  }
+}
 
 // ===== 滚动高度 =====
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
-onMounted(() => {
+onMounted(async () => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
+  try {
+    growth.value = await getGrowthData()
+  } catch {
+    growth.value = null
+    uni.showToast({ title: '成长数据加载失败', icon: 'none' })
+  }
 })
 </script>
 
@@ -289,6 +358,58 @@ onMounted(() => {
 .stat-sep {
   color: #D0C8C0;
   font-size: 22rpx;
+}
+
+/* ===== 今日成长 ===== */
+.today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.today-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.today-xp {
+  font-size: 42rpx;
+  color: #E8855A;
+  font-weight: 800;
+}
+
+.today-label {
+  font-size: 24rpx;
+  color: #8A7568;
+  line-height: 1.45;
+}
+
+.breakdown-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.breakdown-chip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 999rpx;
+  background: #FFF6EE;
+  border: 1rpx solid rgba(232, 133, 90, 0.16);
+}
+
+.breakdown-name {
+  font-size: 22rpx;
+  color: #8A7568;
+}
+
+.breakdown-xp {
+  font-size: 22rpx;
+  color: #E8855A;
+  font-weight: 700;
 }
 
 /* ===== 技能卡片 ===== */
@@ -433,6 +554,113 @@ onMounted(() => {
 .milestone-date {
   font-size: 22rpx;
   font-weight: 600;
+}
+
+/* ===== 成长轨迹 ===== */
+.timeline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.timeline-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.timeline-dot {
+  width: 18rpx;
+  height: 18rpx;
+  margin-top: 8rpx;
+  border-radius: 50%;
+  background: #E8855A;
+  flex-shrink: 0;
+}
+
+.timeline-body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid #F5EFE9;
+}
+
+.timeline-row:last-child .timeline-body {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.timeline-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.timeline-title {
+  font-size: 26rpx;
+  color: #2C1F14;
+  font-weight: 700;
+}
+
+.timeline-xp {
+  font-size: 22rpx;
+  color: #E8855A;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.timeline-desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 23rpx;
+  color: #8A7568;
+  line-height: 1.45;
+}
+
+.timeline-date {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 21rpx;
+  color: #AE9D92;
+}
+
+.empty-hint {
+  font-size: 24rpx;
+  color: #AE9D92;
+  line-height: 1.5;
+}
+
+.timeline-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+  padding-top: 6rpx;
+}
+
+.timeline-page-btn {
+  flex: 1;
+  height: 62rpx;
+  border-radius: 18rpx;
+  background: #FFF6EE;
+  color: #E8855A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.timeline-page-btn.disabled {
+  opacity: 0.38;
+}
+
+.timeline-page-count {
+  min-width: 82rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #AE9D92;
+  font-weight: 700;
 }
 
 /* ===== 底部留白 ===== */

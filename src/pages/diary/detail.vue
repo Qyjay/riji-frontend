@@ -93,6 +93,16 @@
             </view>
             <scroll-view class="trend-scroll" scroll-x>
               <view class="line-chart-canvas" :style="{ width: chartCanvasWidth + 'rpx' }">
+                <view v-if="trendWeatherSummary.length > 0" class="trend-weather-summary">
+                  <view
+                    v-for="item in trendWeatherSummary"
+                    :key="item.key"
+                    class="trend-weather-chip"
+                  >
+                    <text class="trend-weather-icon">{{ weatherIcon(item.weatherText) }}</text>
+                    <text class="trend-weather-text">{{ item.weatherText }}</text>
+                  </view>
+                </view>
                 <view class="y-grid y-grid-top"><text class="y-label">+10</text></view>
                 <view class="y-grid y-grid-mid"><text class="y-label">0</text></view>
                 <view class="y-grid y-grid-bottom"><text class="y-label">-10</text></view>
@@ -170,15 +180,37 @@
               <text class="tool-label">生成</text>
               <text class="tool-name">漫画</text>
             </view>
-            <view class="tool-item" @click="handleTool('novel')">
-              <DoodleIcon name="pen" :size="48" color="#6B8EC4" class="tool-icon" />
-              <text class="tool-label">生成</text>
-              <text class="tool-name">小说</text>
+          </view>
+        </view>
+
+        <!-- ── 历史创作 ── -->
+        <view v-if="hasHistoryCreation" class="creation-history-section">
+          <view class="section-header">
+            <view class="header-line" />
+            <text class="header-label">历史创作</text>
+            <view class="header-line" />
+          </view>
+          <view class="creation-list">
+            <view v-if="comicTask" class="creation-card creation-card--pending">
+              <view class="creation-pending-thumb">
+                <DoodleIcon name="palette" :size="52" color="#E8855A" />
+              </view>
+              <view class="creation-card-body">
+                <text class="creation-title">漫画生成中...</text>
+                <text class="creation-desc">AI 正在把这篇日记画成漫画，完成后会自动出现在这里</text>
+              </view>
             </view>
-            <view class="tool-item" @click="handleTool('style')">
-              <DoodleIcon name="wand" :size="48" color="#C8A86B" class="tool-icon" />
-              <text class="tool-label">切换</text>
-              <text class="tool-name">文风</text>
+            <view
+              v-for="item in comicHistory"
+              :key="item.id"
+              class="creation-card"
+              @click="previewComic(item)"
+            >
+              <image class="creation-thumb" :src="toFullUrl(item.mediaUrl)" mode="aspectFill" />
+              <view class="creation-card-body">
+                <text class="creation-title">日记漫画</text>
+                <text class="creation-desc">{{ formatCreationTime(item.createdAt) }}</text>
+              </view>
             </view>
           </view>
         </view>
@@ -195,9 +227,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { getDiaryDetail, updateDiary, generateDerivative, getEmotionTrend, streamDiaryAiComment } from '@/services/api/diary'
-import type { Diary, EmotionTrendPoint } from '@/services/api/diary'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import {
+  getDerivativeTask,
+  getDerivatives,
+  getDiaryDetail,
+  getEmotionTrend,
+  generateDerivative,
+  startDerivativeTask,
+  streamDiaryAiComment,
+  updateDiary,
+} from '@/services/api/diary'
+import type { Diary, DiaryDerivative, DiaryDerivativeTask, EmotionTrendPoint, WeatherPeriod } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { API_BASE_URL } from '@/services/config'
@@ -212,10 +253,15 @@ const scrollHeight = ref(600)
 const isEditing = ref(false)
 const editContent = ref('')
 const editSaving = ref(false)
+const derivativeHistory = ref<DiaryDerivative[]>([])
+const comicTask = ref<DiaryDerivativeTask | null>(null)
+let comicTaskTimer: ReturnType<typeof setInterval> | null = null
+const COMIC_TASK_STORAGE_KEY = 'avalin_comic_derivative_tasks_v1'
 
 // 情绪趋势
 const emotionTrend = ref<EmotionTrendPoint[]>([])
-const CHART_TOP_PADDING = 48
+const trendWeatherPeriods = ref<WeatherPeriod[]>([])
+const CHART_TOP_PADDING = 96
 const CHART_HEIGHT = 180
 const CHART_STEP = 92
 const CHART_MIN_WIDTH = 560
@@ -226,6 +272,31 @@ const chartCanvasWidth = computed(() => {
 
 const emotionTrendSegments = computed(() => {
   return emotionTrend.value.slice(0, Math.max(0, emotionTrend.value.length - 1))
+})
+
+const trendWeatherSummary = computed(() => {
+  const labelMap: Record<WeatherPeriod['key'], string> = {
+    morning: '上午',
+    afternoon: '中午',
+    evening: '下午',
+  }
+  const order: WeatherPeriod['key'][] = ['morning', 'afternoon', 'evening']
+  return order
+    .map(key => {
+      const matched = trendWeatherPeriods.value.find(item => item.key === key)
+      return matched
+        ? { ...matched, label: labelMap[key], weatherText: String(matched.weatherText || '').trim() }
+        : null
+    })
+    .filter((item): item is WeatherPeriod => !!item && !!item.weatherText)
+})
+
+const comicHistory = computed(() => {
+  return derivativeHistory.value.filter(item => item.type === 'comic' && item.mediaUrl)
+})
+
+const hasHistoryCreation = computed(() => {
+  return !!comicTask.value || comicHistory.value.length > 0
 })
 
 // 字体 — 从设置 store 读取
@@ -262,6 +333,40 @@ function toFullUrl(path: string): string {
     return `${API_BASE_URL}${path}`
   }
   return path
+}
+
+function readComicTasks(): Record<string, DiaryDerivativeTask> {
+  try {
+    const raw = uni.getStorageSync(COMIC_TASK_STORAGE_KEY)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeComicTasks(tasks: Record<string, DiaryDerivativeTask>) {
+  uni.setStorageSync(COMIC_TASK_STORAGE_KEY, JSON.stringify(tasks))
+}
+
+function saveComicTask(task: DiaryDerivativeTask) {
+  const tasks = readComicTasks()
+  tasks[task.diaryId] = task
+  writeComicTasks(tasks)
+}
+
+function clearComicTask(diaryId: string) {
+  const tasks = readComicTasks()
+  delete tasks[diaryId]
+  writeComicTasks(tasks)
+}
+
+function restoreComicTask(diaryId: string) {
+  const task = readComicTasks()[diaryId]
+  if (task && task.status === 'running') {
+    comicTask.value = task
+    startComicTaskPolling()
+  }
 }
 
 const contentBlocks = computed<ContentBlock[]>(() => {
@@ -334,6 +439,81 @@ function formatDateTime(ts: number): string {
   const h = String(d.getHours()).padStart(2, '0')
   const min = String(d.getMinutes()).padStart(2, '0')
   return `${h}:${min}`
+}
+
+function formatCreationTime(ts: number): string {
+  const d = new Date(ts)
+  const month = d.getMonth() + 1
+  const day = d.getDate()
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${month}月${day}日 ${h}:${min}`
+}
+
+async function loadDerivativeHistory(diaryId: string) {
+  try {
+    derivativeHistory.value = await getDerivatives(diaryId)
+  } catch {
+    derivativeHistory.value = []
+  }
+}
+
+function stopComicTaskPolling() {
+  if (!comicTaskTimer) return
+  clearInterval(comicTaskTimer)
+  comicTaskTimer = null
+}
+
+async function refreshComicTask() {
+  if (!comicTask.value || !diary.value) return
+  try {
+    const latest = await getDerivativeTask(comicTask.value.taskId)
+    comicTask.value = latest.status === 'running' ? latest : null
+    if (latest.status === 'done') {
+      clearComicTask(latest.diaryId)
+      stopComicTaskPolling()
+      await loadDerivativeHistory(latest.diaryId)
+      uni.showToast({ title: '漫画生成完成', icon: 'success' })
+    } else if (latest.status === 'failed') {
+      clearComicTask(latest.diaryId)
+      stopComicTaskPolling()
+      uni.showToast({ title: latest.error || '漫画生成失败', icon: 'none' })
+    } else {
+      saveComicTask(latest)
+    }
+  } catch {
+    // 任务查询偶发失败时保留生成中卡片，下次轮询继续尝试。
+  }
+}
+
+function startComicTaskPolling() {
+  if (comicTaskTimer) return
+  comicTaskTimer = setInterval(() => {
+    void refreshComicTask()
+  }, 3000)
+  void refreshComicTask()
+}
+
+async function startComicGenerationTask() {
+  if (!diary.value || comicTask.value) return
+  try {
+    const task = await startDerivativeTask(diary.value.id, 'comic')
+    comicTask.value = task
+    saveComicTask(task)
+    startComicTaskPolling()
+    uni.showToast({ title: '漫画已开始生成', icon: 'none' })
+  } catch {
+    uni.showToast({ title: '漫画任务创建失败', icon: 'none' })
+  }
+}
+
+function previewComic(item: DiaryDerivative) {
+  const url = toFullUrl(item.mediaUrl)
+  if (!url) return
+  uni.previewImage({
+    urls: comicHistory.value.map(derivative => toFullUrl(derivative.mediaUrl)).filter(Boolean),
+    current: url,
+  })
 }
 
 function getEmotionEmoji(label: string): string {
@@ -419,6 +599,18 @@ function formatTrendScore(score: number): string {
   return score > 0 ? `+${score}` : `${score}`
 }
 
+function weatherIcon(weatherText: string): string {
+  const text = String(weatherText || '')
+  if (/雷|电/.test(text)) return '⛈️'
+  if (/雨|阵雨|暴雨|小雨|中雨|大雨/.test(text)) return '🌧️'
+  if (/雪|冰雹/.test(text)) return '❄️'
+  if (/阴/.test(text)) return '☁️'
+  if (/云/.test(text)) return '🌤️'
+  if (/雾|霾|沙|尘/.test(text)) return '🌫️'
+  if (/晴/.test(text)) return '☀️'
+  return '🌡️'
+}
+
 async function generateAiCommentStream() {
   if (!diary.value || aiComment.value || aiCommentLoading.value) return
 
@@ -472,15 +664,23 @@ onMounted(async () => {
 
   // Load emotion trend
   if (diary.value) {
+    await loadDerivativeHistory(diary.value.id)
+    restoreComicTask(diary.value.id)
     try {
       const trend = await getEmotionTrend(diary.value.id)
       emotionTrend.value = trend.trend.map(normalizeTrendPoint)
+      trendWeatherPeriods.value = trend.weatherPeriods || diary.value.emotionSummary?.weatherPeriods || []
     } catch {
       emotionTrend.value = (diary.value.emotionSummary?.trend ?? []).map(normalizeTrendPoint)
+      trendWeatherPeriods.value = diary.value.emotionSummary?.weatherPeriods || []
     }
   }
 
   loading.value = false
+})
+
+onUnmounted(() => {
+  stopComicTaskPolling()
 })
 
 function goBack() {
@@ -558,7 +758,7 @@ function handleTool(type: string) {
   if (type === 'share') {
     handleGenerateDerivative('share_card')
   } else if (type === 'comic') {
-    handleGenerateDerivative('comic')
+    startComicGenerationTask()
   } else if (type === 'novel') {
     handleGenerateDerivative('novel')
   } else if (type === 'style') {
@@ -799,7 +999,7 @@ function handleTool(type: string) {
 
 .line-chart-canvas {
   position: relative;
-  height: 326rpx;
+  height: 374rpx;
   padding-top: 0;
 }
 
@@ -811,9 +1011,9 @@ function handleTool(type: string) {
   background: rgba(174, 157, 146, 0.35);
 }
 
-.y-grid-top { top: 48rpx; }
+.y-grid-top { top: 96rpx; }
 .y-grid-mid {
-  top: 138rpx;
+  top: 186rpx;
   background: repeating-linear-gradient(
     to right,
     rgba(232, 133, 90, 0.5) 0,
@@ -822,7 +1022,7 @@ function handleTool(type: string) {
     transparent 18rpx
   );
 }
-.y-grid-bottom { top: 228rpx; }
+.y-grid-bottom { top: 276rpx; }
 
 .y-label {
   position: absolute;
@@ -850,6 +1050,46 @@ function handleTool(type: string) {
   z-index: 2;
 }
 
+.trend-weather-summary {
+  position: absolute;
+  left: 46rpx;
+  right: 18rpx;
+  top: 12rpx;
+  min-height: 58rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 10rpx;
+  z-index: 3;
+}
+
+.trend-weather-chip {
+  min-width: 154rpx;
+  padding: 8rpx 12rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 253, 249, 0.94);
+  border: 1rpx solid rgba(232, 133, 90, 0.14);
+  box-shadow: 0 3rpx 8rpx rgba(74, 54, 40, 0.06);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 5rpx;
+}
+
+.trend-weather-icon {
+  font-size: 22rpx;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.trend-weather-text {
+  font-size: 20rpx;
+  color: #7A6656;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .trend-point-emoji {
   font-size: 24rpx;
   line-height: 1;
@@ -866,7 +1106,7 @@ function handleTool(type: string) {
 
 .trend-x-label {
   position: absolute;
-  top: 258rpx;
+  top: 306rpx;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -943,7 +1183,7 @@ function handleTool(type: string) {
 
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16rpx;
 }
 
@@ -964,6 +1204,79 @@ function handleTool(type: string) {
 .tool-icon { display: flex; align-items: center; justify-content: center; }
 .tool-label { font-size: 26rpx; color: #4A3628; font-weight: 500; }
 .tool-name { font-size: 24rpx; color: #AE9D92; }
+
+/* ── 历史创作 ── */
+.creation-history-section {
+  padding: 28rpx 32rpx 0;
+}
+
+.creation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.creation-card {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 16rpx;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 16rpx rgba(74, 54, 40, 0.06);
+  border: 1rpx solid rgba(232, 133, 90, 0.08);
+  &:active { opacity: 0.86; }
+}
+
+.creation-card--pending {
+  background: #FFF8F0;
+  border-color: rgba(232, 133, 90, 0.18);
+}
+
+.creation-thumb,
+.creation-pending-thumb {
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: 18rpx;
+  flex-shrink: 0;
+}
+
+.creation-thumb {
+  background: #F6EDE4;
+}
+
+.creation-pending-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-linear-gradient(
+    -45deg,
+    #FFF1E8 0,
+    #FFF1E8 12rpx,
+    #FFE5D3 12rpx,
+    #FFE5D3 24rpx
+  );
+}
+
+.creation-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.creation-title {
+  font-size: 28rpx;
+  color: #2C1F14;
+  font-weight: 700;
+}
+
+.creation-desc {
+  font-size: 23rpx;
+  color: #8A7568;
+  line-height: 1.45;
+}
 
 /* ── 加载/错误 ── */
 .loading-state, .error-state {

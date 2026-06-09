@@ -1,7 +1,7 @@
 <template>
   <view class="page-container">
     <CustomNavBar
-      :title="viewMode === 'toc' ? '我的自传小说' : currentChapter?.title ?? ''"
+      :title="viewMode === 'toc' ? '我的小传' : currentChapter?.title ?? ''"
       :leftIcon="viewMode === 'reader' ? 'back' : 'none'"
       @leftClick="viewMode = 'toc'"
     />

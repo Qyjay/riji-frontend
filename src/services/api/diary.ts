@@ -10,6 +10,12 @@ export interface EmotionTrendPoint {
   score: number
 }
 
+export interface WeatherPeriod {
+  key: 'morning' | 'afternoon' | 'evening'
+  label: string
+  weatherText: string
+}
+
 export interface Diary {
   id: string
   title: string
@@ -21,6 +27,7 @@ export interface Diary {
   emotionSummary: {
     dominant: string
     trend: EmotionTrendPoint[]
+    weatherPeriods?: WeatherPeriod[]
   }
   materialIds: string[]
   style: string
@@ -48,15 +55,40 @@ export interface DiaryDerivative {
   createdAt: number
 }
 
+export interface DiaryDerivativeTask {
+  taskId: string
+  diaryId: string
+  type: 'comic'
+  status: 'running' | 'done' | 'failed'
+  derivativeId?: string | null
+  error: string
+  createdAt: number
+  updatedAt: number
+}
+
 export type DiaryAiCommentStreamEvent =
   | { type: 'start' }
   | { type: 'chunk'; text: string }
   | { type: 'done'; aiComment: string }
   | { type: 'error'; message: string }
 
-export async function generateDiary(date: string, weather?: string): Promise<Diary> {
+export async function generateDiary(date: string, weather?: string, weatherPeriods: WeatherPeriod[] = []): Promise<Diary> {
   if (USE_MOCK) return mock.generateDiary(date, weather)
-  return request<Diary>({ url: '/diaries/generate', method: 'POST', data: { date, weather }, timeout: 60000 })
+  const data: { date: string; weather?: string; weatherPeriods?: WeatherPeriod[] } = { date }
+  const normalizedWeather = String(weather || '').trim()
+  if (normalizedWeather) {
+    data.weather = normalizedWeather
+  }
+  const normalizedPeriods = weatherPeriods
+    .map(item => ({
+      ...item,
+      weatherText: String(item.weatherText || '').trim(),
+    }))
+    .filter(item => item.weatherText)
+  if (normalizedPeriods.length > 0) {
+    data.weatherPeriods = normalizedPeriods
+  }
+  return request<Diary>({ url: '/diaries/generate', method: 'POST', data, timeout: 60000 })
 }
 
 export async function getDiaries(page = 1, pageSize = 10): Promise<{ list: Diary[]; total: number }> {
@@ -190,9 +222,9 @@ export async function deleteDiary(id: string): Promise<void> {
   return request<void>({ url: `/diaries/${id}`, method: 'DELETE' })
 }
 
-export async function getEmotionTrend(id: string): Promise<{ dominant: string; trend: EmotionTrendPoint[] }> {
+export async function getEmotionTrend(id: string): Promise<{ dominant: string; trend: EmotionTrendPoint[]; weatherPeriods?: WeatherPeriod[] }> {
   if (USE_MOCK) return mock.getEmotionTrend(id)
-  return request<{ dominant: string; trend: EmotionTrendPoint[] }>({ url: `/diaries/${id}/emotion-trend` })
+  return request<{ dominant: string; trend: EmotionTrendPoint[]; weatherPeriods?: WeatherPeriod[] }>({ url: `/diaries/${id}/emotion-trend` })
 }
 
 export async function extractInfo(id: string): Promise<{ anniversaries: any[]; relations: any[]; preferences: any[] }> {
@@ -210,6 +242,42 @@ export async function generateDerivative(id: string, type: 'comic' | 'novel' | '
   })
 }
 
+export async function startDerivativeTask(id: string, type: 'comic'): Promise<DiaryDerivativeTask> {
+  if (USE_MOCK) {
+    return {
+      taskId: `mock-task-${Date.now()}`,
+      diaryId: id,
+      type,
+      status: 'running',
+      derivativeId: null,
+      error: '',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+  }
+  return request<DiaryDerivativeTask>({
+    url: `/diaries/${id}/derivative-task`,
+    method: 'POST',
+    data: { type },
+  })
+}
+
+export async function getDerivativeTask(taskId: string): Promise<DiaryDerivativeTask> {
+  if (USE_MOCK) {
+    return {
+      taskId,
+      diaryId: '',
+      type: 'comic',
+      status: 'done',
+      derivativeId: null,
+      error: '',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+  }
+  return request<DiaryDerivativeTask>({ url: `/derivatives/tasks/${taskId}` })
+}
+
 export async function getDerivatives(diaryId?: string): Promise<DiaryDerivative[]> {
   if (USE_MOCK) return mock.getDerivatives(diaryId)
   const url = diaryId ? `/derivatives?diary_id=${diaryId}` : '/derivatives'
@@ -224,7 +292,7 @@ export async function setDerivativeShare(id: string, scope: string): Promise<voi
 export interface TodaySummary {
   date: string
   material_count: number
-  materials: Array<{ id: string; type: string; content: string; createdAt: number; emotion?: { label: string; emoji: string; score: number } }>
+  materials: Array<{ id: string; type: string; content: string; createdAt: number; emotion?: { label: string; emoji: string; score: number } | null }>
   has_diary: boolean
   diary_id: string | null
   diary_status: string | null

@@ -120,7 +120,7 @@
                 <view class="chat-header-row">
                   <text class="chat-icon">💬</text>
                   <text class="chat-title">{{ getChatTitle(item) }}</text>
-                  <text v-if="item.emotion?.emoji" class="chat-mood-emoji">{{ item.emotion.emoji }}</text>
+                    <text v-if="item.emotion?.emoji" class="chat-mood-emoji">{{ item.emotion.emoji }}</text>
                 </view>
                 <text class="chat-summary">{{ getChatPreview(item.content) }}</text>
                 <view class="chat-expand-row">
@@ -135,7 +135,8 @@
             <view class="item-header">
               <text class="item-time">{{ formatTime(item.createdAt) }}</text>
               <text class="item-type-icon">{{ typeIcon(item.type) }}</text>
-              <text v-if="item.emotion && item.emotion.emoji" class="item-emotion-emoji">{{ item.emotion.emoji }}</text>
+                <text v-if="item.emotion && item.emotion.emoji" class="item-emotion-emoji">{{ item.emotion.emoji }}</text>
+                <text v-else class="item-emotion-pending">识别中</text>
               <view class="item-delete-btn press-feedback" @click.stop="handleDeleteMaterial(item.id)">
                 <text class="item-delete-icon">×</text>
               </view>
@@ -216,6 +217,8 @@ import { API_BASE_URL } from '@/services/config'
 import type { RawMaterial } from '@/services/api/material'
 import { speechToText, speechToTextFile } from '@/services/api/ai'
 import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
+import { getIpLocationContext, getLocationContext } from '@/services/api/location'
+import type { LocationContext } from '@/services/api/location'
 import ChatDetailSheet from '@/components/ChatDetailSheet.vue'
 import { getAssistantPreview } from '@/utils/chat-message'
 import { toLocalDateYmd } from '@/utils/date'
@@ -325,15 +328,40 @@ onMounted(async () => {
   await loadTodayMaterials()
 })
 
-function getLocation() {
+async function getLocation() {
+  const applyLocationContext = (context: LocationContext) => {
+    if (context.locationVisible) {
+      locationText.value = [context.district, context.township].filter(Boolean).join(' · ')
+        || context.city
+        || context.address
+        || locationText.value
+    } else if (context.weatherVisible) {
+      locationText.value = context.weatherText
+    }
+  }
+
   uni.getLocation({
     type: 'gcj02',
-    success: (res) => {
-      // 简单用经纬度模拟地址（真实场景需逆地理编码）
-      locationText.value = `${res.latitude.toFixed(4)}°N · 晴 22°`
+    success: async (res) => {
+      locationText.value = `${res.latitude.toFixed(4)}°N · ${res.longitude.toFixed(4)}°E`
+      try {
+        const context = await getLocationContext(res.latitude, res.longitude)
+        applyLocationContext(context)
+      } catch {
+        // 保留经纬度展示。
+      }
     },
-    fail: () => {
-      locationText.value = '位置未获取'
+    fail: async () => {
+      locationText.value = '正在用 IP 定位...'
+      try {
+        const context = await getIpLocationContext()
+        applyLocationContext(context)
+        if (!context.locationVisible && !context.weatherVisible) {
+          locationText.value = '位置未获取'
+        }
+      } catch {
+        locationText.value = '位置未获取'
+      }
     },
   })
 }
@@ -1068,6 +1096,15 @@ function handleBack() {
 
 .item-emotion-emoji {
   font-size: 22rpx;
+}
+
+.item-emotion-pending {
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #FFF7E8;
+  color: #B88446;
+  font-size: 20rpx;
+  line-height: 1.4;
 }
 
 .item-delete-btn {

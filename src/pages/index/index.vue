@@ -2,8 +2,6 @@
   <view class="page">
     <CustomNavBar
       title="日记"
-      left-icon="avatar"
-      @left-click="drawerVisible = true"
       @right-click="onSearch"
     >
       <template #right>
@@ -12,9 +10,6 @@
         </view>
       </template>
     </CustomNavBar>
-
-    <!-- 侧边栏 -->
-    <SideDrawer v-model:visible="drawerVisible" />
 
     <!-- NavBar 占位（fixed 定位后需要此占位撑开空间） -->
     <view class="nav-placeholder" :style="{ height: navPlaceholderHeight + 'px' }" />
@@ -82,13 +77,44 @@
               <text class="tl-type-icon">{{ matTypeIcon(mat.type) }}</text>
               <text class="tl-text" :class="{ 'tl-text-clamp': getTimelinePreview(mat).length > 20 }">{{ getTimelinePreview(mat) }}</text>
               <text v-if="mat.emotion" class="tl-emotion">{{ mat.emotion.emoji }}</text>
+              <text v-else class="tl-emotion-pending">分析情绪中...</text>
+            </view>
+          </view>
+        </view>
+
+        <view
+          v-if="false"
+          class="weather-edit-card"
+        >
+          <view class="weather-edit-header">
+            <view class="weather-edit-title">
+              <text class="weather-edit-icon">🌤️</text>
+              <text class="weather-edit-label">今天天气</text>
+            </view>
+            <text v-if="diaryWeatherLoading" class="weather-edit-status">获取中...</text>
+            <text v-else-if="diaryLocationText" class="weather-edit-status">{{ diaryLocationText }}</text>
+          </view>
+          <view class="weather-period-list">
+            <view
+              v-for="(period, index) in diaryWeatherPeriods"
+              :key="period.key"
+              class="weather-period-row"
+            >
+              <text class="weather-period-label">{{ period.label }}</text>
+              <input
+                class="weather-edit-input"
+                :value="period.weatherText"
+                placeholder="可填写或修改天气，如：晴 22℃"
+                placeholder-class="weather-edit-placeholder"
+                @input="handleDiaryWeatherInput(index, $event)"
+              />
             </view>
           </view>
         </view>
 
         <!-- 生成日记按钮 -->
         <view
-          v-if="todaySummary && todaySummary.material_count > 0 && !todaySummary.has_diary"
+          v-if="todaySummary && todaySummary.material_count > 0 && !todaySummary.has_diary && !hasTodayPendingDiary"
           class="generate-diary-btn press-feedback"
           :class="{ generating: generatingDiary }"
           @click="handleGenerateDiary"
@@ -224,18 +250,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
-import SideDrawer from '@/components/SideDrawer.vue'
 import DiaryCard from '@/components/DiaryCard.vue'
 import TabBar from '@/components/TabBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { getDiaries, generateDiary, getTodaySummary, deleteDiary } from '@/services/api/diary'
-import type { Diary, TodaySummary } from '@/services/api/diary'
+import type { Diary, TodaySummary, WeatherPeriod } from '@/services/api/diary'
 import { getTodayAnniversaries } from '@/services/api/anniversary'
 import type { Anniversary } from '@/services/api/anniversary'
+import { getIpLocationContext, getLocationContext } from '@/services/api/location'
+import type { LocationContext } from '@/services/api/location'
 import { getAssistantPreview } from '@/utils/chat-message'
 import { toLocalDateYmd } from '@/utils/date'
 
-const drawerVisible = ref(false)
 const diaries = ref<Diary[]>([])
 const loading = ref(false)
 const refreshing = ref(false)
@@ -251,6 +277,15 @@ const todaySummary = ref<TodaySummary | null>(null)
 const generatingDiary = ref(false)
 const regeneratingDiary = ref(false)
 const currentDateKey = ref(toLocalDateYmd())
+const defaultWeatherPeriods = (): WeatherPeriod[] => [
+  { key: 'morning', label: '上午', weatherText: '' },
+  { key: 'afternoon', label: '下午', weatherText: '' },
+  { key: 'evening', label: '晚上', weatherText: '' },
+]
+const diaryWeatherPeriods = ref<WeatherPeriod[]>(defaultWeatherPeriods())
+const diaryLocationText = ref('')
+const diaryWeatherLoading = ref(false)
+const diaryWeatherTouched = ref(false)
 
 interface PendingDiary {
   id: string
@@ -263,6 +298,20 @@ type DiaryListItem = Diary | PendingDiary
 
 const pendingDiaries = ref<PendingDiary[]>([])
 const hasDiaryListItems = computed(() => diaries.value.length > 0 || pendingDiaries.value.length > 0)
+const hasTodayPendingDiary = computed(() => {
+  const today = toLocalDateYmd()
+  return pendingDiaries.value.some(item => item.date === today)
+})
+const normalizedDiaryWeatherPeriods = computed<WeatherPeriod[]>(() => {
+  return diaryWeatherPeriods.value
+    .map(item => ({ ...item, weatherText: String(item.weatherText || '').trim() }))
+    .filter(item => item.weatherText)
+})
+const normalizedDiaryWeather = computed(() => {
+  return normalizedDiaryWeatherPeriods.value
+    .map(item => `${item.label}${item.weatherText}`)
+    .join('；')
+})
 
 // 状态栏 + NavBar 占位高度（px）
 const navPlaceholderHeight = ref(64) // 默认值，onMounted 后更新
@@ -371,6 +420,71 @@ const greetingActionArrow = computed(() => {
 
 let dayRefreshTimer: ReturnType<typeof setInterval> | null = null
 let dayRefreshPending = false
+let pendingRefreshTimer: ReturnType<typeof setInterval> | null = null
+const PENDING_DIARIES_STORAGE_KEY = 'avalin_pending_diaries_v1'
+const PENDING_DIARY_TTL_MS = 30 * 60 * 1000
+
+function handleDiaryWeatherInput(index: number, event: any) {
+  diaryWeatherTouched.value = true
+  const next = [...diaryWeatherPeriods.value]
+  if (!next[index]) return
+  next[index] = {
+    ...next[index],
+    weatherText: String(event?.detail?.value || ''),
+  }
+  diaryWeatherPeriods.value = next
+}
+
+function resetDiaryWeatherPeriods() {
+  diaryWeatherPeriods.value = defaultWeatherPeriods()
+}
+
+function applyDiaryWeatherPeriods(periods?: WeatherPeriod[], fallbackWeather = '') {
+  const source = Array.isArray(periods) && periods.length > 0
+    ? periods
+    : defaultWeatherPeriods().map(item => ({ ...item, weatherText: fallbackWeather }))
+  const sourceMap = new Map(source.map(item => [item.key, item]))
+  diaryWeatherPeriods.value = defaultWeatherPeriods().map(item => ({
+    ...item,
+    weatherText: String(sourceMap.get(item.key)?.weatherText || '').trim(),
+  }))
+}
+
+function getCurrentPosition(): Promise<{ latitude: number; longitude: number }> {
+  return new Promise((resolve, reject) => {
+    uni.getLocation({
+      type: 'gcj02',
+      success: (res) => resolve({ latitude: res.latitude, longitude: res.longitude }),
+      fail: reject,
+    })
+  })
+}
+
+async function refreshDiaryWeatherContext() {
+  if (diaryWeatherLoading.value) return
+  diaryWeatherLoading.value = true
+  try {
+    let context: LocationContext
+    try {
+      const position = await getCurrentPosition()
+      context = await getLocationContext(position.latitude, position.longitude)
+    } catch {
+      context = await getIpLocationContext()
+    }
+    diaryLocationText.value = context.locationVisible
+      ? [context.district, context.township].filter(Boolean).join(' · ') || context.city || context.address
+      : ''
+    const hasAnyWeather = diaryWeatherPeriods.value.some(item => item.weatherText.trim())
+    if (context.weatherVisible && (!diaryWeatherTouched.value || !hasAnyWeather)) {
+      applyDiaryWeatherPeriods(context.weatherPeriods, context.weatherText)
+      diaryWeatherTouched.value = false
+    }
+  } catch {
+    diaryLocationText.value = ''
+  } finally {
+    diaryWeatherLoading.value = false
+  }
+}
 
 async function refreshForNewDay(nextDate: string) {
   if (dayRefreshPending) return
@@ -378,8 +492,12 @@ async function refreshForNewDay(nextDate: string) {
   try {
     page.value = 1
     noMore.value = false
+    resetDiaryWeatherPeriods()
+    diaryLocationText.value = ''
+    diaryWeatherTouched.value = false
     await Promise.all([loadDiaries(1), loadAnniversaryData(nextDate)])
     currentDateKey.value = nextDate
+    void refreshDiaryWeatherContext()
   } finally {
     dayRefreshPending = false
   }
@@ -401,6 +519,60 @@ function stopDayRefreshWatcher() {
   dayRefreshTimer = null
 }
 
+function loadPendingDiariesFromStorage() {
+  try {
+    const raw = uni.getStorageSync(PENDING_DIARIES_STORAGE_KEY)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!Array.isArray(parsed)) return
+    const now = Date.now()
+    pendingDiaries.value = parsed.filter((item: PendingDiary) => (
+      item
+      && typeof item.id === 'string'
+      && (item.mode === 'generate' || item.mode === 'regenerate')
+      && typeof item.date === 'string'
+      && typeof item.createdAt === 'number'
+      && now - item.createdAt < PENDING_DIARY_TTL_MS
+    ))
+  } catch {
+    pendingDiaries.value = []
+  }
+}
+
+function savePendingDiariesToStorage() {
+  if (pendingDiaries.value.length === 0) {
+    uni.removeStorageSync(PENDING_DIARIES_STORAGE_KEY)
+    return
+  }
+  uni.setStorageSync(PENDING_DIARIES_STORAGE_KEY, JSON.stringify(pendingDiaries.value))
+}
+
+function cleanupPendingDiaries(summary?: TodaySummary | null) {
+  const now = Date.now()
+  const before = pendingDiaries.value.length
+  pendingDiaries.value = pendingDiaries.value.filter(item => {
+    if (now - item.createdAt >= PENDING_DIARY_TTL_MS) return false
+    if (summary?.date === item.date && summary.has_diary) return false
+    return true
+  })
+  if (pendingDiaries.value.length !== before) {
+    savePendingDiariesToStorage()
+  }
+}
+
+function startPendingRefreshWatcher() {
+  if (pendingRefreshTimer) clearInterval(pendingRefreshTimer)
+  pendingRefreshTimer = setInterval(() => {
+    if (pendingDiaries.value.length === 0) return
+    void refreshTodayState()
+  }, 5000)
+}
+
+function stopPendingRefreshWatcher() {
+  if (!pendingRefreshTimer) return
+  clearInterval(pendingRefreshTimer)
+  pendingRefreshTimer = null
+}
+
 function isPendingDiary(diary: DiaryListItem): diary is PendingDiary {
   return diary.id.startsWith('pending_diary_')
 }
@@ -419,12 +591,17 @@ function addPendingDiary(mode: PendingDiary['mode']): string {
     date: toLocalDateYmd(),
     createdAt: Date.now(),
   }
-  pendingDiaries.value = [pending, ...pendingDiaries.value]
+  pendingDiaries.value = [
+    pending,
+    ...pendingDiaries.value.filter(item => item.date !== pending.date),
+  ]
+  savePendingDiariesToStorage()
   return pending.id
 }
 
 function removePendingDiary(id: string) {
   pendingDiaries.value = pendingDiaries.value.filter(item => item.id !== id)
+  savePendingDiariesToStorage()
 }
 
 function replacePendingDiary(id: string, diary: Diary) {
@@ -437,6 +614,7 @@ async function refreshTodayState() {
   noMore.value = false
   await Promise.all([loadDiaries(1), loadAnniversaryData(toLocalDateYmd())])
   currentDateKey.value = toLocalDateYmd()
+  void refreshDiaryWeatherContext()
 }
 
 function handleMaterialsChanged(payload?: { date?: string }) {
@@ -450,22 +628,31 @@ onMounted(async () => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 50
+  loadPendingDiariesFromStorage()
   await loadDiaries(1)
   await loadAnniversaryData(currentDateKey.value)
+  void refreshDiaryWeatherContext()
   uni.$on('materials:changed', handleMaterialsChanged)
   startDayRefreshWatcher()
+  startPendingRefreshWatcher()
 })
 
 onShow(async () => {
   currentTime.value = new Date()
   const today = toLocalDateYmd()
-  if (today === currentDateKey.value) return
+  if (today === currentDateKey.value) {
+    if (pendingDiaries.value.length > 0) {
+      await refreshTodayState()
+    }
+    return
+  }
   await refreshForNewDay(today)
 })
 
 onUnmounted(() => {
   uni.$off('materials:changed', handleMaterialsChanged)
   stopDayRefreshWatcher()
+  stopPendingRefreshWatcher()
 })
 
 async function loadAnniversaryData(date: string = toLocalDateYmd()) {
@@ -477,6 +664,7 @@ async function loadAnniversaryData(date: string = toLocalDateYmd()) {
     todayAnniversaries.value = todayData?.anniversaries || []
     todayHistory.value = todayData?.thisDateInHistory || []
     todaySummary.value = summary
+    cleanupPendingDiaries(summary)
   } catch {
     todayAnniversaries.value = []
     todayHistory.value = []
@@ -495,7 +683,7 @@ function handleGenerateDiary() {
 async function generateDiaryInBackground(pendingId: string) {
   try {
     const today = toLocalDateYmd()
-    const diary = await generateDiary(today, '多云 18°C')
+    const diary = await generateDiary(today, normalizedDiaryWeather.value || undefined, normalizedDiaryWeatherPeriods.value)
     replacePendingDiary(pendingId, diary)
     await loadAnniversaryData(today)
     currentDateKey.value = today
@@ -535,7 +723,7 @@ async function regenerateDiaryInBackground(pendingId: string, oldDiaryId?: strin
     if (oldDiaryId) {
       await deleteDiary(oldDiaryId)
     }
-    const diary = await generateDiary(today, '多云 18°C')
+    const diary = await generateDiary(today, normalizedDiaryWeather.value || undefined, normalizedDiaryWeatherPeriods.value)
     replacePendingDiary(pendingId, diary)
     await loadAnniversaryData(today)
     currentDateKey.value = today
@@ -573,6 +761,7 @@ async function onRefresh() {
   noMore.value = false
   await Promise.all([loadDiaries(1), loadAnniversaryData(toLocalDateYmd())])
   currentDateKey.value = toLocalDateYmd()
+  void refreshDiaryWeatherContext()
   refreshing.value = false
   uni.showToast({ title: '刷新成功', icon: 'success' })
 }
@@ -898,6 +1087,94 @@ function onActionClick(payload: { action: string; diaryId: string }) {
 .tl-emotion {
   font-size: 24rpx;
   flex-shrink: 0;
+}
+
+.tl-emotion-pending {
+  flex-shrink: 0;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #FFF7E8;
+  color: #B88446;
+  font-size: 20rpx;
+  line-height: 1.4;
+}
+
+.weather-edit-card {
+  margin: 4rpx 0 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 248, 240, 0.9);
+  border: 1px solid rgba(232, 133, 90, 0.12);
+}
+
+.weather-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.weather-edit-title {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
+.weather-edit-icon {
+  font-size: 26rpx;
+}
+
+.weather-edit-label {
+  font-size: 24rpx;
+  color: #6f5544;
+  font-weight: 700;
+}
+
+.weather-edit-status {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 22rpx;
+  color: #ae9d92;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.weather-period-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.weather-period-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.weather-period-label {
+  width: 72rpx;
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #7A6656;
+  font-weight: 600;
+}
+
+.weather-edit-input {
+  flex: 1;
+  min-height: 58rpx;
+  padding: 0 16rpx;
+  border-radius: 14rpx;
+  background: #ffffff;
+  font-size: 26rpx;
+  color: #4a3628;
+}
+
+.weather-edit-placeholder {
+  color: #c2b5ac;
 }
 
 /* 生成日记按钮 */
