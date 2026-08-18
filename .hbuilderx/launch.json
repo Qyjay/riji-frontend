@@ -3,7 +3,8 @@
     "configurations" : [
         {
             "customPlaygroundType" : "device",
-            "playground" : "custom",
+            "packageName" : "com.vivo.hybrid.sdkdemo",
+            "playground" : "standard",
             "type" : "uni-app:app-android"
         }
     ]

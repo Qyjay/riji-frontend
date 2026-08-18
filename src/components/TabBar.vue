@@ -1,5 +1,5 @@
 <template>
-  <view v-if="visible" class="tabbar-wrapper">
+  <view class="tabbar-wrapper">
     <!-- 双路径选择面板 -->
       <view v-if="showActionSheet" class="action-sheet-overlay" @click="closeActionSheet">
         <view class="action-panel" @click.stop>
@@ -84,7 +84,6 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
 import DoodleIcon from './DoodleIcon.vue'
 
 const props = defineProps<{
@@ -94,59 +93,14 @@ const props = defineProps<{
 const activeIndex = ref(props.current ?? 0)
 const showActionSheet = ref(false)
 
-// 只在 Tab 一级页面显示 TabBar
-const visible = ref(true)
-
-// 不应显示 TabBar 的二级页面路由
-const HIDE_ROUTES = [
-  'pages/growth/index',
-  'pages/growth/achievements',
-  'pages/novel/index',
-  'pages/novel/reader',
-  'pages/social/match',
-  'pages/social/chat',
-  'pages/profile/settings',
-  'pages/profile/agent-portrait',
-  'pages/profile/semester-report',
-  'pages/settings/about',
-  'pages/diary/detail',
-  'pages/diary/comic',
-  'pages/diary/share-card',
-  'pages/diary/emotion-calendar',
-  'pages/diary/style-engine',
-  'pages/study/pomodoro',
-  'pages/study/todo',
-  'pages/fortune/index',
-  'pages/chat/index',
-  'pages/plaza/post',
-  'pages/plaza/detail',
-  'pages/profile/avatar-memory',
-]
-
-onShow(() => {
-  try {
-    const pages = getCurrentPages()
-    if (!pages || pages.length === 0) {
-      visible.value = true
-      return
-    }
-    const currentPage = pages[pages.length - 1]
-    const route = currentPage.route || ''
-    const shouldHide = HIDE_ROUTES.some(r => route === r || route.startsWith(r))
-    visible.value = !shouldHide
-  } catch (_) {
-    visible.value = true
-  }
-})
-
 watch(() => props.current, (v) => {
   if (v !== undefined) activeIndex.value = v
 })
 
 const tabs = [
-  { iconName: 'book',     text: '日记',  path: '/pages/index/index' },
-  { iconName: 'discover', text: '发现',  path: '/pages/discover/index' },
-  { iconName: 'pen',      text: '写',    path: '/pages/write/index' },
+  { iconName: 'book',     text: '记忆',  path: '/pages/index/index' },
+  { iconName: 'robot',    text: '找朋友', path: '/pages/social/index' },
+  { iconName: 'pen',      text: '记录',  path: '/pages/write/index' },
   { iconName: 'chat',     text: '消息',  path: '/pages/messages/index' },
   { iconName: 'user',     text: '我的',  path: '/pages/profile/index' },
 ]

@@ -58,6 +58,10 @@
             <text class="unread-num">{{ buddy.unread }}</text>
           </view>
         </view>
+        <view v-if="buddyMessages.length === 0" class="buddy-empty" @click="openSocial">
+          <text class="buddy-empty-title">还没有已连接的搭子</text>
+          <text class="buddy-empty-desc">去分身中心查看 AtoA 试聊结果</text>
+        </view>
       </view>
 
       <!-- ── 系统通知 ── -->
@@ -99,17 +103,21 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { useChatStore } from '@/stores/chat'
 import { getAssistantPreview } from '@/utils/chat-message'
+import { getMatches } from '@/services/api/social'
+import type { Match } from '@/services/api/social'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
 const chatStore = useChatStore()
 const { lastPreview } = storeToRefs(chatStore)
+const acceptedMatches = ref<Match[]>([])
 
 onMounted(() => {
   const info = uni.getSystemInfoSync()
@@ -118,6 +126,14 @@ onMounted(() => {
   if (!lastPreview.value) {
     chatStore.loadHistory().catch(() => undefined)
   }
+})
+
+onShow(() => {
+  getMatches().then((items) => {
+    acceptedMatches.value = items
+  }).catch(() => {
+    acceptedMatches.value = []
+  })
 })
 
 const aiPreview = computed(() => {
@@ -145,35 +161,26 @@ const aiTime = computed(() => {
   return '昨天'
 })
 
-const buddyMessages = [
-  {
-    id: 1,
-    iconName: 'bookopen',
-    avatarBg: 'linear-gradient(135deg, #7BB8D4, #A8D4E8)',
-    name: '学习搭子 · 小明',
-    lastMsg: '明天一起去图书馆吗？',
-    time: '3小时前',
-    unread: 0,
-  },
-  {
-    id: 2,
-    iconName: 'run',
-    avatarBg: 'linear-gradient(135deg, #F2B49B, #F7CDB5)',
-    name: '运动搭子 · 小红',
-    lastMsg: '晨跑 6:30，老地方见！',
-    time: '昨天',
-    unread: 1,
-  },
-  {
-    id: 3,
-    iconName: 'heart',
-    avatarBg: 'linear-gradient(135deg, #5BAF85, #8ECFAD)',
-    name: '美食搭子 · 小华',
-    lastMsg: '发现了一家新开的奶茶店！',
-    time: '2天前',
-    unread: 0,
-  },
-]
+const buddyMessages = computed(() => acceptedMatches.value.map((match, index) => ({
+  id: match.id,
+  iconName: index % 2 === 0 ? 'handshake' : 'chat',
+  avatarBg: index % 2 === 0 ? '#D7855D' : '#6B9278',
+  name: match.nickname,
+  lastMsg: match.reason || '你们已经完成双方确认，可以开始真人交流。',
+  time: formatMatchTime(match.matchedAt),
+  unread: 0,
+  matchId: match.id,
+  avatar: match.avatar,
+  missionId: match.missionId,
+  missionMode: match.missionMode,
+})))
+
+function formatMatchTime(timestamp: number) {
+  const diffHours = Math.max(0, Math.floor((Date.now() - timestamp) / 3600000))
+  if (diffHours < 1) return '刚刚'
+  if (diffHours < 24) return `${diffHours}小时前`
+  return `${Math.floor(diffHours / 24)}天前`
+}
 
 const systemNotifications = [
   {
@@ -202,8 +209,20 @@ function openAI() {
   uni.navigateTo({ url: '/pages/chat/index' })
 }
 
+function openSocial() {
+  uni.redirectTo({ url: '/pages/social/index' })
+}
+
 function openBuddy(buddy: any) {
-  uni.showToast({ title: '搭子聊天开发中', icon: 'none' })
+  if (buddy.missionMode === 'short_term' && buddy.missionId) {
+    uni.navigateTo({
+      url: `/pages/social/activity-room?matchId=${encodeURIComponent(buddy.matchId)}`,
+    })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/social/chat?matchId=${encodeURIComponent(buddy.matchId)}&nickname=${encodeURIComponent(buddy.name)}&avatar=${encodeURIComponent(buddy.avatar || '')}`,
+  })
 }
 
 function handleSystemNotif(notif: any) {
@@ -241,7 +260,7 @@ function handleSystemNotif(notif: any) {
   padding: 28rpx 32rpx;
   background: #FFFFFF;
   border-radius: 32rpx 40rpx 28rpx 36rpx;
-  border-left: 6rpx solid #E8855A;
+  border: 1rpx solid #E4D6CB;
   box-shadow: 2px 3px 0 rgba(232, 133, 90, 0.08), 0 2px 8px rgba(0, 0, 0, 0.05);
   cursor: pointer;
 }
@@ -382,6 +401,17 @@ function handleSystemNotif(notif: any) {
   text-overflow: ellipsis;
   display: block;
 }
+
+.buddy-empty {
+  padding: 40rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.buddy-empty-title { font-size: 28rpx; color: #45352C; font-weight: 600; }
+.buddy-empty-desc { font-size: 24rpx; color: #A05C3C; }
 
 /* ── 系统通知 ── */
 .system-list {

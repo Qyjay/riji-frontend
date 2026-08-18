@@ -3,10 +3,6 @@
 // 如需在其他页面拦截未登录，可在对应页面 onLoad 中检查
 </script>
 
-<template>
-  <router-view v-if="false" />
-</template>
-
 <style lang="scss">
 // 引入手绘风格规范（§11）
 @import './common/styles/handdrawn.scss';
@@ -108,13 +104,6 @@ view, text, input, textarea, scroll-view, swiper, image {
 .font-mono {
   font-family: "DIN Alternate", "SF Mono", monospace;
   font-variant-numeric: tabular-nums;
-}
-
-.text-gradient {
-  background: linear-gradient(135deg, #E8855A 0%, #F0A882 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .clickable {

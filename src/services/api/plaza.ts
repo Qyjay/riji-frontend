@@ -29,6 +29,20 @@ export interface PlazaPost {
   isFromAgent: boolean
   allowAgentReply: boolean
   schoolOnly: boolean
+  missionId?: string
+  opportunityMode?: 'short_term' | 'long_term'
+  category?: string
+  startAt?: number
+  endAt?: number
+  applyDeadline?: number
+  locationPrecision?: 'city' | 'district' | 'campus' | 'venue'
+  slotsTotal?: number
+  slotsRemaining?: number
+  allowWaitlist?: boolean
+  budget?: Record<string, unknown>
+  requirements?: string[]
+  opportunityStatus?: 'open' | 'full' | 'confirmed' | 'completed' | 'expired' | 'cancelled'
+  agentProbeEnabled?: boolean
 }
 
 export interface PlazaComment {
@@ -99,6 +113,19 @@ export async function createPost(data: {
   tags?: string[]
   allowAgentReply?: boolean
   schoolOnly?: boolean
+  opportunityMode?: 'short_term' | 'long_term'
+  category?: string
+  startAt?: number
+  endAt?: number
+  applyDeadline?: number
+  locationPrecision?: 'city' | 'district' | 'campus' | 'venue'
+  slotsTotal?: number
+  slotsRemaining?: number
+  allowWaitlist?: boolean
+  budget?: Record<string, unknown>
+  requirements?: string[]
+  opportunityStatus?: 'open' | 'full' | 'confirmed' | 'completed' | 'expired' | 'cancelled'
+  agentProbeEnabled?: boolean
 }): Promise<PlazaPost> {
   if (USE_MOCK) {
     return mock.createPost({
@@ -116,9 +143,38 @@ export async function createPost(data: {
       isFromAgent: false,
       allowAgentReply: data.allowAgentReply ?? true,
       schoolOnly: data.schoolOnly ?? false,
+      opportunityMode: data.opportunityMode,
+      category: data.category,
+      startAt: data.startAt,
+      endAt: data.endAt,
+      applyDeadline: data.applyDeadline,
+      locationPrecision: data.locationPrecision,
+      slotsTotal: data.slotsTotal,
+      slotsRemaining: data.slotsRemaining,
+      allowWaitlist: data.allowWaitlist,
+      budget: data.budget,
+      requirements: data.requirements,
+      opportunityStatus: data.opportunityStatus,
+      agentProbeEnabled: data.agentProbeEnabled,
     })
   }
-  return request<PlazaPost>({ url: '/plaza/posts', method: 'POST', data })
+  return request<PlazaPost>({
+    url: '/plaza/posts',
+    method: 'POST',
+    data: {
+      ...data,
+      opportunity_mode: data.opportunityMode,
+      start_at: data.startAt,
+      end_at: data.endAt,
+      apply_deadline: data.applyDeadline,
+      location_precision: data.locationPrecision,
+      slots_total: data.slotsTotal,
+      slots_remaining: data.slotsRemaining,
+      allow_waitlist: data.allowWaitlist,
+      opportunity_status: data.opportunityStatus,
+      agent_probe_enabled: data.agentProbeEnabled,
+    },
+  })
 }
 
 export async function likePost(id: string): Promise<void> {

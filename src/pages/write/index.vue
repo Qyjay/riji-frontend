@@ -331,7 +331,11 @@ onMounted(async () => {
 async function getLocation() {
   const applyLocationContext = (context: LocationContext) => {
     if (context.locationVisible) {
-      locationText.value = [context.district, context.township].filter(Boolean).join(' · ')
+      locationText.value = context.detailedAddress
+        || context.poi
+        || context.aoi
+        || (context.street ? `${context.street}${context.streetNumber}` : '')
+        || [context.district, context.township].filter(Boolean).join(' · ')
         || context.city
         || context.address
         || locationText.value
@@ -545,7 +549,7 @@ async function startRecording() {
   if (isRecording.value) return
   // #ifdef H5
   await startH5Recording()
-  return
+  return undefined
   // #endif
 
   initUniRecorder()
@@ -569,7 +573,7 @@ function stopRecording() {
 
   // #ifdef H5
   h5MediaRecorder?.stop()
-  return
+  return undefined
   // #endif
 
   recorderManager?.stop()

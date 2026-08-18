@@ -42,6 +42,17 @@ export interface AvatarStatus {
     autoReplyIntervalMinutes?: number
     autoReplyMinScore?: number
   }
+  surfFrequency: string
+  surfWindow: { start: string; end: string; timezone: string }
+  personalizedSurfPlan: Record<string, unknown>
+  nextSurfAt: number
+  lastSurfAt: number
+  dailySurfCount: number
+  dailyActionCount: number
+  quietMode: boolean
+  autoMatchEnabled: boolean
+  autoCommentEnabled: boolean
+  autoPublishEnabled: boolean
 }
 
 export interface AvatarProfile {
@@ -79,6 +90,65 @@ export interface AutoSurfResult {
   publishedCount: number
   draftCount: number
   skippedReason: string
+}
+
+export interface AtoaConversationTurn {
+  role: 'avatar_a' | 'avatar_b'
+  content: string
+}
+
+export interface AtoaProbe {
+  id: string
+  sessionId?: string
+  userBId: string
+  userBName: string
+  userBAvatar: string
+  interactionType: string
+  outcome: 'pending_user_decision' | 'blocked' | 'connected' | 'connect_confirmed' | 'connect_rejected' | string
+  readableOutcome: string
+  scoreA: number
+  scoreB: number
+  sharedTopics: string[]
+  reasonsA: string[]
+  conversation: AtoaConversationTurn[]
+  riskFlags: string[]
+  interactionPhase: number
+  userDecision?: string
+  isMutual: boolean
+  triggeredMatchId?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AtoaSession {
+  id: string
+  status: string
+  candidateCount: number
+  excludedCount: number
+  pendingCount: number
+  decidedCount: number
+  surfLogId?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SurfJob {
+  id: string
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  trigger: string
+  attempts: number
+  result: Record<string, any>
+  errorMessage: string
+  createdAt: number
+  startedAt?: number
+  finishedAt?: number
+  updatedAt: number
+}
+
+export interface AtoaDecisionResult {
+  outcome: string
+  socialMatchId?: string
+  replacementInteractionId?: string
 }
 
 // ── 记忆 ──────────────────────────────────────────────────────────
@@ -121,8 +191,75 @@ export async function updateAvatarStatus(fields: Partial<AvatarStatus>): Promise
       enabled_channels: fields.enabledChannels,
       enabled_actions: fields.enabledActions,
       match_range: fields.matchRange,
+      surf_frequency: fields.surfFrequency,
+      surf_window: fields.surfWindow,
+      quiet_mode: fields.quietMode,
+      auto_match_enabled: fields.autoMatchEnabled,
+      auto_comment_enabled: fields.autoCommentEnabled,
+      auto_publish_enabled: fields.autoPublishEnabled,
     },
   })
+}
+
+// ── AtoA 预社交 ──────────────────────────────────────────────────
+
+export async function getAtoaProbes(outcome?: string, sessionId?: string): Promise<AtoaProbe[]> {
+  if (USE_MOCK) return mock.getAtoaProbes(outcome)
+  const params = new URLSearchParams()
+  if (outcome) params.set('outcome', outcome)
+  if (sessionId) params.set('session_id', sessionId)
+  const query = params.toString() ? `?${params}` : ''
+  return request<AtoaProbe[]>({ url: `/avatar/probe-log${query}` })
+}
+
+export async function getAtoaSessions(): Promise<AtoaSession[]> {
+  if (USE_MOCK) return mock.getAtoaSessions()
+  return request<AtoaSession[]>({ url: '/avatar/atoa/sessions' })
+}
+
+export async function continueAtoaConversation(interactionId: string): Promise<{
+  id: string
+  outcome: string
+  interactionPhase: number
+  newTurns: AtoaConversationTurn[]
+  conversation: AtoaConversationTurn[]
+  updatedAt: number
+}> {
+  if (USE_MOCK) return mock.continueAtoaConversation(interactionId)
+  return request({
+    url: `/avatar/atoa/${interactionId}/continue`,
+    method: 'POST',
+    timeout: 90000,
+  })
+}
+
+export async function decideAtoa(
+  interactionId: string,
+  decision: 'block' | 'connect',
+  openingMessage?: string,
+): Promise<AtoaDecisionResult> {
+  if (USE_MOCK) return mock.decideAtoa(interactionId, decision)
+  return request<AtoaDecisionResult>({
+    url: `/avatar/atoa/${interactionId}/decide`,
+    method: 'POST',
+    data: { decision, opening_message: openingMessage },
+    timeout: 90000,
+  })
+}
+
+export async function createSurfJob(): Promise<SurfJob> {
+  if (USE_MOCK) return mock.createSurfJob()
+  return request<SurfJob>({ url: '/avatar/surf/jobs', method: 'POST' })
+}
+
+export async function getSurfJob(jobId: string): Promise<SurfJob> {
+  if (USE_MOCK) return mock.getSurfJob(jobId)
+  return request<SurfJob>({ url: `/avatar/surf/jobs/${jobId}` })
+}
+
+export async function getLatestSurfJob(): Promise<SurfJob | null> {
+  if (USE_MOCK) return mock.getLatestSurfJob()
+  return request<SurfJob | null>({ url: '/avatar/surf/jobs/latest' })
 }
 
 // ── 分身侧写 ──────────────────────────────────────────────────────

@@ -5,6 +5,11 @@ export interface LocationContext {
   locationVisible: boolean
   weatherVisible: boolean
   address: string
+  detailedAddress: string
+  poi: string
+  aoi: string
+  street: string
+  streetNumber: string
   province: string
   city: string
   district: string

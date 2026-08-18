@@ -7,6 +7,29 @@
     <scroll-view scroll-y class="scroll-area" :style="{ height: scrollHeight + 'px' }">
       <view class="content">
 
+        <!-- ===== 骨架加载 ===== -->
+        <template v-if="loading">
+          <view class="card">
+            <view class="sk-row sk-row-between">
+              <Skeleton :width="200" :height="40" />
+              <Skeleton :width="120" :height="36" />
+            </view>
+            <Skeleton :width="'100%'" :height="16" :margin-bottom="12" />
+            <Skeleton :width="160" :height="22" />
+          </view>
+          <view v-for="g in 2" :key="g" class="card">
+            <Skeleton :width="200" :height="26" :margin-bottom="28" />
+            <view class="sk-grid">
+              <view v-for="n in 6" :key="n" class="sk-grid-item">
+                <Skeleton variant="circle" :width="80" :height="80" :margin-bottom="12" />
+                <Skeleton :width="120" :height="22" :margin-bottom="8" />
+                <Skeleton :width="160" :height="20" />
+              </view>
+            </view>
+          </view>
+        </template>
+
+        <template v-else>
         <!-- ===== 顶部统计卡片 ===== -->
         <view class="card summary-card doodle-box-v2">
           <view class="summary-header">
@@ -67,6 +90,7 @@
         </view>
 
         <view class="bottom-spacer"></view>
+        </template>
       </view>
     </scroll-view>
   </view>
@@ -76,11 +100,13 @@
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { getAchievements, type Achievement as ApiAchievement } from '@/services/api/user'
 
 // ===== 滚动高度 =====
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
+const loading = ref(true)
 onMounted(() => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
@@ -147,6 +173,8 @@ async function loadAchievements() {
     }))
   } catch (e) {
     allAchievements.value = []
+  } finally {
+    loading.value = false
   }
 }
 
@@ -384,5 +412,35 @@ function handleAchClick(ach: Achievement) {
 /* ===== 底部留白 ===== */
 .bottom-spacer {
   height: 48rpx;
+}
+
+/* ===== 骨架辅助布局 ===== */
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.sk-row-between {
+  justify-content: space-between;
+}
+
+.sk-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.sk-grid-item {
+  width: calc((100% - 32rpx) / 3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16rpx 8rpx;
+  background: #FFFFFF;
+  border-radius: 14rpx;
+  border: 1rpx solid #F0EAE4;
+  box-sizing: border-box;
 }
 </style>

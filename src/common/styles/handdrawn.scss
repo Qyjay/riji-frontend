@@ -3,20 +3,9 @@
 // 作者：Iris 🎨 | 实现：BB 🔮
 // ══════════════════════════════════════════════════════════════════
 
-// ── §11.2 手写字体 ──────────────────────────────────────────────
-@import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
-
-@font-face {
-  font-family: 'ZcoolKuaiLe';
-  src: url('https://fonts.gstatic.com/s/zcoolkuaile/v19/tssqApdaRQokwFjFJjvM6h2WpozzoXhC2g.woff2') format('woff2');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
 // 手写字体工具类
 .font-handwrite {
-  font-family: 'ZcoolKuaiLe', 'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', 'PingFang SC', sans-serif !important;
+  font-family: 'XiaoKeNaiLao', 'STXingkai', 'KaiTi', 'PingFang SC', sans-serif !important;
   letter-spacing: 2rpx;
 }
 

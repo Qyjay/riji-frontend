@@ -43,6 +43,44 @@
             </view>
           </view>
 
+          <view v-if="post.opportunityMode" class="opportunity-panel">
+            <view class="opportunity-head">
+              <text class="opportunity-title">{{ post.opportunityMode === 'short_term' ? '活动信息' : '寻友信息' }}</text>
+              <view class="opportunity-state" :class="post.opportunityStatus || 'open'">
+                <text>{{ opportunityStatusLabel(post) }}</text>
+              </view>
+            </view>
+            <view class="opportunity-facts">
+              <view class="opportunity-fact">
+                <DoodleIcon name="calendar" :size="29" color="#5D7D96" />
+                <text>{{ opportunityTime(post) }}</text>
+              </view>
+              <view class="opportunity-fact">
+                <DoodleIcon name="user" :size="29" color="#5D7D96" />
+                <text>{{ opportunitySlots(post) }}</text>
+              </view>
+              <view class="opportunity-fact">
+                <DoodleIcon name="pin" :size="29" color="#5D7D96" />
+                <text>{{ post.location || '地点待确认' }}</text>
+              </view>
+              <view class="opportunity-fact">
+                <DoodleIcon name="target" :size="29" color="#5D7D96" />
+                <text>{{ opportunityBudget(post) }}</text>
+              </view>
+            </view>
+            <view v-if="post.requirements?.length" class="opportunity-requirements">
+              <text v-for="item in post.requirements" :key="item">{{ item }}</text>
+            </view>
+            <view
+              v-if="post.opportunityStatus === 'open' || !post.opportunityStatus"
+              class="agent-ask-action"
+              @click="askAgentAboutPost"
+            >
+              <DoodleIcon name="robot" :size="30" color="#FFF9F5" />
+              <text>让分身帮我问清楚</text>
+            </view>
+          </view>
+
           <!-- 正文 -->
           <text class="post-content">{{ post.content }}</text>
 
@@ -201,6 +239,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import DoodleIcon from '@/components/DoodleIcon.vue'
 import {
   getPostDetail,
   getPostComments,
@@ -212,6 +251,8 @@ import {
 import type { PlazaPost, PlazaComment, AgentMatch } from '@/services/api/plaza'
 import { approveAgentAction, rejectAgentAction } from '@/services/api/avatar'
 import type { AgentAction } from '@/services/api/avatar'
+import type { MissionDraft } from '@/services/api/mission'
+import { saveMissionDraft } from '@/utils/mission'
 
 const navBarHeight = ref(64)
 const postId = ref('')
@@ -222,7 +263,7 @@ onLoad((options: any) => {
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
-  navBarHeight.value = (info.statusBarHeight ?? 20) + 44
+  navBarHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20) + 44
 
   if (postId.value) {
     await loadPost(postId.value)
@@ -295,6 +336,97 @@ function handleMore() {
 // 分身继续聊
 function handleAgentContinue() {
   uni.showToast({ title: '分身已继续对话', icon: 'none' })
+}
+
+function opportunityTime(item: PlazaPost) {
+  if (!item.startAt) return '时间可商量'
+  const date = new Date(item.startAt)
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${minute}`
+}
+
+function opportunitySlots(item: PlazaPost) {
+  if (item.slotsRemaining === undefined || item.slotsRemaining === null) return '名额待确认'
+  if (item.slotsRemaining <= 0) return item.allowWaitlist ? '已满，可候补' : '已组满'
+  return `还差 ${item.slotsRemaining} 人`
+}
+
+function opportunityBudget(item: PlazaPost) {
+  const budget = item.budget || {}
+  if (budget.type === 'free') return '免费'
+  if (budget.type === 'range') return `人均 ${budget.min || 0} 到 ${budget.max || 0} 元`
+  if (budget.type === 'host') return '发起人安排'
+  return '默认 AA'
+}
+
+function opportunityStatusLabel(item: PlazaPost) {
+  const labels: Record<string, string> = {
+    open: '招募中',
+    full: '已组满',
+    confirmed: '已确认',
+    completed: '已结束',
+    expired: '已过期',
+    cancelled: '已取消',
+  }
+  return labels[item.opportunityStatus || 'open'] || '招募中'
+}
+
+function askAgentAboutPost() {
+  if (!post.value) return
+  const mode = post.value.opportunityMode || 'short_term'
+  const rawBudget = post.value.budget || {}
+  const rawBudgetType = String(rawBudget.type || 'aa')
+  const budgetType: MissionDraft['budget']['type'] = (
+    ['free', 'aa', 'range', 'host'].includes(rawBudgetType)
+      ? rawBudgetType
+      : 'aa'
+  ) as MissionDraft['budget']['type']
+  const draft: MissionDraft = {
+    mode,
+    purposeType: post.value.category || (mode === 'short_term' ? 'activity' : 'friendship'),
+    title: post.value.content.slice(0, 28),
+    description: `我对这个公开招募感兴趣：${post.value.content}`,
+    source: 'plaza_post',
+    timeWindow: {
+      label: opportunityTime(post.value),
+      startAt: post.value.startAt,
+      endAt: post.value.endAt,
+      flexibilityMinutes: 60,
+    },
+    location: {
+      label: post.value.location || post.value.authorSchool || '位置待确认',
+      radiusKm: 5,
+      precision: post.value.locationPrecision || 'district',
+    },
+    headcount: {
+      current: 1,
+      wanted: 1,
+      allowWaitlist: Boolean(post.value.allowWaitlist),
+    },
+    budget: {
+      type: budgetType,
+      min: typeof rawBudget.min === 'number' ? rawBudget.min : undefined,
+      max: typeof rawBudget.max === 'number' ? rawBudget.max : undefined,
+    },
+    mustHaves: post.value.requirements || [],
+    preferences: post.value.tags,
+    boundaries: [],
+    publicMemoryIds: [],
+    permissions: {
+      search: true,
+      atoaProbe: true,
+      draftPost: false,
+      draftReply: true,
+      autoPublish: false,
+      autoConnect: false,
+    },
+    searchStrategy: 'search_only',
+    expiresAt: post.value.applyDeadline || post.value.endAt,
+  }
+  saveMissionDraft(draft)
+  uni.navigateTo({
+    url: mode === 'short_term' ? '/pages/social/mission-short' : '/pages/social/mission-long',
+  })
 }
 
 // 评论
@@ -573,6 +705,86 @@ function toggleThink(commentId: string) {
 .type-tag-text {
   font-size: 22rpx;
   font-weight: 500;
+}
+
+.opportunity-panel {
+  margin: 28rpx 0 24rpx;
+  padding: 22rpx;
+  border-radius: 24rpx;
+  background: #EDF4F8;
+  border: 1rpx solid #D5E2EA;
+}
+
+.opportunity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+
+.opportunity-title {
+  color: #3F5669;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.opportunity-state {
+  padding: 7rpx 12rpx;
+  border-radius: 13rpx;
+  background: #DCEBE2;
+  color: #48745B;
+  font-size: 20rpx;
+  font-weight: 600;
+}
+
+.opportunity-state.full,
+.opportunity-state.expired,
+.opportunity-state.cancelled {
+  background: #E9E1DB;
+  color: #78665B;
+}
+
+.opportunity-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14rpx 18rpx;
+}
+
+.opportunity-fact {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: #566D80;
+  font-size: 22rpx;
+}
+
+.opportunity-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 18rpx;
+}
+
+.opportunity-requirements text {
+  padding: 7rpx 12rpx;
+  border-radius: 13rpx;
+  background: #FFFDFC;
+  color: #6E6170;
+  font-size: 20rpx;
+}
+
+.agent-ask-action {
+  min-height: 76rpx;
+  margin-top: 20rpx;
+  border-radius: 20rpx;
+  background: #5C82A3;
+  color: #FFF9F5;
+  font-size: 24rpx;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
 }
 
 .post-content {

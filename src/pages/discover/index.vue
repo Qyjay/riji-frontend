@@ -1,7 +1,7 @@
 <template>
   <view class="page">
     <!-- ① NavBar -->
-    <CustomNavBar title="广场">
+    <CustomNavBar title="广场" left-icon="back">
       <template #right>
         <view class="nav-right-icons">
           <text class="nav-icon" @click="go('/pages/messages/notifications')">🔔</text>
@@ -244,7 +244,7 @@ const scrollHeight = ref(600)
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
-  navHeight.value = (info.statusBarHeight ?? 20) + 44
+  navHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20) + 44
   // TabBar 约 60px
   scrollHeight.value = info.windowHeight - navHeight.value - 60
 
@@ -420,7 +420,8 @@ const toolboxItems = [
   { key: 'comic',        iconName: 'grid',      iconColor: '#5CA06E', borderColor: '#9BC8A8', name: '漫画生成', toast: '' },
   { key: 'share-card',   iconName: 'share',     iconColor: '#D4728A', borderColor: '#E8A0B4', name: '分享卡片', toast: '' },
   { key: 'style-engine', iconName: 'wand',      iconColor: '#9B72C8', borderColor: '#C4A8E8', name: '文风引擎', toast: '' },
-  { key: 'pomodoro',     iconName: 'tomato',    iconColor: '#E8855A', borderColor: '#F2B49B', name: '番茄钟',   toast: '' },
+  // 暂时隐藏番茄钟入口
+  // { key: 'pomodoro',     iconName: 'tomato',    iconColor: '#E8855A', borderColor: '#F2B49B', name: '番茄钟',   toast: '' },
   { key: 'todo',         iconName: 'list',      iconColor: '#C87290', borderColor: '#E8B4C4', name: '待办清单', toast: '' },
   { key: 'growth',       iconName: 'chart',     iconColor: '#C8A86B', borderColor: '#E8C49B', name: '成长轨迹', toast: '' },
   { key: 'achievements', iconName: 'trophy',    iconColor: '#C8A86B', borderColor: '#E8C49B', name: '成就系统', toast: '' },
@@ -431,7 +432,7 @@ const toolboxRoutes: Record<string, string> = {
   comic:          '/pages/diary/comic',
   'share-card':   '/pages/diary/share-card',
   'style-engine': '/pages/diary/style-engine',
-  pomodoro:       '/pages/study/pomodoro',
+  // pomodoro:       '/pages/study/pomodoro',
   todo:           '/pages/study/todo',
   growth:         '/pages/growth/index',
   achievements:   '/pages/growth/achievements',

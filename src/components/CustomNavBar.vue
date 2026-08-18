@@ -54,7 +54,7 @@ const avatarUrl = ref(resolveAvatarUrl(getCurrentUser()?.avatar))
 
 onMounted(() => {
   const info = uni.getSystemInfoSync()
-  statusBarHeight.value = info.statusBarHeight ?? 20
+  statusBarHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20)
   void refreshAvatar()
 })
 
@@ -69,7 +69,12 @@ defineExpose({ statusBarHeight, totalHeightPx })
 
 function handleLeftClick() {
   if (props.leftIcon === 'back') {
-    uni.navigateBack()
+    const pages = getCurrentPages()
+    if (pages.length > 1) {
+      uni.navigateBack()
+    } else {
+      uni.redirectTo({ url: '/pages/index/index' })
+    }
   } else {
     emit('leftClick')
   }

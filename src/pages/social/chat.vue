@@ -4,7 +4,9 @@ import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { getMessages, sendMessage, getMatchReport } from '@/services/api/social'
-import type { Message, Match, MatchReport } from '@/services/api/social'
+import type { Message, MatchReport } from '@/services/api/social'
+import { getCurrentUser } from '@/services/api/auth'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const navBarHeight = ref(64)
 const matchId = ref('')
@@ -16,8 +18,14 @@ const scrollTopVal = ref(0)
 const loading = ref(true)
 const showReport = ref(false)
 const report = ref<MatchReport | null>(null)
+const currentUserId = getCurrentUser()?.id || ''
 
 const canSend = computed(() => inputText.value.trim().length > 0)
+const resolvedAvatar = computed(() => resolveAvatarUrl(avatar.value))
+
+function isMine(message: Message) {
+  return message.fromUid === 'me' || message.fromUid === currentUserId
+}
 
 function formatTime(timestamp: number) {
   const d = new Date(timestamp)
@@ -106,7 +114,7 @@ onLoad((options: any) => {
 
 onMounted(async () => {
   const info = uni.getSystemInfoSync()
-  navBarHeight.value = (info.statusBarHeight ?? 20) + 44
+  navBarHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20) + 44
 
   if (matchId.value) {
     try {
@@ -133,7 +141,7 @@ onMounted(async () => {
     <!-- 匹配卡片（头部简介） -->
     <view class="match-header">
       <view class="match-avatar">
-        <text v-if="avatar" class="match-avatar-emoji">{{ avatar }}</text>
+        <image v-if="avatar" class="match-avatar-image" :src="resolvedAvatar" mode="aspectFill" />
         <DoodleIcon v-else name="user" :size="48" color="#E8855A" />
       </view>
       <view class="match-info">
@@ -165,19 +173,19 @@ onMounted(async () => {
             <view
               v-else-if="item.message"
               class="message-wrap"
-              :class="item.message.fromUid === 'me' ? 'message-wrap--user' : 'message-wrap--other'"
+              :class="isMine(item.message) ? 'message-wrap--user' : 'message-wrap--other'"
             >
-              <view v-if="item.message.fromUid !== 'me'" class="msg-avatar">
-                <text v-if="avatar" class="msg-avatar-emoji">{{ avatar }}</text>
+              <view v-if="!isMine(item.message)" class="msg-avatar">
+                <image v-if="avatar" class="msg-avatar-image" :src="resolvedAvatar" mode="aspectFill" />
                 <DoodleIcon v-else name="user" :size="32" color="#FFFFFF" />
               </view>
               <view
                 class="message-bubble"
-                :class="item.message.fromUid === 'me' ? 'bubble--user' : 'bubble--other'"
+                :class="isMine(item.message) ? 'bubble--user' : 'bubble--other'"
               >
                 <text
                   class="bubble-text"
-                  :class="item.message.fromUid === 'me' ? 'bubble-text--user' : ''"
+                  :class="isMine(item.message) ? 'bubble-text--user' : ''"
                 >{{ item.message.content }}</text>
               </view>
             </view>
@@ -282,6 +290,7 @@ onMounted(async () => {
   width: 72rpx;
   height: 72rpx;
   border-radius: 9999rpx;
+  overflow: hidden;
   background: linear-gradient(135deg, #FDF0E8, #FEF3EE);
   display: flex;
   align-items: center;
@@ -289,9 +298,9 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.match-avatar-emoji {
-  font-size: 56rpx;
-  line-height: 1;
+.match-avatar-image {
+  width: 100%;
+  height: 100%;
 }
 
 .match-info {
@@ -384,6 +393,7 @@ onMounted(async () => {
   width: 64rpx;
   height: 64rpx;
   border-radius: 9999rpx;
+  overflow: hidden;
   background: linear-gradient(135deg, #6B8EC4, #8AACCF);
   display: flex;
   align-items: center;
@@ -392,9 +402,9 @@ onMounted(async () => {
   box-shadow: 1px 2px 0 rgba(107, 142, 196, 0.15);
 }
 
-.msg-avatar-emoji {
-  font-size: 48rpx;
-  line-height: 1;
+.msg-avatar-image {
+  width: 100%;
+  height: 100%;
 }
 
 .message-bubble {

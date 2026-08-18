@@ -332,7 +332,7 @@ async function startRecording() {
   if (isRecording.value) return
   // #ifdef H5
   await startH5Recording()
-  return
+  return undefined
   // #endif
 
   initUniRecorder()
@@ -355,7 +355,7 @@ function stopRecording() {
   if (!isRecording.value) return
   // #ifdef H5
   h5MediaRecorder?.stop()
-  return
+  return undefined
   // #endif
 
   recorderManager?.stop()

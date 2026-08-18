@@ -2,7 +2,15 @@
 // Mock — AI 分身记忆 / 状态 / 侧写
 // ══════════════════════════════════════════════════════════════════
 
-import type { AvatarMemory, AvatarStatus, AvatarProfile } from '../api/avatar'
+import type {
+  AtoaDecisionResult,
+  AtoaProbe,
+  AtoaSession,
+  AvatarMemory,
+  AvatarProfile,
+  AvatarStatus,
+  SurfJob,
+} from '../api/avatar'
 
 const now = Date.now()
 const day = 86400000
@@ -62,6 +70,17 @@ export const mockAvatarStatus: AvatarStatus = {
   enabledChannels: ['buddy', 'help', 'share'],
   enabledActions: ['reply_buddy', 'reply_help', 'push_match'],
   matchRange: { school: '南开大学', distanceKm: 3 },
+  surfFrequency: 'adaptive',
+  surfWindow: { start: '09:00', end: '23:00', timezone: 'Asia/Shanghai' },
+  personalizedSurfPlan: {},
+  nextSurfAt: now + 3600000,
+  lastSurfAt: now - 2 * 60000,
+  dailySurfCount: 2,
+  dailyActionCount: 1,
+  quietMode: false,
+  autoMatchEnabled: true,
+  autoCommentEnabled: false,
+  autoPublishEnabled: false,
 }
 
 // ── 分身侧写 ──────────────────────────────────────────────────────
@@ -132,4 +151,171 @@ export function getAvatarProfile(): AvatarProfile {
 export function regenerateProfile(): AvatarProfile {
   mockAvatarProfile.generatedAt = Date.now()
   return { ...mockAvatarProfile }
+}
+
+const mockProbes: AtoaProbe[] = [
+  {
+    id: 'probe_movie',
+    sessionId: 'session_1',
+    userBId: 'user_xiaolu',
+    userBName: '林小鹿',
+    userBAvatar: '',
+    interactionType: 'mission_probe',
+    outcome: 'pending_user_decision',
+    readableOutcome: '等待你的决定',
+    scoreA: 91,
+    scoreB: 86,
+    sharedTopics: ['科幻电影', '周末活动', '南开大学'],
+    reasonsA: ['想看的影片类型相同', '本周六时间完全重叠', '活动还剩 1 个名额'],
+    conversation: [
+      { role: 'avatar_a', content: '我的用户本周六晚上有空，想看科幻电影。你们还有名额吗？' },
+      { role: 'avatar_b', content: '还有 1 个名额，计划周六 19:30 在学校附近的影院，默认 AA。' },
+      { role: 'avatar_a', content: '想确认一下，这次欢迎第一次见面的新朋友吗？' },
+      { role: 'avatar_b', content: '欢迎，大家会先在活动房间确认具体影院和碰面位置。' },
+    ],
+    riskFlags: [],
+    interactionPhase: 1,
+    isMutual: true,
+    createdAt: now - 8 * 60000,
+    updatedAt: now - 8 * 60000,
+  },
+  {
+    id: 'probe_1',
+    sessionId: 'session_1',
+    userBId: 'user_xiaolu',
+    userBName: '林小鹿',
+    userBAvatar: '',
+    interactionType: 'card_exchange',
+    outcome: 'pending_user_decision',
+    readableOutcome: '等待你的决定',
+    scoreA: 86,
+    scoreB: 81,
+    sharedTopics: ['摄影', '城市散步', '周末活动'],
+    reasonsA: ['都喜欢用照片记录城市', '社交节奏都偏慢热', '周末时间容易协调'],
+    conversation: [
+      { role: 'avatar_a', content: '看到你也喜欢城市摄影，你更常拍街景还是人物？' },
+      { role: 'avatar_b', content: '我更喜欢傍晚的街景，周末会沿着海河慢慢走。' },
+      { role: 'avatar_a', content: '我的主人也常在周末骑行拍照，可能会有不少共同路线。' },
+      { role: 'avatar_b', content: '听起来挺合拍，可以先聊聊各自喜欢的取景点。' },
+    ],
+    riskFlags: [],
+    interactionPhase: 1,
+    isMutual: true,
+    createdAt: now - 12 * 60000,
+    updatedAt: now - 12 * 60000,
+  },
+  {
+    id: 'probe_2',
+    sessionId: 'session_1',
+    userBId: 'user_chen',
+    userBName: '陈屿',
+    userBAvatar: '',
+    interactionType: 'card_exchange',
+    outcome: 'connected',
+    readableOutcome: '已发出结交申请',
+    scoreA: 78,
+    scoreB: 74,
+    sharedTopics: ['雅思', '图书馆'],
+    reasonsA: ['都在准备语言考试', '学习时间接近'],
+    conversation: [
+      { role: 'avatar_a', content: '你最近也在准备雅思吗？' },
+      { role: 'avatar_b', content: '是的，我主要想找一个能互相监督的学习搭子。' },
+    ],
+    riskFlags: [],
+    interactionPhase: 1,
+    userDecision: 'connect',
+    isMutual: true,
+    triggeredMatchId: 'buddy_pending_1',
+    createdAt: now - day,
+    updatedAt: now - day,
+  },
+]
+
+let mockSurfJob: SurfJob | null = null
+
+export function getAtoaProbes(outcome?: string): AtoaProbe[] {
+  return mockProbes
+    .filter((item) => !outcome || item.outcome === outcome)
+    .map((item) => ({ ...item, conversation: [...item.conversation] }))
+}
+
+export function getAtoaSessions(): AtoaSession[] {
+  return [{
+    id: 'session_1',
+    status: 'active',
+    candidateCount: mockProbes.length,
+    excludedCount: 0,
+    pendingCount: mockProbes.filter((item) => item.outcome === 'pending_user_decision').length,
+    decidedCount: mockProbes.filter((item) => item.outcome !== 'pending_user_decision').length,
+    createdAt: now - day,
+    updatedAt: Date.now(),
+  }]
+}
+
+export function continueAtoaConversation(interactionId: string) {
+  const item = mockProbes.find((probe) => probe.id === interactionId)
+  if (!item) throw new Error('探针对话不存在')
+  const newTurns = [
+    { role: 'avatar_a' as const, content: '如果一起活动，你通常更希望提前多久确定计划？' },
+    { role: 'avatar_b' as const, content: '提前一天确认会比较自在，也方便彼此保留调整空间。' },
+  ]
+  item.conversation.push(...newTurns)
+  item.interactionPhase += 1
+  item.updatedAt = Date.now()
+  return {
+    id: item.id,
+    outcome: item.outcome,
+    interactionPhase: item.interactionPhase,
+    newTurns,
+    conversation: [...item.conversation],
+    updatedAt: item.updatedAt,
+  }
+}
+
+export function decideAtoa(
+  interactionId: string,
+  decision: 'block' | 'connect',
+): AtoaDecisionResult {
+  const item = mockProbes.find((probe) => probe.id === interactionId)
+  if (!item) throw new Error('探针对话不存在')
+  item.outcome = decision === 'block' ? 'blocked' : 'connected'
+  item.readableOutcome = decision === 'block' ? '已打断' : '已发出结交申请'
+  item.userDecision = decision
+  item.updatedAt = Date.now()
+  if (decision === 'connect') item.triggeredMatchId = `buddy_${Date.now()}`
+  return {
+    outcome: item.outcome,
+    socialMatchId: item.triggeredMatchId,
+  }
+}
+
+export function createSurfJob(): SurfJob {
+  mockSurfJob = {
+    id: `surf_${Date.now()}`,
+    status: 'running',
+    trigger: 'manual',
+    attempts: 1,
+    result: {},
+    errorMessage: '',
+    createdAt: Date.now(),
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  return { ...mockSurfJob }
+}
+
+export function getSurfJob(jobId: string): SurfJob {
+  if (!mockSurfJob || mockSurfJob.id !== jobId) throw new Error('冲浪任务不存在')
+  mockSurfJob = {
+    ...mockSurfJob,
+    status: 'succeeded',
+    result: { atoaScanned: mockProbes.length, surfReport: '分身完成了新一轮探路。' },
+    finishedAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  return { ...mockSurfJob }
+}
+
+export function getLatestSurfJob(): SurfJob | null {
+  return mockSurfJob ? { ...mockSurfJob } : null
 }

@@ -3,8 +3,12 @@
     <CustomNavBar :title="navTitle" left-icon="back" />
 
     <scroll-view scroll-y class="content-scroll" :style="{ height: scrollHeight + 'px' }">
-      <view v-if="loading" class="state-wrap">
-        <text class="state-text">正在加载小说...</text>
+      <view v-if="loading" class="reader-skeleton">
+        <Skeleton :width="'70%'" :height="56" :margin-bottom="20" />
+        <Skeleton :width="'40%'" :height="28" :margin-bottom="40" />
+        <view v-for="n in 12" :key="n" class="sk-line">
+          <Skeleton :width="n % 4 === 0 ? '70%' : '100%'" :height="28" />
+        </view>
       </view>
 
       <view v-else-if="!novelContent" class="state-wrap">
@@ -32,6 +36,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { generateDerivative, getDerivatives, getDiaryDetail } from '@/services/api/diary'
 import type { DiaryDerivative } from '@/services/api/diary'
 
@@ -165,5 +170,13 @@ onMounted(async () => {
 
 .bottom-space {
   height: 48rpx;
+}
+
+.reader-skeleton {
+  padding: 24rpx 4rpx 0;
+}
+
+.sk-line {
+  margin-bottom: 16rpx;
 }
 </style>

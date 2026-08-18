@@ -1,7 +1,7 @@
 // 全局开关：运行时可通过设置页「开发者选项」切换 mock 模式
 // 使用 export let + live binding，所有 import { USE_MOCK } 的地方自动读到最新值
 
-const DEFAULT_API_BASE_URL = 'http://115.190.218.167/api'
+const DEFAULT_API_BASE_URL = '/api'
 
 function _readMock(): boolean {
   try {
@@ -17,6 +17,10 @@ function _readMock(): boolean {
 function _readBaseUrl(): string {
   try {
     const saved = uni.getStorageSync('dev_api_base_url')
+    if (saved && /^http:\/\/115\.190\.218\.167/i.test(saved)) {
+      uni.removeStorageSync('dev_api_base_url')
+      return DEFAULT_API_BASE_URL
+    }
     return saved || DEFAULT_API_BASE_URL
   } catch {
     return DEFAULT_API_BASE_URL
