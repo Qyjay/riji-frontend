@@ -35,7 +35,8 @@ let playing = false
 let muted = false
 // 一次 write 没写完的尾巴，由后续 flushPending 继续写出，保证音频顺序
 let pendingBytes: ByteArray | null = null
-let pendingOffset = 0
+// 必须是 Int：会传给 AudioTrack.write 的 offsetInBytes，number 在 Kotlin 里对不上
+let pendingOffset: Int = 0
 
 /** 供 JS 侧探测插件是否真的编译进了基座 */
 export function isAvailable(): boolean {
@@ -66,8 +67,12 @@ export function startCapture(sampleRate: number, frameBytes: number): string {
     return 'NO_PERMISSION'
   }
 
+  // JS/TS 传入的 number 在 Kotlin 里是 Number/Double，Android API 要 Int
+  const sampleRateHz: Int = sampleRate.toInt()
+  const frameSize: Int = frameBytes.toInt()
+
   const minBuffer = AudioRecord.getMinBufferSize(
-    sampleRate,
+    sampleRateHz,
     AudioFormat.CHANNEL_IN_MONO,
     AudioFormat.ENCODING_PCM_16BIT,
   )
@@ -76,8 +81,8 @@ export function startCapture(sampleRate: number, frameBytes: number): string {
   }
 
   // 缓冲区放大到至少 8 帧，容忍 JS 定时器抖动，避免丢帧
-  let bufferSize = minBuffer * 4
-  const wanted = frameBytes * 8
+  let bufferSize: Int = minBuffer * 4
+  const wanted: Int = frameSize * 8
   if (bufferSize < wanted) {
     bufferSize = wanted
   }
@@ -85,7 +90,7 @@ export function startCapture(sampleRate: number, frameBytes: number): string {
   try {
     const instance = new AudioRecord(
       MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-      sampleRate,
+      sampleRateHz,
       AudioFormat.CHANNEL_IN_MONO,
       AudioFormat.ENCODING_PCM_16BIT,
       bufferSize,
@@ -98,7 +103,7 @@ export function startCapture(sampleRate: number, frameBytes: number): string {
 
     instance.startRecording()
     recorder = instance
-    captureBuffer = new ByteArray(frameBytes)
+    captureBuffer = new ByteArray(frameSize)
     capturing = true
     return ''
   } catch (error) {
@@ -117,12 +122,13 @@ export function readCaptureFrame(): string {
     return ''
   }
 
-  const read = instance.read(buffer, 0, buffer.size, AudioRecord.READ_NON_BLOCKING)
+  const offset: Int = 0
+  const read = instance.read(buffer, offset, buffer.size, AudioRecord.READ_NON_BLOCKING)
   if (read <= 0) {
     return ''
   }
 
-  return Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
+  return Base64.encodeToString(buffer, offset, read, Base64.NO_WRAP)
 }
 
 export function stopCapture(): void {
@@ -157,8 +163,10 @@ export function startPlayback(sampleRate: number): string {
     return ''
   }
 
+  const sampleRateHz: Int = sampleRate.toInt()
+
   const minBuffer = AudioTrack.getMinBufferSize(
-    sampleRate,
+    sampleRateHz,
     AudioFormat.CHANNEL_OUT_MONO,
     AudioFormat.ENCODING_PCM_16BIT,
   )
@@ -166,16 +174,18 @@ export function startPlayback(sampleRate: number): string {
     return 'UNSUPPORTED_SAMPLE_RATE'
   }
 
+  const bufferSize: Int = minBuffer * 4
+
   try {
     // 用 STREAM_MUSIC 走扬声器，保证免手持时能听清。
     // 若真机出现回声，可改为 STREAM_VOICE_CALL 并配合 setSpeakerphoneOn(true)，
     // 那样能拿到更强的系统回声消除，但需要 MODIFY_AUDIO_SETTINGS 权限。
     const instance = new AudioTrack(
       AudioManager.STREAM_MUSIC,
-      sampleRate,
+      sampleRateHz,
       AudioFormat.CHANNEL_OUT_MONO,
       AudioFormat.ENCODING_PCM_16BIT,
-      minBuffer * 4,
+      bufferSize,
       AudioTrack.MODE_STREAM,
     )
 
@@ -213,15 +223,16 @@ export function writePlayback(base64: string): number {
   const decoded = Base64.decode(base64, Base64.NO_WRAP)
   if (muted) {
     // 静音时丢弃数据而不是排队，避免解除静音后播放一大段过期语音
-    return decoded.size
+    return Number.from(decoded.size)
   }
 
-  const written = instance.write(decoded, 0, decoded.size, AudioTrack.WRITE_NON_BLOCKING)
+  const offset: Int = 0
+  const written = instance.write(decoded, offset, decoded.size, AudioTrack.WRITE_NON_BLOCKING)
   if (written < decoded.size) {
     pendingBytes = decoded
     pendingOffset = written > 0 ? written : 0
   }
-  return written > 0 ? written : 0
+  return Number.from(written > 0 ? written : 0)
 }
 
 /**
@@ -235,7 +246,7 @@ export function flushPending(): number {
     return 0
   }
 
-  const remaining = buffer.size - pendingOffset
+  const remaining: Int = buffer.size - pendingOffset
   if (remaining <= 0) {
     pendingBytes = null
     pendingOffset = 0
@@ -252,7 +263,7 @@ export function flushPending(): number {
     pendingBytes = null
     pendingOffset = 0
   }
-  return written
+  return Number.from(written)
 }
 
 /** 是否还有未写出的缓存数据 */
