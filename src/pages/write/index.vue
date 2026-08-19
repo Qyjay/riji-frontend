@@ -331,7 +331,11 @@ onMounted(async () => {
 async function getLocation() {
   const applyLocationContext = (context: LocationContext) => {
     if (context.locationVisible) {
-      locationText.value = [context.district, context.township].filter(Boolean).join(' · ')
+      locationText.value = context.detailedAddress
+        || context.poi
+        || context.aoi
+        || (context.street ? `${context.street}${context.streetNumber}` : '')
+        || [context.district, context.township].filter(Boolean).join(' · ')
         || context.city
         || context.address
         || locationText.value

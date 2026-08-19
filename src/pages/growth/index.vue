@@ -6,6 +6,36 @@
 
     <scroll-view scroll-y class="scroll-area" :style="{ height: scrollHeight + 'px' }">
       <view class="content">
+        <!-- ===== 骨架加载 ===== -->
+        <template v-if="loading">
+          <view class="card">
+            <view class="sk-row">
+              <Skeleton variant="circle" :width="56" :height="56" />
+              <Skeleton :width="240" :height="36" />
+            </view>
+            <Skeleton :width="'100%'" :height="16" :margin-bottom="12" />
+            <Skeleton :width="180" :height="22" :margin-bottom="28" />
+            <view class="sk-row sk-row-between">
+              <Skeleton :width="200" :height="22" />
+              <Skeleton :width="200" :height="22" />
+            </view>
+          </view>
+          <view class="card">
+            <Skeleton :width="160" :height="42" :margin-bottom="20" />
+            <view class="sk-chips">
+              <Skeleton v-for="n in 4" :key="n" :width="140" :height="42" :radius="999" />
+            </view>
+          </view>
+          <view class="card">
+            <view v-for="n in 5" :key="n" class="sk-row sk-skill-row">
+              <Skeleton :width="70" :height="22" />
+              <Skeleton :width="'100%'" :height="14" />
+              <Skeleton :width="48" :height="22" />
+            </view>
+          </view>
+        </template>
+
+        <template v-else>
         <!-- ===== 等级卡片 ===== -->
         <view class="card level-card">
           <view class="level-header">
@@ -156,6 +186,7 @@
 
         <!-- 底部留白 -->
         <view class="bottom-spacer"></view>
+        </template>
       </view>
     </scroll-view>
   </view>
@@ -165,11 +196,13 @@
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { getGrowthData } from '@/services/api/user'
 import type { GrowthData } from '@/services/api/user'
 
 // ===== XP / 等级 =====
 const growth = ref<GrowthData | null>(null)
+const loading = ref(true)
 const currentXP = computed(() => growth.value?.xpInCurrentLevel || 0)
 const nextLevelXP = computed(() => growth.value
   ? Math.max(1, growth.value.nextLevelXp - growth.value.currentLevelXp)
@@ -178,7 +211,8 @@ const nextLevelXP = computed(() => growth.value
 const xpPercent = computed(() => growth.value?.progressPercent || 0)
 
 // ===== 技能数据 =====
-const skills = computed(() => growth.value?.skills || [])
+// 暂时隐藏“专注”技能（番茄钟功能入口已下线）
+const skills = computed(() => (growth.value?.skills || []).filter((s: any) => s.key !== 'focus' && s.name !== '专注'))
 const visibleBreakdown = computed(() => {
   return (growth.value?.xpBreakdown || []).filter(item => item.xp > 0)
 })
@@ -237,6 +271,8 @@ onMounted(async () => {
   } catch {
     growth.value = null
     uni.showToast({ title: '成长数据加载失败', icon: 'none' })
+  } finally {
+    loading.value = false
   }
 })
 </script>
@@ -666,5 +702,31 @@ onMounted(async () => {
 /* ===== 底部留白 ===== */
 .bottom-spacer {
   height: 48rpx;
+}
+
+/* ===== 骨架辅助布局 ===== */
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.sk-row-between {
+  justify-content: space-between;
+}
+
+.sk-skill-row {
+  margin-bottom: 20rpx;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.sk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
 }
 </style>

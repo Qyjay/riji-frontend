@@ -24,8 +24,26 @@
       <!-- ========== 目录视图 ========== -->
       <view v-if="viewMode === 'toc'" class="toc-view">
 
-        <view v-if="loading" class="state-hint">
-          <text class="state-hint-text">加载中...</text>
+        <view v-if="loading" class="novel-skeleton">
+          <view class="sk-cover" />
+          <view class="sk-progress-card">
+            <view class="sk-progress-head">
+              <Skeleton :width="220" :height="28" />
+              <Skeleton :width="80" :height="28" />
+            </view>
+            <Skeleton :width="'100%'" :height="14" :margin-bottom="14" />
+            <Skeleton :width="320" :height="22" />
+          </view>
+          <Skeleton :width="200" :height="26" :margin-bottom="20" />
+          <view v-for="n in 3" :key="n" class="sk-chapter-card">
+            <Skeleton :width="180" :height="180" :radius="16" />
+            <view class="sk-chapter-body">
+              <Skeleton :width="280" :height="32" :margin-bottom="14" />
+              <Skeleton :width="220" :height="22" :margin-bottom="14" />
+              <Skeleton :width="'100%'" :height="22" :margin-bottom="8" />
+              <Skeleton :width="'80%'" :height="22" />
+            </view>
+          </view>
         </view>
 
         <template v-else>
@@ -245,6 +263,7 @@
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import {
   getBiography,
   createBiographyTask,
@@ -870,10 +889,63 @@ onMounted(() => {
   width: 56rpx;
   height: 56rpx;
   border-radius: 50%;
-  border: 2px solid transparent;
+  border: 2rpx solid transparent;
 }
 .theme-dot-paper { background: #FDF8F3; border-color: rgba(174,157,146,0.3); }
 .theme-dot-sepia { background: #F5ECD8; }
 .theme-dot-dark { background: #1A1815; }
-.theme-dot-active { border-color: #E8855A; border-width: 3px; }
+.theme-dot-active { border-color: #E8855A; border-width: 3rpx; }
+
+/* ===== 骨架屏 ===== */
+.novel-skeleton {
+  padding: 0 0 32rpx;
+}
+.sk-cover {
+  width: 100%;
+  height: 360rpx;
+  border-radius: 24rpx;
+  background: #EFE7DF;
+  margin-bottom: 24rpx;
+  position: relative;
+  overflow: hidden;
+}
+.sk-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%);
+  transform: translateX(-100%);
+  animation: sk-shimmer 1.4s infinite;
+}
+.sk-progress-card {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 28rpx;
+  margin-bottom: 28rpx;
+  border: 1rpx solid #F0EAE4;
+}
+.sk-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+.sk-chapter-card {
+  display: flex;
+  gap: 20rpx;
+  background: #FFFFFF;
+  border-radius: 18rpx;
+  padding: 24rpx;
+  margin-bottom: 18rpx;
+  border: 1rpx solid #F0EAE4;
+}
+.sk-chapter-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+@keyframes sk-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
 </style>

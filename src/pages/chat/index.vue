@@ -4,6 +4,7 @@ import { onHide, onShow, onUnload } from '@dcloudio/uni-app'
 import { storeToRefs } from 'pinia'
 
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import DoodleIcon from '@/components/DoodleIcon.vue'
 import ChatAttachmentTray from '@/components/chat/ChatAttachmentTray.vue'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatEmptyState from '@/components/chat/ChatEmptyState.vue'
@@ -13,6 +14,11 @@ import ChatQuickActions from '@/components/chat/ChatQuickActions.vue'
 import ChatRecordingBar from '@/components/chat/ChatRecordingBar.vue'
 import { getUserProfile } from '@/services/api/user'
 import type { UserProfile } from '@/services/api/user'
+import {
+  getRealtimeAudioStartupMessage,
+  primeRealtimeAudio,
+} from '@/services/realtime/audio'
+import { getRealtimeVoiceHealth } from '@/services/realtime/voice-api'
 import { useChatStore, type DraftChatAttachment } from '@/stores/chat'
 
 const chatStore = useChatStore()
@@ -20,8 +26,10 @@ const { messages, draftText, pendingAttachments, isStreaming, isRecording, useWe
 
 const quickActions = [
   { iconName: 'pen', iconColor: '#E8855A', label: '记录素材', path: '/pages/write/index' },
-  { iconName: 'crystal', iconColor: '#D4728A', label: '看运势', path: '/pages/fortune/index' },
-  { iconName: 'tomato', iconColor: '#E8855A', label: '开始番茄', path: '/pages/study/pomodoro' },
+  // 暂时隐藏运势入口
+  // { iconName: 'crystal', iconColor: '#D4728A', label: '看运势', path: '/pages/fortune/index' },
+  // 暂时隐藏番茄钟入口
+  // { iconName: 'tomato', iconColor: '#E8855A', label: '开始番茄', path: '/pages/study/pomodoro' },
   { iconName: 'calendar', iconColor: '#C8A86B', label: '纪念日', path: '/pages/anniversary/index' },
 ]
 
@@ -45,6 +53,7 @@ const scrollTopVal = ref(0)
 const recordDuration = ref(0)
 const manualScrollLocked = ref(false)
 const showScrollToBottom = ref(false)
+const voiceAvailable = ref(false)
 const lastScrollTop = ref(0)
 
 let recordTimer: ReturnType<typeof setInterval> | null = null
@@ -151,6 +160,12 @@ onMounted(async () => {
   } catch {
     // ignore profile failure
   }
+  try {
+    const health = await getRealtimeVoiceHealth()
+    voiceAvailable.value = health.enabled && health.configured
+  } catch {
+    voiceAvailable.value = false
+  }
 
   startQueueStatusPolling()
 
@@ -161,6 +176,18 @@ onMounted(async () => {
   }
   jumpBottom()
 })
+
+async function openRealtimeVoice() {
+  try {
+    await primeRealtimeAudio()
+    uni.navigateTo({ url: '/pages/chat/voice-call' })
+  } catch (error) {
+    uni.showToast({
+      title: getRealtimeAudioStartupMessage(error),
+      icon: 'none',
+    })
+  }
+}
 
 async function handleSend() {
   try {
@@ -495,6 +522,26 @@ function handlePlayVoice(src: string) {
     <view class="page-content">
       <ChatHeaderCard :diary-count="profile.diaryCount" :interest-count="interestCount" />
 
+      <button
+        v-if="voiceAvailable"
+        class="voice-call-entry"
+        role="button"
+        tabindex="0"
+        aria-label="与分身开始实时语音通话"
+        @click="openRealtimeVoice"
+        @keyup.enter="openRealtimeVoice"
+        @keyup.space="openRealtimeVoice"
+      >
+        <view class="voice-call-entry__icon">
+          <DoodleIcon name="phone" :size="34" color="#5D7E66" />
+        </view>
+        <view class="voice-call-entry__copy">
+          <text class="voice-call-entry__title">和分身说话</text>
+          <text class="voice-call-entry__meta">实时语音</text>
+        </view>
+        <text class="voice-call-entry__arrow" aria-hidden="true">›</text>
+      </button>
+
       <view v-if="showQueueCard" class="queue-card">
         <view class="queue-card__main">
           <text class="queue-card__label">正在排队</text>
@@ -570,6 +617,46 @@ function handlePlayVoice(src: string) {
   min-height: 0;
   overflow: hidden;
 }
+
+.voice-call-entry {
+  min-height: 88rpx;
+  margin: 0 24rpx 14rpx;
+  padding: 0 18rpx;
+  border: 1px solid #c9d8cc;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  text-align: left;
+  background: #f3f7f4;
+}
+.voice-call-entry::after { border: 0; }
+.voice-call-entry:active { background: #e8f0ea; }
+.voice-call-entry:focus-visible { outline: 2px solid #52765e; outline-offset: 2px; }
+.voice-call-entry__icon {
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e1ebe3;
+}
+.voice-call-entry__copy { flex: 1; min-width: 0; }
+.voice-call-entry__title {
+  display: block;
+  color: #34473a;
+  font-size: 25rpx;
+  line-height: 1.35;
+  font-weight: 700;
+}
+.voice-call-entry__meta {
+  display: block;
+  color: #76847a;
+  font-size: 19rpx;
+  line-height: 1.4;
+}
+.voice-call-entry__arrow { color: #728579; font-size: 36rpx; }
 
 .composer-shell {
   padding: 0 16rpx 18rpx;

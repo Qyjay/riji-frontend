@@ -55,9 +55,14 @@
               今日已记录 {{ todaySummary ? todaySummary.material_count : 0 }} 条素材
             </text>
           </view>
-          <view class="material-entry-btn press-feedback" @click="goWrite">
-            <DoodleIcon name="plus" color="#E8855A" :size="28" />
-            <text class="material-entry-add">添加</text>
+          <view class="today-header-actions">
+            <view class="backfill-entry-btn press-feedback" @click="goBackfill">
+              <text class="backfill-entry-text">📷 补写</text>
+            </view>
+            <view class="material-entry-btn press-feedback" @click="goWrite">
+              <DoodleIcon name="plus" color="#E8855A" :size="28" />
+              <text class="material-entry-add">添加</text>
+            </view>
           </view>
         </view>
 
@@ -164,6 +169,25 @@
         </view>
       </view>
 
+      <!-- ── 初次加载骨架 ── -->
+      <view v-if="firstLoading" class="initial-skeleton">
+        <view class="sk-today-card">
+          <view class="sk-row sk-between">
+            <Skeleton :width="280" :height="32" />
+            <Skeleton :width="120" :height="56" :radius="28" />
+          </view>
+        </view>
+        <view v-for="n in 3" :key="n" class="sk-diary-card">
+          <view class="sk-row sk-between" style="margin-bottom: 20rpx;">
+            <Skeleton :width="200" :height="28" />
+            <Skeleton :width="80" :height="24" />
+          </view>
+          <Skeleton :width="'100%'" :height="28" :margin-bottom="14" />
+          <Skeleton :width="'100%'" :height="28" :margin-bottom="14" />
+          <Skeleton :width="'70%'" :height="28" />
+        </view>
+      </view>
+
       <!-- ── 日记列表 ── -->
       <view v-if="!loading || hasDiaryListItems">
         <template v-for="(group, gIndex) in groupedDiaries" :key="gIndex">
@@ -253,6 +277,7 @@ import CustomNavBar from '@/components/CustomNavBar.vue'
 import DiaryCard from '@/components/DiaryCard.vue'
 import TabBar from '@/components/TabBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { getDiaries, generateDiary, getTodaySummary, deleteDiary } from '@/services/api/diary'
 import type { Diary, TodaySummary, WeatherPeriod } from '@/services/api/diary'
 import { getTodayAnniversaries } from '@/services/api/anniversary'
@@ -264,6 +289,7 @@ import { toLocalDateYmd } from '@/utils/date'
 
 const diaries = ref<Diary[]>([])
 const loading = ref(false)
+const hasLoadedOnce = ref(false)
 const refreshing = ref(false)
 const page = ref(1)
 const noMore = ref(false)
@@ -298,6 +324,7 @@ type DiaryListItem = Diary | PendingDiary
 
 const pendingDiaries = ref<PendingDiary[]>([])
 const hasDiaryListItems = computed(() => diaries.value.length > 0 || pendingDiaries.value.length > 0)
+const firstLoading = computed(() => !hasLoadedOnce.value && loading.value && !hasDiaryListItems.value)
 const hasTodayPendingDiary = computed(() => {
   const today = toLocalDateYmd()
   return pendingDiaries.value.some(item => item.date === today)
@@ -472,7 +499,13 @@ async function refreshDiaryWeatherContext() {
       context = await getIpLocationContext()
     }
     diaryLocationText.value = context.locationVisible
-      ? [context.district, context.township].filter(Boolean).join(' · ') || context.city || context.address
+      ? context.detailedAddress
+        || context.poi
+        || context.aoi
+        || (context.street ? `${context.street}${context.streetNumber}` : '')
+        || [context.district, context.township].filter(Boolean).join(' · ')
+        || context.city
+        || context.address
       : ''
     const hasAnyWeather = diaryWeatherPeriods.value.some(item => item.weatherText.trim())
     if (context.weatherVisible && (!diaryWeatherTouched.value || !hasAnyWeather)) {
@@ -752,6 +785,7 @@ async function loadDiaries(p: number, append = false) {
     noMore.value = true
   } finally {
     loading.value = false
+    hasLoadedOnce.value = true
   }
 }
 
@@ -863,6 +897,10 @@ function goDetail(id: string) {
 
 function goWrite() {
   uni.navigateTo({ url: '/pages/write/index' })
+}
+
+function goBackfill() {
+  uni.navigateTo({ url: '/pages/write/backfill-pick' })
 }
 
 function handleGreetingAction() {
@@ -1258,6 +1296,27 @@ function onActionClick(payload: { action: string; diaryId: string }) {
   font-weight: 600;
 }
 
+.today-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.backfill-entry-btn {
+  display: flex;
+  align-items: center;
+  background: rgba(143, 175, 126, 0.14);
+  border-radius: 16rpx;
+  padding: 10rpx 20rpx;
+  &:active { opacity: 0.7; }
+}
+
+.backfill-entry-text {
+  font-size: 26rpx;
+  color: #6E9457;
+  font-weight: 600;
+}
+
 .greeting-inner {
   border-radius: 32rpx 40rpx 28rpx 36rpx;
   padding: 24rpx;
@@ -1538,5 +1597,29 @@ function onActionClick(payload: { action: string; diaryId: string }) {
 /* ── 底部留白 ── */
 .bottom-spacer {
   height: 24rpx;
+}
+
+/* ── 初次加载骨架 ── */
+.initial-skeleton {
+  padding-top: 8rpx;
+}
+
+.sk-today-card,
+.sk-diary-card {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+}
+
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.sk-between {
+  justify-content: space-between;
 }
 </style>

@@ -16,6 +16,41 @@
     <!-- ── 内容区 ── -->
     <view class="page-content">
 
+      <!-- ── 骨架加载 ── -->
+      <template v-if="loading">
+        <view class="profile-card-skeleton">
+          <Skeleton variant="circle" :width="120" :height="120" />
+          <view class="sk-profile-info">
+            <Skeleton :width="200" :height="40" :margin-bottom="14" />
+            <Skeleton :width="280" :height="24" :margin-bottom="14" />
+            <Skeleton :width="160" :height="40" :radius="999" />
+          </view>
+        </view>
+        <view class="stats-card-skeleton">
+          <view v-for="n in 3" :key="n" class="sk-stat-item">
+            <Skeleton variant="circle" :width="44" :height="44" :margin-bottom="14" />
+            <Skeleton :width="80" :height="40" :margin-bottom="8" />
+            <Skeleton :width="60" :height="22" />
+          </view>
+        </view>
+        <view class="exp-card-skeleton">
+          <view class="sk-exp-head">
+            <Skeleton :width="200" :height="32" />
+            <Skeleton :width="140" :height="28" />
+          </view>
+          <Skeleton :width="'100%'" :height="14" :margin-bottom="14" />
+          <Skeleton :width="280" :height="22" />
+        </view>
+        <view class="menu-card-skeleton">
+          <view v-for="n in 6" :key="n" class="sk-menu-item">
+            <Skeleton variant="circle" :width="56" :height="56" />
+            <Skeleton :width="180" :height="28" />
+          </view>
+        </view>
+      </template>
+
+      <template v-else>
+
       <!-- 用户卡片 -->
       <view class="profile-card" @click="goEditProfile">
         <view class="profile-avatar-wrap">
@@ -98,6 +133,8 @@
         <text class="logout-text">退出登录</text>
       </view>
 
+      </template>
+
     </view>
 
     <!-- ── TabBar ── -->
@@ -118,6 +155,7 @@ import { resolveAvatarUrl } from '@/utils/avatar'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import Skeleton from '@/components/Skeleton.vue'
 
 const avatarUrl = computed(() => {
   return resolveAvatarUrl(profile.value.avatar)
@@ -140,6 +178,7 @@ const profile = ref<UserProfile>({
 const achievements = ref<Achievement[]>([])
 const growth = ref<GrowthData | null>(null)
 const buddyCount = ref(23)
+const loading = ref(true)
 
 const achievementCount = computed(() =>
   growth.value?.stats.achievementCount ?? achievements.value.filter(a => a.unlocked).length
@@ -240,6 +279,7 @@ async function loadProfile() {
   } catch {
     achievements.value = []
   }
+  loading.value = false
 }
 </script>
 
@@ -471,4 +511,73 @@ async function loadProfile() {
 }
 
 .bottom-spacer { height: 40rpx; }
+
+/* ===== 骨架 ===== */
+.profile-card-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.sk-profile-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-card-skeleton {
+  display: flex;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.sk-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.exp-card-skeleton {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.sk-exp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+
+.menu-card-skeleton {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 12rpx 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.sk-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #F5EFE9;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
 </style>

@@ -37,7 +37,31 @@
       }
     },
     {
+      "path": "pages/write/backfill-pick",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/write/backfill-canvas",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/write/backfill-companion",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/messages/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/index",
       "style": {
         "navigationStyle": "custom"
       }
@@ -127,6 +151,13 @@
       }
     },
     {
+      "path": "pages/chat/voice-call",
+      "style": {
+        "navigationStyle": "custom",
+        "disableScroll": true
+      }
+    },
+    {
       "path": "pages/social/match",
       "style": {
         "navigationStyle": "custom"
@@ -134,6 +165,60 @@
     },
     {
       "path": "pages/social/chat",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/find",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/mission-short",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/mission-long",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/mission-permission",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/mission-detail",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/candidates",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/activity-room",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/atoa-detail",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/social/request-status",
       "style": {
         "navigationStyle": "custom"
       }

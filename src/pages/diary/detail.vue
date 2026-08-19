@@ -774,8 +774,6 @@ function handleTool(type: string) {
 </script>
 
 <style lang="scss" scoped>
-@import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Serif+SC:wght@400;700&display=swap');
-
 .page {
   background: #FDF8F3;
 }

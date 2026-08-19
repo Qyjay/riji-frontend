@@ -3,7 +3,7 @@ import { API_BASE_URL } from './config'
 
 export interface RequestOptions {
   url: string
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   data?: any
   header?: Record<string, string>
   timeout?: number
@@ -39,7 +39,7 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     uni.request({
       url: `${API_BASE_URL}${options.url}`,
-      method: options.method || 'GET',
+      method: (options.method || 'GET') as any,
       data: options.data,
       header,
       timeout: options.timeout ?? 10000,
