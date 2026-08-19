@@ -207,7 +207,7 @@ const activeTab = ref<'long' | 'short'>('long')
 
 onMounted(() => {
   const info = uni.getSystemInfoSync()
-  navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
+  navPlaceholderHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 50 // tab bar height
 })
 

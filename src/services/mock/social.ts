@@ -1,7 +1,16 @@
-import type { Match, MatchRequest, Message, MatchRecommendation, MatchReport, BuddyRequest, UserPortrait } from '../api/social'
+import type {
+  ActivityRoom,
+  BuddyRequest,
+  Match,
+  MatchRecommendation,
+  MatchReport,
+  MatchRequest,
+  Message,
+  UserPortrait,
+} from '../api/social'
 
-export function getMatches(): Match[] {
-  return [
+export function getMatches(includePending = false): Match[] {
+  const matches: Match[] = [
     {
       id: 'm1',
       nickname: '小明',
@@ -9,6 +18,13 @@ export function getMatches(): Match[] {
       school: '南开大学',
       commonTags: ['学习', '编程', '美食'],
       matchedAt: Date.now() - 86400000 * 3,
+      status: 'accepted',
+      matchType: 'buddy',
+      requestDirection: 'outgoing',
+      reason: '都在准备语言考试',
+      missionId: 'mission_movie',
+      missionTitle: '周六看科幻电影',
+      missionMode: 'short_term',
     },
     {
       id: 'm2',
@@ -17,6 +33,10 @@ export function getMatches(): Match[] {
       school: '天津大学',
       commonTags: ['运动', '音乐', '美食'],
       matchedAt: Date.now() - 86400000 * 7,
+      status: 'accepted',
+      matchType: 'buddy',
+      requestDirection: 'incoming',
+      reason: '都喜欢晨跑',
     },
     {
       id: 'm3',
@@ -25,8 +45,27 @@ export function getMatches(): Match[] {
       school: '南开大学',
       commonTags: ['美食', '阅读', '写作'],
       matchedAt: Date.now() - 86400000 * 15,
+      status: 'accepted',
+      matchType: 'long_term',
+      requestDirection: 'outgoing',
+      reason: '',
     },
   ]
+  if (includePending) {
+    matches.unshift({
+      id: 'buddy_pending_1',
+      nickname: '陈屿',
+      avatar: '',
+      school: '南开大学',
+      commonTags: ['雅思', '图书馆'],
+      matchedAt: Date.now() - 3600000,
+      status: 'pending',
+      matchType: 'buddy',
+      requestDirection: 'outgoing',
+      reason: '我们的分身先聊过，想继续认识一下。',
+    })
+  }
+  return matches
 }
 
 export function createMatchRequest(data: Partial<MatchRequest>): MatchRequest {
@@ -148,6 +187,39 @@ export function applyBuddy(targetId: string, reason: string): BuddyRequest {
 
 export function respondBuddy(_requestId: string, _accept: boolean): void {
   // mock: no-op
+}
+
+export function getActivityRoom(matchId: string): ActivityRoom {
+  return {
+    matchId,
+    missionId: 'mission_movie',
+    title: '周六看科幻电影',
+    status: 'active',
+    timeWindow: {
+      label: '本周六 19:30',
+      startAt: Date.now() + 3 * 86400000,
+      endAt: Date.now() + 3 * 86400000 + 3 * 3600000,
+    },
+    location: {
+      label: '南开大学附近',
+      radiusKm: 5,
+    },
+    budget: { type: 'aa' },
+    linkedPostId: 'p5',
+    participants: [
+      { id: 'mock-user-1', name: '我', avatar: '', school: '南开大学', isOrganizer: true },
+      { id: 'u_xiaolu', name: '林小鹿', avatar: '', school: '南开大学', isOrganizer: false },
+    ],
+    createdAt: Date.now() - 3600000,
+  }
+}
+
+export function completeActivityRoom(matchId: string): ActivityRoom {
+  return {
+    ...getActivityRoom(matchId),
+    status: 'completed',
+    completedAt: Date.now(),
+  }
 }
 
 export function getUserPortrait(): UserPortrait {

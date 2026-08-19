@@ -9,6 +9,13 @@ export interface Match {
   school: string
   commonTags: string[]
   matchedAt: number
+  status: 'pending' | 'accepted' | 'rejected'
+  matchType: 'long_term' | 'buddy' | string
+  requestDirection: 'incoming' | 'outgoing'
+  reason: string
+  missionId?: string
+  missionTitle?: string
+  missionMode?: 'short_term' | 'long_term'
 }
 
 export interface MatchRequest {
@@ -60,9 +67,69 @@ export interface UserPortrait {
   interests: string[]
 }
 
-export async function getMatches(): Promise<Match[]> {
-  if (USE_MOCK) return mock.getMatches()
-  return request<Match[]>({ url: '/social/matches' })
+export interface ActivityParticipant {
+  id: string
+  name: string
+  avatar: string
+  school: string
+  isOrganizer: boolean
+}
+
+export interface ActivityRoom {
+  matchId: string
+  missionId: string
+  title: string
+  status: 'active' | 'completed'
+  timeWindow: {
+    label?: string
+    startAt?: number
+    endAt?: number
+  }
+  location: {
+    label?: string
+    radiusKm?: number
+  }
+  budget: {
+    type?: string
+    min?: number
+    max?: number
+  }
+  linkedPostId?: string
+  participants: ActivityParticipant[]
+  createdAt: number
+  completedAt?: number
+}
+
+function readableMatchReason(value: unknown): string {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (!text) return ''
+  try {
+    const parsed = JSON.parse(text)
+    if (typeof parsed === 'string') return parsed.trim()
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return text
+    if (typeof parsed.analysis === 'string' && parsed.analysis.trim()) {
+      return parsed.analysis.trim()
+    }
+    const points = Array.isArray(parsed.common_points)
+      ? parsed.common_points
+      : Array.isArray(parsed.commonPoints)
+        ? parsed.commonPoints
+        : []
+    const labels = points.map((item: unknown) => String(item).trim()).filter(Boolean)
+    return labels.length ? `共同点：${labels.slice(0, 3).join('、')}` : ''
+  } catch {
+    return text
+  }
+}
+
+export async function getMatches(includePending = false): Promise<Match[]> {
+  const items = USE_MOCK
+    ? await mock.getMatches(includePending)
+    : await request<Match[]>({ url: `/social/matches?include_pending=${includePending}` })
+  return items.map((item) => ({
+    ...item,
+    reason: readableMatchReason(item.reason),
+  }))
 }
 
 export async function createMatchRequest(data: Partial<MatchRequest>): Promise<MatchRequest> {
@@ -99,7 +166,7 @@ export async function respondMatch(requestId: string, accept: boolean): Promise<
 
 export async function applyBuddy(targetId: string, reason: string): Promise<BuddyRequest> {
   if (USE_MOCK) return mock.applyBuddy(targetId, reason)
-  return request<BuddyRequest>({ url: '/social/buddy', method: 'POST', data: { target_user_id: targetId } })
+  return request<BuddyRequest>({ url: '/social/buddy', method: 'POST', data: { target_user_id: targetId, reason } })
 }
 
 export async function respondBuddy(requestId: string, accept: boolean): Promise<void> {
@@ -115,4 +182,19 @@ export async function getUserPortrait(): Promise<UserPortrait> {
 export async function refreshPortrait(): Promise<UserPortrait> {
   if (USE_MOCK) return mock.refreshPortrait()
   return request<UserPortrait>({ url: '/user/portrait/refresh', method: 'POST' })
+}
+
+export function getActivityRoom(matchId: string): Promise<ActivityRoom> {
+  if (USE_MOCK) return Promise.resolve(mock.getActivityRoom(matchId))
+  return request<ActivityRoom>({
+    url: `/social/activity-rooms/${encodeURIComponent(matchId)}`,
+  })
+}
+
+export function completeActivityRoom(matchId: string): Promise<ActivityRoom> {
+  if (USE_MOCK) return Promise.resolve(mock.completeActivityRoom(matchId))
+  return request<ActivityRoom>({
+    url: `/social/activity-rooms/${encodeURIComponent(matchId)}/complete`,
+    method: 'POST',
+  })
 }
