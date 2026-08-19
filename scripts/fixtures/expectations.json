@@ -1,0 +1,27 @@
+{
+  "with-datetime-gps.jpg": {
+    "takenAtLocal": "2026-03-15 14:30:45",
+    "lat": 32.0603,
+    "lon": 118.7969
+  },
+  "south-west-gps.jpg": {
+    "takenAtLocal": "2025-12-24 20:05:00",
+    "lat": -22.9068,
+    "lon": -43.1729
+  },
+  "datetime-only.jpg": {
+    "takenAtLocal": "2024-07-01 08:15:30",
+    "lat": null,
+    "lon": null
+  },
+  "ifd0-datetime-only.jpg": {
+    "takenAtLocal": "2023-05-20 11:22:33",
+    "lat": null,
+    "lon": null
+  },
+  "no-exif.jpg": {
+    "takenAtLocal": null,
+    "lat": null,
+    "lon": null
+  }
+}

@@ -1,5 +1,6 @@
 import { API_BASE_URL, USE_MOCK } from '../config'
 import { request } from '../request'
+import { requestSseStream } from '../sse'
 import * as mock from '../mock/chat'
 
 export interface ChatAttachment {
@@ -265,109 +266,32 @@ export async function chatStream(
     return
   }
 
-  const token = uni.getStorageSync('token')
-  if (!token) {
-    const error = new Error('未登录，请先登录')
-    handlers.onError?.(error)
-    throw error
+  // 服务端下发 error 事件后会关闭流，这里先记下，等流结束再统一抛出
+  let streamError: Error | null = null
+
+  const emitEvent = (event: ChatStreamEvent) => {
+    handlers.onEvent?.(event)
+    if (event.type === 'session') handlers.onSession?.(event.sessionId)
+    if (event.type === 'ack') handlers.onAck?.(normalizeMessage(event.message), event.clientMessageId)
+    if (event.type === 'chunk') handlers.onChunk?.(event.text)
+    if (event.type === 'done') handlers.onDone?.(normalizeMessage(event.message))
+    if (event.type === 'error') streamError = new Error(event.message || '流式响应失败')
   }
 
-  return new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    let consumedLength = 0
-    let buffer = ''
-    let settled = false
-    let timedOut = false
+  try {
+    await requestSseStream<ChatStreamEvent>({
+      path: '/chat/stream',
+      body: payload,
+      onEvent: emitEvent,
+    })
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error('流式响应失败')
+    handlers.onError?.(failure)
+    throw failure
+  }
 
-    const finishWithError = (error: Error) => {
-      if (settled) return
-      settled = true
-      handlers.onError?.(error)
-      reject(error)
-    }
-
-    const emitEvent = (event: ChatStreamEvent) => {
-      handlers.onEvent?.(event)
-      if (event.type === 'session') handlers.onSession?.(event.sessionId)
-      if (event.type === 'ack') handlers.onAck?.(normalizeMessage(event.message), event.clientMessageId)
-      if (event.type === 'chunk') handlers.onChunk?.(event.text)
-      if (event.type === 'done') handlers.onDone?.(normalizeMessage(event.message))
-      if (event.type === 'error') finishWithError(new Error(event.message || '流式响应失败'))
-    }
-
-    const processBuffer = () => {
-      const incoming = xhr.responseText.slice(consumedLength)
-      consumedLength = xhr.responseText.length
-      buffer += incoming
-
-      const blocks = buffer.split('\n\n')
-      buffer = blocks.pop() || ''
-
-      blocks.forEach((block) => {
-        const dataLines = block
-          .split('\n')
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice(5).trim())
-
-        if (!dataLines.length) return
-        const raw = dataLines.join('\n')
-        try {
-          const event = JSON.parse(raw) as ChatStreamEvent
-          emitEvent(event)
-        } catch {
-          // 忽略不完整分片，等待下个 onprogress
-        }
-      })
-    }
-
-    xhr.open('POST', `${API_BASE_URL}/chat/stream`, true)
-    xhr.setRequestHeader('Content-Type', 'application/json')
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-    xhr.responseType = 'text'
-
-    xhr.onprogress = () => {
-      processBuffer()
-    }
-
-    xhr.onload = () => {
-      processBuffer()
-      if (settled) return
-      if (xhr.status >= 400) {
-        finishWithError(new Error(`HTTP ${xhr.status}`))
-        return
-      }
-      if (buffer.trim()) {
-        try {
-          const raw = buffer
-            .split('\n')
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trim())
-            .join('\n')
-          if (raw) {
-            emitEvent(JSON.parse(raw) as ChatStreamEvent)
-          }
-        } catch {
-          // ignore trailing partial block
-        }
-      }
-      if (!settled) {
-        settled = true
-        resolve()
-      }
-    }
-
-    xhr.onerror = () => {
-      if (timedOut) return
-      finishWithError(new Error('网络请求失败'))
-    }
-
-    xhr.send(JSON.stringify(payload))
-
-    setTimeout(() => {
-      if (settled || xhr.readyState === 4) return
-      timedOut = true
-      xhr.abort()
-      finishWithError(new Error('请求超时'))
-    }, 90000)
-  })
+  if (streamError) {
+    handlers.onError?.(streamError)
+    throw streamError
+  }
 }
