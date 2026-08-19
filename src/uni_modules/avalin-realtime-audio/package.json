@@ -1,0 +1,86 @@
+{
+  "id": "avalin-realtime-audio",
+  "displayName": "Avalin 实时音频",
+  "version": "1.0.0",
+  "description": "App 端实时语音通话所需的 16kHz PCM 采集与 24kHz PCM 流式播放，基于 AudioRecord / AudioTrack 非阻塞读写",
+  "keywords": [
+    "实时语音",
+    "PCM",
+    "AudioRecord",
+    "AudioTrack"
+  ],
+  "repository": "",
+  "engines": {
+    "HBuilderX": "^4.25"
+  },
+  "dcloudext": {
+    "type": "uts",
+    "sale": {
+      "regular": {
+        "price": "0.00"
+      },
+      "sourcecode": {
+        "price": "0.00"
+      }
+    },
+    "contact": {
+      "qq": ""
+    },
+    "declaration": {
+      "ads": "无",
+      "data": "插件仅在本地采集与播放音频，不收集、不上传任何数据",
+      "permissions": "android.permission.RECORD_AUDIO"
+    },
+    "npmurl": ""
+  },
+  "uni_modules": {
+    "dependencies": [],
+    "encrypt": [],
+    "platforms": {
+      "cloud": {
+        "tcb": "u",
+        "aliyun": "u",
+        "alipay": "u"
+      },
+      "client": {
+        "Vue": {
+          "vue2": "u",
+          "vue3": "y"
+        },
+        "App": {
+          "app-android": "y",
+          "app-ios": "n",
+          "app-harmony": "u"
+        },
+        "H5-mobile": {
+          "Safari": "n",
+          "Android Browser": "n",
+          "微信浏览器(Android)": "n",
+          "QQ浏览器(Android)": "n"
+        },
+        "H5-pc": {
+          "Chrome": "n",
+          "IE": "n",
+          "Edge": "n",
+          "Firefox": "n",
+          "Safari": "n"
+        },
+        "小程序": {
+          "微信": "n",
+          "阿里": "n",
+          "百度": "n",
+          "字节跳动": "n",
+          "QQ": "n",
+          "钉钉": "n",
+          "快手": "n",
+          "飞书": "n",
+          "京东": "n"
+        },
+        "快应用": {
+          "华为": "n",
+          "联盟": "n"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+/**
+ * Avalin 实时音频 · 非 Android 平台兜底实现
+ *
+ * H5 有自己的 AudioWorklet 实现，不会走到这里；
+ * iOS / 鸿蒙尚未实现原生采集，统一返回不可用，由调用方给出可读提示而不是崩溃。
+ */
+
+export function isAvailable(): boolean {
+  return false
+}
+
+export function hasRecordPermission(): boolean {
+  return false
+}
+
+export function startCapture(sampleRate: number, frameBytes: number): string {
+  return 'UNSUPPORTED_PLATFORM'
+}
+
+export function readCaptureFrame(): string {
+  return ''
+}
+
+export function stopCapture(): void {
+}
+
+export function startPlayback(sampleRate: number): string {
+  return 'UNSUPPORTED_PLATFORM'
+}
+
+export function writePlayback(base64: string): number {
+  return 0
+}
+
+export function flushPending(): number {
+  return 0
+}
+
+export function hasPendingPlayback(): boolean {
+  return false
+}
+
+export function clearPlayback(): void {
+}
+
+export function setPlaybackMuted(value: boolean): void {
+}
+
+export function stopPlayback(): void {
+}

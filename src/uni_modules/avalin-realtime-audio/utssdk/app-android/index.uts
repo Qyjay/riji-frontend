@@ -1,0 +1,312 @@
+/**
+ * Avalin 实时音频 · Android 实现
+ *
+ * 设计要点：全部使用 API 23+ 的非阻塞读写（READ_NON_BLOCKING / WRITE_NON_BLOCKING），
+ * 由 JS 侧定时器驱动，插件内部不创建线程、不做跨线程回调，所有导出函数都是同步的。
+ * 这样既避开了 UTS 的线程与匿名内部类语法限制，也让 JS 侧完全掌控节奏。
+ *
+ * 音量计算、PCM 解码等纯计算工作一律留在 JS 侧，插件只做设备读写。
+ *
+ * 采集：16kHz / 16bit / 单声道，音源用 VOICE_COMMUNICATION 以启用系统回声消除，
+ *      避免扬声器播放的 AI 语音被麦克风重新采集造成回环啸叫。
+ * 播放：24kHz / 16bit / 单声道，MODE_STREAM 连续写入，天然无缝拼接。
+ */
+
+import AudioRecord from 'android.media.AudioRecord'
+import AudioTrack from 'android.media.AudioTrack'
+import AudioFormat from 'android.media.AudioFormat'
+import AudioManager from 'android.media.AudioManager'
+import MediaRecorder from 'android.media.MediaRecorder'
+import Base64 from 'android.util.Base64'
+import Manifest from 'android.Manifest'
+import PackageManager from 'android.content.pm.PackageManager'
+import { UTSAndroid } from 'io.dcloud.uts'
+
+// ── 采集状态 ────────────────────────────────────────────────
+
+let recorder: AudioRecord | null = null
+let capturing = false
+let captureBuffer: ByteArray | null = null
+
+// ── 播放状态 ────────────────────────────────────────────────
+
+let track: AudioTrack | null = null
+let playing = false
+let muted = false
+// 一次 write 没写完的尾巴，由后续 flushPending 继续写出，保证音频顺序
+let pendingBytes: ByteArray | null = null
+let pendingOffset = 0
+
+/** 供 JS 侧探测插件是否真的编译进了基座 */
+export function isAvailable(): boolean {
+  return true
+}
+
+/** 麦克风权限是否已授予 */
+export function hasRecordPermission(): boolean {
+  const context = UTSAndroid.getAppContext()
+  if (context == null) {
+    return false
+  }
+  const granted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+  return granted == PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * 开始采集。
+ * @param sampleRate 采样率，实时语音固定 16000
+ * @param frameBytes 单帧字节数，16kHz/40ms 对应 1280
+ * @returns 空字符串表示成功，否则为错误码
+ */
+export function startCapture(sampleRate: number, frameBytes: number): string {
+  if (capturing) {
+    return ''
+  }
+  if (!hasRecordPermission()) {
+    return 'NO_PERMISSION'
+  }
+
+  const minBuffer = AudioRecord.getMinBufferSize(
+    sampleRate,
+    AudioFormat.CHANNEL_IN_MONO,
+    AudioFormat.ENCODING_PCM_16BIT,
+  )
+  if (minBuffer <= 0) {
+    return 'UNSUPPORTED_SAMPLE_RATE'
+  }
+
+  // 缓冲区放大到至少 8 帧，容忍 JS 定时器抖动，避免丢帧
+  let bufferSize = minBuffer * 4
+  const wanted = frameBytes * 8
+  if (bufferSize < wanted) {
+    bufferSize = wanted
+  }
+
+  try {
+    const instance = new AudioRecord(
+      MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+      sampleRate,
+      AudioFormat.CHANNEL_IN_MONO,
+      AudioFormat.ENCODING_PCM_16BIT,
+      bufferSize,
+    )
+
+    if (instance.getState() != AudioRecord.STATE_INITIALIZED) {
+      instance.release()
+      return 'INIT_FAILED'
+    }
+
+    instance.startRecording()
+    recorder = instance
+    captureBuffer = new ByteArray(frameBytes)
+    capturing = true
+    return ''
+  } catch (error) {
+    return 'START_FAILED'
+  }
+}
+
+/**
+ * 非阻塞读取一帧。JS 侧应以小于帧时长的间隔轮询调用。
+ * @returns Base64 编码的 PCM16 数据；暂无数据时返回空字符串
+ */
+export function readCaptureFrame(): string {
+  const instance = recorder
+  const buffer = captureBuffer
+  if (!capturing || instance == null || buffer == null) {
+    return ''
+  }
+
+  const read = instance.read(buffer, 0, buffer.size, AudioRecord.READ_NON_BLOCKING)
+  if (read <= 0) {
+    return ''
+  }
+
+  return Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
+}
+
+export function stopCapture(): void {
+  const instance = recorder
+  capturing = false
+  captureBuffer = null
+  recorder = null
+  if (instance == null) {
+    return
+  }
+  try {
+    if (instance.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+      instance.stop()
+    }
+  } catch (error) {
+    // 设备已被系统回收时 stop 会抛异常，忽略
+  }
+  try {
+    instance.release()
+  } catch (error) {
+    // 同上
+  }
+}
+
+/**
+ * 开始播放。
+ * @param sampleRate 采样率，实时语音下行固定 24000
+ * @returns 空字符串表示成功，否则为错误码
+ */
+export function startPlayback(sampleRate: number): string {
+  if (playing) {
+    return ''
+  }
+
+  const minBuffer = AudioTrack.getMinBufferSize(
+    sampleRate,
+    AudioFormat.CHANNEL_OUT_MONO,
+    AudioFormat.ENCODING_PCM_16BIT,
+  )
+  if (minBuffer <= 0) {
+    return 'UNSUPPORTED_SAMPLE_RATE'
+  }
+
+  try {
+    // 用 STREAM_MUSIC 走扬声器，保证免手持时能听清。
+    // 若真机出现回声，可改为 STREAM_VOICE_CALL 并配合 setSpeakerphoneOn(true)，
+    // 那样能拿到更强的系统回声消除，但需要 MODIFY_AUDIO_SETTINGS 权限。
+    const instance = new AudioTrack(
+      AudioManager.STREAM_MUSIC,
+      sampleRate,
+      AudioFormat.CHANNEL_OUT_MONO,
+      AudioFormat.ENCODING_PCM_16BIT,
+      minBuffer * 4,
+      AudioTrack.MODE_STREAM,
+    )
+
+    if (instance.getState() != AudioTrack.STATE_INITIALIZED) {
+      instance.release()
+      return 'INIT_FAILED'
+    }
+
+    instance.play()
+    track = instance
+    playing = true
+    muted = false
+    pendingBytes = null
+    pendingOffset = 0
+    return ''
+  } catch (error) {
+    return 'START_FAILED'
+  }
+}
+
+/**
+ * 写入一段待播放音频。
+ * @param base64 Base64 编码的 PCM16 数据
+ * @returns 本次写入的字节数；未写完的部分会缓存，由 flushPending 继续写出
+ */
+export function writePlayback(base64: string): number {
+  const instance = track
+  if (!playing || instance == null) {
+    return 0
+  }
+
+  // 先把上一次的尾巴写完，保证音频顺序不乱
+  flushPending()
+
+  const decoded = Base64.decode(base64, Base64.NO_WRAP)
+  if (muted) {
+    // 静音时丢弃数据而不是排队，避免解除静音后播放一大段过期语音
+    return decoded.size
+  }
+
+  const written = instance.write(decoded, 0, decoded.size, AudioTrack.WRITE_NON_BLOCKING)
+  if (written < decoded.size) {
+    pendingBytes = decoded
+    pendingOffset = written > 0 ? written : 0
+  }
+  return written > 0 ? written : 0
+}
+
+/**
+ * 继续写出缓存中未写完的数据。JS 侧应在轮询里调用，避免尾巴滞留。
+ * @returns 本次写出的字节数
+ */
+export function flushPending(): number {
+  const instance = track
+  const buffer = pendingBytes
+  if (!playing || instance == null || buffer == null) {
+    return 0
+  }
+
+  const remaining = buffer.size - pendingOffset
+  if (remaining <= 0) {
+    pendingBytes = null
+    pendingOffset = 0
+    return 0
+  }
+
+  const written = instance.write(buffer, pendingOffset, remaining, AudioTrack.WRITE_NON_BLOCKING)
+  if (written <= 0) {
+    return 0
+  }
+
+  pendingOffset = pendingOffset + written
+  if (pendingOffset >= buffer.size) {
+    pendingBytes = null
+    pendingOffset = 0
+  }
+  return written
+}
+
+/** 是否还有未写出的缓存数据 */
+export function hasPendingPlayback(): boolean {
+  return pendingBytes != null
+}
+
+/**
+ * 立即打断播放并丢弃已排队音频。
+ * 用户插话（barge-in）时调用，pause + flush 会清空 AudioTrack 内部缓冲。
+ */
+export function clearPlayback(): void {
+  const instance = track
+  pendingBytes = null
+  pendingOffset = 0
+  if (!playing || instance == null) {
+    return
+  }
+  try {
+    instance.pause()
+    instance.flush()
+    instance.play()
+  } catch (error) {
+    // 状态异常时忽略，下一次 write 会重新触发播放
+  }
+}
+
+export function setPlaybackMuted(value: boolean): void {
+  muted = value
+  if (value) {
+    clearPlayback()
+  }
+}
+
+export function stopPlayback(): void {
+  const instance = track
+  playing = false
+  muted = false
+  pendingBytes = null
+  pendingOffset = 0
+  track = null
+  if (instance == null) {
+    return
+  }
+  try {
+    instance.pause()
+    instance.flush()
+    instance.stop()
+  } catch (error) {
+    // 忽略
+  }
+  try {
+    instance.release()
+  } catch (error) {
+    // 忽略
+  }
+}
