@@ -413,7 +413,7 @@ function stopRecordTimer() {
 async function startRecording() {
   // #ifdef H5
   await startH5Recording()
-  return
+  return undefined
   // #endif
 
   initUniRecorder()
@@ -434,7 +434,7 @@ async function startRecording() {
 function stopRecording() {
   // #ifdef H5
   h5MediaRecorder?.stop()
-  return
+  return undefined
   // #endif
 
   recorderManager?.stop()
@@ -447,7 +447,7 @@ function cancelRecording() {
   h5MediaRecorder?.stop()
   stopRecordTimer()
   chatStore.setRecording(false)
-  return
+  return undefined
   // #endif
 
   recorderManager?.stop()

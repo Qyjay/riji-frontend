@@ -96,4 +96,3 @@ defineProps<{
 }
 .utterance--active .utterance-copy { color: #655249; }
 </style>
-

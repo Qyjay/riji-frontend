@@ -1,8 +1,8 @@
 # Avalin 实时语音分身前端 UX 与工程规格
 
-> 状态：Draft v1.0  
-> 技术栈：uni-app + Vue 3 + TypeScript + Pinia  
-> 后端契约：`riji-backend/docs/REALTIME_VOICE_AVATAR_SPEC.md`  
+> 状态：Draft v1.0
+> 技术栈：uni-app + Vue 3 + TypeScript + Pinia
+> 后端契约：`riji-backend/docs/REALTIME_VOICE_AVATAR_SPEC.md`
 > 产品原则：记忆是证据，画像是理解，分身是行动；AI 建议，用户决策
 
 ---

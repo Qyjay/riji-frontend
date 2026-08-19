@@ -64,4 +64,3 @@ export class FakeRealtimeAudioAdapter implements RealtimeAudioAdapter {
     this.disposed = true
   }
 }
-

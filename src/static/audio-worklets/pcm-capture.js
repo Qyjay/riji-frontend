@@ -11,4 +11,3 @@ class AvalinPcmCaptureProcessor extends AudioWorkletProcessor {
 }
 
 registerProcessor('avalin-pcm-capture', AvalinPcmCaptureProcessor)
-

@@ -74,4 +74,3 @@ export function concatInt16(
   output.set(right, left.length)
   return output
 }
-

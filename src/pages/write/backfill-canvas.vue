@@ -155,7 +155,7 @@ async function startRecording(id: string) {
 
   // #ifdef H5
   await startH5Recording()
-  return
+  return undefined
   // #endif
 
   if (!recorderManager) {
@@ -230,7 +230,7 @@ function stopRecording() {
   if (!isRecording.value) return
   // #ifdef H5
   h5MediaRecorder?.stop()
-  return
+  return undefined
   // #endif
   recorderManager?.stop()
   stopRecordTimer()
