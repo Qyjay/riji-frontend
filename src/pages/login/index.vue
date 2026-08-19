@@ -96,6 +96,10 @@
 
       <!-- 错误提示（调试用） -->
       <view v-if="errorMsg" class="error-bar">{{ errorMsg }}</view>
+        <view v-if="USE_MOCK" class="mock-entry" role="button" tabindex="0" @click="enterMockDemo" @keyup.enter="enterMockDemo">
+          <text class="mock-entry-title">进入 Mock 演示</text>
+          <text class="mock-entry-desc">仅本地视觉验收，不连接真实账号</text>
+        </view>
     </view>
   </view>
 </template>
@@ -104,6 +108,8 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { login, register, isLoggedIn } from '../../services/api/auth'
+import { USE_MOCK } from '../../services/config'
+import { consumePendingDeepLink } from '../../platform'
 
 const mode = ref<'login' | 'register'>('login')
 const submitting = ref(false)
@@ -114,9 +120,16 @@ const registerForm = ref({ username: '', password: '', name: '', school: '' })
 
 onLoad(() => {
   if (isLoggedIn()) {
-    uni.reLaunch({ url: '/pages/index/index' })
+    goAfterAuth()
   }
 })
+
+/** 登录态就绪后的落地页：优先跳转外部唤起的目标，否则回首页 */
+function goAfterAuth() {
+  if (!consumePendingDeepLink()) {
+    uni.reLaunch({ url: '/pages/index/index' })
+  }
+}
 
 function validateUsername(v: string): string | null {
   if (!v) return '用户名不能为空'
@@ -128,6 +141,11 @@ function validatePassword(v: string): string | null {
   if (!v) return '密码不能为空'
   if (v.length < 6) return '密码至少 6 个字符'
   return null
+}
+
+async function enterMockDemo() {
+  await login('mock_demo', 'mock_demo')
+  uni.reLaunch({ url: '/pages/social/index' })
 }
 
 async function handleLogin() {
@@ -143,7 +161,7 @@ async function handleLogin() {
     await login(loginForm.value.username, loginForm.value.password)
     console.log('[Login] 成功')
     uni.showToast({ title: '登录成功', icon: 'success' })
-    setTimeout(() => uni.reLaunch({ url: '/pages/index/index' }), 800)
+    setTimeout(() => goAfterAuth(), 800)
   } catch (err: any) {
     console.error('[Login] 失败:', err)
     const msg = err?.message || '登录失败，请检查网络'
@@ -172,7 +190,7 @@ async function handleRegister() {
     })
     console.log('[Register] 成功')
     uni.showToast({ title: '注册成功', icon: 'success' })
-    setTimeout(() => uni.reLaunch({ url: '/pages/index/index' }), 800)
+    setTimeout(() => goAfterAuth(), 800)
   } catch (err: any) {
     console.error('[Register] 失败:', err)
     const msg = err?.message || '注册失败，请检查网络'
@@ -186,17 +204,20 @@ async function handleRegister() {
 
 <style lang="scss" scoped>
 .page {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 100%;
   background:
     radial-gradient(circle at 18% 8%, rgba(221, 162, 107, 0.24), transparent 32%),
     linear-gradient(160deg, #FFF9F1 0%, #F6EBDD 52%, #EFE1D0 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 72rpx 40rpx 56rpx;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
   color: #2E2118;
   font-family: 'ZcoolKuaiLe', 'ZCOOL KuaiLe', 'STXingkai', 'KaiTi', 'PingFang SC', sans-serif;
@@ -573,6 +594,32 @@ async function handleRegister() {
   width: 100%;
   text-align: center;
   box-sizing: border-box;
+}
+
+.mock-entry {
+  width: 100%;
+  min-height: 88rpx;
+  margin-top: 18rpx;
+  padding: 14rpx 22rpx;
+  border-radius: 22rpx;
+  border: 1px solid rgba(107, 142, 180, 0.28);
+  background: #EDF4FA;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.mock-entry-title {
+  color: #4F7394;
+  font-size: 26rpx;
+  font-weight: 650;
+}
+
+.mock-entry-desc {
+  margin-top: 3rpx;
+  color: #7891A7;
+  font-size: 20rpx;
 }
 
 @keyframes paper-grid-drift {

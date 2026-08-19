@@ -1,11 +1,15 @@
 <script setup lang="ts">
 // 全局启动 — 登录检查由 login 页面自身处理
 // 如需在其他页面拦截未登录，可在对应页面 onLoad 中检查
-</script>
+import { onLaunch } from '@dcloudio/uni-app'
+import { initDeepLink, initHaptics } from '@/platform'
 
-<template>
-  <router-view v-if="false" />
-</template>
+onLaunch(() => {
+  initHaptics()
+  // 未登录时会把目标暂存，由登录页在登录成功后消费
+  initDeepLink()
+})
+</script>
 
 <style lang="scss">
 // 引入手绘风格规范（§11）
@@ -108,13 +112,6 @@ view, text, input, textarea, scroll-view, swiper, image {
 .font-mono {
   font-family: "DIN Alternate", "SF Mono", monospace;
   font-variant-numeric: tabular-nums;
-}
-
-.text-gradient {
-  background: linear-gradient(135deg, #E8855A 0%, #F0A882 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .clickable {
