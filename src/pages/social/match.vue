@@ -200,6 +200,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import { withQuery } from '@/utils/query'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -308,7 +309,11 @@ function confirmAction() {
 function onBuddyClick(buddy: { id: number; name: string; avatar: string }) {
   const matchId = buddy.id === 1 ? 'm1' : buddy.id === 2 ? 'm2' : `m${buddy.id}`
   uni.navigateTo({
-    url: `/pages/social/chat?matchId=${matchId}&nickname=${encodeURIComponent(buddy.name)}&avatar=${encodeURIComponent(buddy.avatar)}`,
+    url: withQuery('/pages/social/chat', {
+      matchId,
+      nickname: buddy.name,
+      avatar: buddy.avatar,
+    }),
   })
 }
 </script>

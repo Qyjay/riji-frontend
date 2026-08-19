@@ -24,7 +24,7 @@
         <view v-else-if="visibleMatches.length">
           <view v-for="match in visibleMatches" :key="match.id" class="match-row">
             <view class="avatar">
-              <image v-if="match.avatar" :src="match.avatar" mode="aspectFill" />
+              <image v-if="match.avatar" :src="resolveAvatarUrl(match.avatar)" mode="aspectFill" />
               <text v-else class="avatar-letter">{{ match.nickname.slice(0, 1) }}</text>
             </view>
             <view class="match-main">
@@ -76,6 +76,9 @@ import DoodleIcon from '@/components/DoodleIcon.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { getMatches, respondBuddy } from '@/services/api/social'
 import type { Match } from '@/services/api/social'
+import { haptics } from '@/platform'
+import { decodeQueryParam, withQuery } from '@/utils/query'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -93,8 +96,9 @@ const visibleMatches = computed(() => filter.value === 'all'
 const emptyTitle = computed(() => filter.value === 'pending' ? '没有等待确认的申请' : '这里还没有关系记录')
 
 onLoad((options: any) => {
-  if (options?.filter === 'pending' || options?.filter === 'accepted') {
-    filter.value = options.filter
+  const next = decodeQueryParam(options?.filter)
+  if (next === 'pending' || next === 'accepted') {
+    filter.value = next
   }
 })
 
@@ -133,6 +137,7 @@ async function respond(match: Match, accept: boolean) {
     match.status = accept ? 'accepted' : 'rejected'
     if (!accept) matches.value = matches.value.filter((item) => item.id !== match.id)
     uni.showToast({ title: accept ? '已接受申请' : '已婉拒申请', icon: 'none' })
+    if (accept) haptics.heavy()
   } catch (error: any) {
     uni.showToast({ title: error?.message || '操作失败', icon: 'none' })
   }
@@ -141,12 +146,16 @@ async function respond(match: Match, accept: boolean) {
 function openChat(match: Match) {
   if (match.missionMode === 'short_term' && match.missionId) {
     uni.navigateTo({
-      url: `/pages/social/activity-room?matchId=${encodeURIComponent(match.id)}`,
+      url: withQuery('/pages/social/activity-room', { matchId: match.id }),
     })
     return
   }
   uni.navigateTo({
-    url: `/pages/social/chat?matchId=${encodeURIComponent(match.id)}&nickname=${encodeURIComponent(match.nickname)}&avatar=${encodeURIComponent(match.avatar || '')}`,
+    url: withQuery('/pages/social/chat', {
+      matchId: match.id,
+      nickname: match.nickname,
+      avatar: match.avatar || '',
+    }),
   })
 }
 </script>

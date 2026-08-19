@@ -98,7 +98,9 @@ import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { createMaterial, extractEmotion, uploadDiaryImage } from '@/services/api/material'
 import { speechToText, speechToTextFile } from '@/services/api/ai'
+import { haptics } from '@/platform'
 import { toLocalDateYmd } from '@/utils/date'
+import { decodeQueryParam } from '@/utils/query'
 
 const navPlaceholderHeight = ref(64)
 const contentHeight = ref(600)
@@ -166,14 +168,16 @@ function isLikelyDuplicateSubmit(signature: string): boolean {
 
 onLoad((query: Record<string, string> | undefined) => {
   // 兼容新格式（多张 JSON）和旧格式（单张）
-  if (query?.photos) {
+  const photosRaw = decodeQueryParam(query?.photos)
+  const photoRaw = decodeQueryParam(query?.photo)
+  if (photosRaw) {
     try {
-      photos.value = JSON.parse(decodeURIComponent(query.photos))
+      photos.value = JSON.parse(photosRaw)
     } catch {
-      photos.value = [decodeURIComponent(query.photos)]
+      photos.value = [photosRaw]
     }
-  } else if (query?.photo) {
-    photos.value = [decodeURIComponent(query.photo)]
+  } else if (photoRaw) {
+    photos.value = [photoRaw]
   }
 })
 
@@ -408,6 +412,7 @@ async function savePhotoMaterialAfterVoiceReady(options: {
     photos.value = []
 
     uni.showToast({ title: '已记录 ✓', icon: 'success' })
+    haptics.medium()
 
     // 后台提取情绪
     extractEmotion(mat.id).catch(() => {})

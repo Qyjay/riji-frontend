@@ -394,9 +394,200 @@ async function run() {
     })
     store.resolveConfirmation('approve')
     assert.deepEqual(sent.confirmations, [['confirm-1', 'approve']])
+    handlers.onEvent({
+      type: 'assistant.audio.done',
+      eventId: 'audio-done',
+      sessionId: 'voice-session',
+      timestamp: 8,
+    })
+    assert.equal(audio.flushCount, 1)
     await store.close()
     assert.equal(store.phase, 'closed')
     assert.equal(audio.disposed, true)
+  })
+
+  await test('old plugin writePlayback overwrites unfinished tail and drops audio', () => {
+    const played = []
+    let pending = null
+    let pendingOffset = 0
+    let filled = 0
+    const capacity = 4
+
+    function writeFrom(bytes, offset) {
+      const space = capacity - filled
+      const remain = bytes.length - offset
+      const n = Math.min(space, remain)
+      if (n <= 0) return 0
+      played.push(...bytes.slice(offset, offset + n))
+      filled += n
+      return n
+    }
+
+    function flushPending() {
+      if (!pending) return 0
+      const written = writeFrom(pending, pendingOffset)
+      if (written <= 0) return 0
+      pendingOffset += written
+      if (pendingOffset >= pending.length) {
+        pending = null
+        pendingOffset = 0
+      }
+      return written
+    }
+
+    function writePlayback(bytes) {
+      flushPending()
+      const written = writeFrom(bytes, 0)
+      if (written < bytes.length) {
+        pending = bytes
+        pendingOffset = written > 0 ? written : 0
+      }
+      return written
+    }
+
+    writePlayback([1, 2, 3, 4, 5, 6])
+    writePlayback([7, 8, 9, 10])
+    assert.deepEqual(played, [1, 2, 3, 4])
+    assert.deepEqual(pending, [7, 8, 9, 10])
+    assert.equal(pendingOffset, 0)
+  })
+
+  await test('playback buffer queues in order, waits for prebuffer, then flushes tail', () => {
+    const { PcmPlaybackBuffer } = loadTs(
+      path.join(src, 'services/realtime/audio/playback-buffer.ts'),
+    )
+    const buffer = new PcmPlaybackBuffer({
+      sampleRate: 1000,
+      prebufferMs: 4,
+      maxBufferMs: 20,
+    })
+    buffer.enqueue(Uint8Array.from([1, 2, 3, 4]).buffer)
+    assert.equal(buffer.takeChunk(), null)
+    assert.equal(buffer.stats.queuedBytes, 4)
+    buffer.enqueue(Uint8Array.from([5, 6, 7, 8]).buffer)
+    assert.deepEqual(Array.from(buffer.takeChunk()), [1, 2, 3, 4])
+    assert.deepEqual(Array.from(buffer.takeChunk()), [5, 6, 7, 8])
+
+    const tail = new PcmPlaybackBuffer({
+      sampleRate: 1000,
+      prebufferMs: 4,
+      maxBufferMs: 20,
+    })
+    tail.enqueue(Uint8Array.from([9, 10]).buffer)
+    assert.equal(tail.takeChunk(), null)
+    tail.releasePrebuffer()
+    assert.deepEqual(Array.from(tail.takeChunk()), [9, 10])
+  })
+
+  await test('playback buffer drops oldest chunks when overflowing', () => {
+    const events = []
+    const { PcmPlaybackBuffer } = loadTs(
+      path.join(src, 'services/realtime/audio/playback-buffer.ts'),
+    )
+    const buffer = new PcmPlaybackBuffer({
+      sampleRate: 1000,
+      prebufferMs: 2,
+      maxBufferMs: 4,
+      onEvent: (event) => events.push(event.type),
+    })
+    buffer.enqueue(Uint8Array.from([1, 2, 3, 4]).buffer)
+    buffer.enqueue(Uint8Array.from([5, 6, 7, 8]).buffer)
+    buffer.enqueue(Uint8Array.from([9, 10, 11, 12]).buffer)
+    assert.equal(events.includes('overflow'), true)
+    const drained = []
+    let chunk = buffer.takeChunk()
+    while (chunk) {
+      drained.push(...chunk)
+      chunk = buffer.takeChunk()
+    }
+    assert.deepEqual(drained, [5, 6, 7, 8, 9, 10, 11, 12])
+  })
+
+  await test('playback pump writes in order, continues pending, and clears on interrupt', () => {
+    const { AppPlaybackPump } = loadTs(
+      path.join(src, 'services/realtime/audio/playback-buffer.ts'),
+    )
+    const played = []
+    let pending = null
+    let pendingOffset = 0
+    let filled = 0
+    const capacity = 4
+
+    function writeFrom(bytes, offset) {
+      const space = capacity - filled
+      const remain = bytes.length - offset
+      const n = Math.min(space, remain)
+      if (n <= 0) return 0
+      played.push(...bytes.slice(offset, offset + n))
+      filled += n
+      return n
+    }
+
+    const native = {
+      consume() {
+        filled = 0
+      },
+      writePlayback(base64) {
+        if (pending) throw new Error('writePlayback called while pending')
+        const bytes = Array.from(Buffer.from(base64, 'base64'))
+        const written = writeFrom(bytes, 0)
+        if (written < bytes.length) {
+          pending = bytes
+          pendingOffset = written
+        }
+        return written
+      },
+      flushPending() {
+        if (!pending) return 0
+        const written = writeFrom(pending, pendingOffset)
+        if (written <= 0) return 0
+        pendingOffset += written
+        if (pendingOffset >= pending.length) {
+          pending = null
+          pendingOffset = 0
+        }
+        return written
+      },
+      hasPendingPlayback() {
+        return pending != null
+      },
+      clearPlayback() {
+        pending = null
+        pendingOffset = 0
+        filled = 0
+      },
+    }
+    const pump = new AppPlaybackPump({
+      native,
+      toBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+      sampleRate: 1000,
+      prebufferMs: 4,
+      maxBufferMs: 40,
+    })
+
+    pump.enqueue(Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]).buffer)
+    assert.deepEqual(played, [1, 2, 3, 4])
+    assert.equal(native.hasPendingPlayback(), true)
+
+    pump.enqueue(Uint8Array.from([9, 10, 11, 12]).buffer)
+    assert.deepEqual(played, [1, 2, 3, 4])
+    assert.equal(native.hasPendingPlayback(), true)
+    assert.equal(pump.hasWork(), true)
+
+    native.consume()
+    pump.pump()
+    assert.deepEqual(played, [1, 2, 3, 4, 5, 6, 7, 8])
+    assert.equal(native.hasPendingPlayback(), true)
+
+    native.consume()
+    pump.pump()
+    assert.deepEqual(played, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    assert.equal(native.hasPendingPlayback(), false)
+
+    pump.enqueue(Uint8Array.from([13, 14, 15, 16]).buffer)
+    pump.interrupt()
+    assert.equal(pump.hasWork(), false)
+    assert.equal(native.hasPendingPlayback(), false)
   })
 
   console.log(`\nRealtime voice tests passed: ${passed}`)

@@ -2,7 +2,8 @@
 // 使用 export let + live binding，所有 import { USE_MOCK } 的地方自动读到最新值
 
 // App / 小程序端没有同源概念，必须用绝对地址；H5 走 vite dev 代理或同源部署。
-let DEFAULT_API_BASE_URL = 'https://avalin.cn/api'
+// 生产域名用 www：裸域 avalin.cn 目前没有 A/AAAA 记录，真机会 DNS 失败。
+let DEFAULT_API_BASE_URL = 'https://www.avalin.cn/api'
 // #ifdef H5
 DEFAULT_API_BASE_URL = '/api'
 // #endif
@@ -21,7 +22,13 @@ function _readMock(): boolean {
 function _readBaseUrl(): string {
   try {
     const saved = uni.getStorageSync('dev_api_base_url')
-    if (saved && /^http:\/\/115\.190\.218\.167/i.test(saved)) {
+    // 清掉已失效的旧地址：旧公网 IP、无法解析的裸域、以及会被 Android 拦截的明文 HTTP。
+    if (
+      saved &&
+      (/^https?:\/\/115\.190\.218\.167/i.test(saved) ||
+        /^https?:\/\/avalin\.cn(\/|$)/i.test(saved) ||
+        /^http:\/\/www\.avalin\.cn(\/|$)/i.test(saved))
+    ) {
       uni.removeStorageSync('dev_api_base_url')
       return DEFAULT_API_BASE_URL
     }

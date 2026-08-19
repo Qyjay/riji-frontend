@@ -35,10 +35,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { generateDerivative, getDerivatives, getDiaryDetail } from '@/services/api/diary'
 import type { DiaryDerivative } from '@/services/api/diary'
+import { decodeQueryParam } from '@/utils/query'
 
 const loading = ref(true)
 const navTitle = ref('小说阅读')
@@ -67,22 +69,23 @@ async function loadNovelDerivative(diaryId: string, derivativeId?: string): Prom
   return null
 }
 
-onMounted(async () => {
-  const info = uni.getSystemInfoSync()
-  scrollHeight.value = info.windowHeight - ((info.statusBarHeight ?? 20) + 44)
-
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  const options = current?.$page?.options ?? current?.options ?? {}
-  const diaryId = (options as any).diaryId as string | undefined
-  const derivativeId = (options as any).derivativeId as string | undefined
-
+onLoad((options: any) => {
+  const diaryId = decodeQueryParam(options?.diaryId)
+  const derivativeId = decodeQueryParam(options?.derivativeId) || undefined
   if (!diaryId) {
     loading.value = false
     uni.showToast({ title: '缺少日记ID', icon: 'none' })
     return
   }
+  void loadNovel(diaryId, derivativeId)
+})
 
+onMounted(() => {
+  const info = uni.getSystemInfoSync()
+  scrollHeight.value = info.windowHeight - ((info.statusBarHeight ?? 20) + 44)
+})
+
+async function loadNovel(diaryId: string, derivativeId?: string) {
   try {
     const diary = await getDiaryDetail(diaryId)
     navTitle.value = diary.title || '小说阅读'
@@ -108,7 +111,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 </script>
 
 <style lang="scss" scoped>

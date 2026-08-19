@@ -22,13 +22,13 @@
             <view class="card-footer">
               <text class="card-meta">{{ diary?.emotion.emoji }} {{ diary?.emotion.label }} · {{ formattedDate }}</text>
               <view v-if="showPhoto && diary?.images?.length" class="card-photo-wrap">
-                <image class="card-photo" :src="diary.images[0]" mode="aspectFill" />
+                <image class="card-photo" :src="resolveMediaUrl(diary.images[0])" mode="aspectFill" />
               </view>
               <view v-if="showLocation && diary?.location" class="card-location">
                 <text class="card-location-text">📍 {{ diary.location }}</text>
               </view>
               <view class="card-brand">
-                <text class="card-brand-text">📱 半日 App</text>
+                <text class="card-brand-text">📱 Avalin</text>
               </view>
             </view>
           </view>
@@ -107,10 +107,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { getDiaryDetail } from '@/services/api/diary'
 import type { Diary } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import { decodeQueryParam } from '@/utils/query'
+import { resolveMediaUrl } from '@/utils/avatar'
 
 const templates = [
   { id: 'warm', name: '暖阳', bg: 'linear-gradient(135deg, #FDF0E8, #F7CDB5)', textColor: '#2C1F14' },
@@ -173,20 +176,28 @@ function handleShowLocationChange(event: any) {
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
 
-onMounted(async () => {
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  const options = current?.$page?.options ?? current?.options ?? {}
-  const id = (options as any).id ?? '1'
+})
+
+onLoad((options: any) => {
+  const id = decodeQueryParam(options?.id)
+  if (!id) {
+    uni.showToast({ title: '请先打开一篇日记再生成分享卡', icon: 'none' })
+    return
+  }
+  void loadShareCard(id)
+})
+
+async function loadShareCard(id: string) {
   try {
     diary.value = await getDiaryDetail(id)
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }
-})
+}
 </script>
 
 <style lang="scss" scoped>

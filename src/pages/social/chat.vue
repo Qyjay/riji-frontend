@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { ref, computed, nextTick, onMounted } from 'vue'
+import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
+import { usePolling } from '@/composables/usePolling'
 import { getMessages, sendMessage, getMatchReport } from '@/services/api/social'
 import type { Message, MatchReport } from '@/services/api/social'
 import { getCurrentUser } from '@/services/api/auth'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { clearActiveMatchId, setActiveMatchId } from '@/utils/active-session'
+import { mergeMessagesById } from '@/utils/message-merge'
+import { haptics } from '@/platform'
+import { decodeQueryParam } from '@/utils/query'
+import { CHAT_POLL_INTERVAL_MS, CHAT_POLL_MAX_INTERVAL_MS } from '@/utils/polling'
 
 const navBarHeight = ref(64)
 const matchId = ref('')
@@ -18,7 +24,10 @@ const scrollTopVal = ref(0)
 const loading = ref(true)
 const showReport = ref(false)
 const report = ref<MatchReport | null>(null)
+const stickToBottom = ref(true)
+const lastScrollTop = ref(0)
 const currentUserId = getCurrentUser()?.id || ''
+let initialLoadDone = false
 
 const canSend = computed(() => inputText.value.trim().length > 0)
 const resolvedAvatar = computed(() => resolveAvatarUrl(avatar.value))
@@ -72,11 +81,51 @@ function scrollToBottom() {
   })
 }
 
-watch(
-  () => messages.value.length,
-  () => scrollToBottom(),
-  { flush: 'post' },
-)
+function onChatScroll(e: { detail?: { scrollTop?: number } }) {
+  const top = Number(e?.detail?.scrollTop || 0)
+  if (top + 12 < lastScrollTop.value) {
+    stickToBottom.value = false
+  }
+  lastScrollTop.value = top
+}
+
+function onChatScrollToLower() {
+  stickToBottom.value = true
+}
+
+function applyIncoming(incoming: Message[], forceScroll = false) {
+  const result = mergeMessagesById(messages.value, incoming)
+  if (result.added.length === 0) return
+  messages.value = result.items
+  if (forceScroll || stickToBottom.value) {
+    scrollToBottom()
+  }
+}
+
+const polling = usePolling({
+  intervalMs: CHAT_POLL_INTERVAL_MS,
+  maxIntervalMs: CHAT_POLL_MAX_INTERVAL_MS,
+  isEnabled: () => Boolean(matchId.value),
+  onError(error, failures) {
+    console.warn('[social-chat] poll failed', failures, error)
+  },
+  async run() {
+    if (!matchId.value) return
+    try {
+      const incoming = await getMessages(matchId.value)
+      if (!polling.active) return
+      applyIncoming(incoming, !initialLoadDone)
+      initialLoadDone = true
+    } catch (error) {
+      if (!initialLoadDone) {
+        uni.showToast({ title: '加载消息失败', icon: 'none' })
+      }
+      throw error
+    } finally {
+      loading.value = false
+    }
+  },
+})
 
 async function handleSend() {
   const text = inputText.value.trim()
@@ -84,7 +133,9 @@ async function handleSend() {
   inputText.value = ''
   try {
     const msg = await sendMessage(matchId.value, text)
-    messages.value.push(msg)
+    stickToBottom.value = true
+    applyIncoming([msg], true)
+    haptics.medium()
   } catch {
     uni.showToast({ title: '发送失败', icon: 'none' })
   }
@@ -107,24 +158,23 @@ async function handleViewReport() {
 }
 
 onLoad((options: any) => {
-  matchId.value = options?.matchId || ''
-  nickname.value = options?.nickname || '搭子'
-  avatar.value = options?.avatar || ''
+  matchId.value = decodeQueryParam(options?.matchId)
+  nickname.value = decodeQueryParam(options?.nickname, '搭子')
+  avatar.value = decodeQueryParam(options?.avatar)
+  if (matchId.value) setActiveMatchId(matchId.value)
 })
 
-onMounted(async () => {
+onShow(() => {
+  if (matchId.value) setActiveMatchId(matchId.value)
+})
+
+onHide(() => {
+  clearActiveMatchId()
+})
+
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   navBarHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20) + 44
-
-  if (matchId.value) {
-    try {
-      messages.value = await getMessages(matchId.value)
-    } catch {
-      uni.showToast({ title: '加载消息失败', icon: 'none' })
-    }
-  }
-  loading.value = false
-  scrollToBottom()
 })
 </script>
 
@@ -157,6 +207,9 @@ onMounted(async () => {
         scroll-y
         :scroll-top="scrollTopVal"
         :scroll-with-animation="true"
+        :lower-threshold="120"
+        @scroll="onChatScroll"
+        @scrolltolower="onChatScrollToLower"
       >
         <view class="messages-inner">
           <view v-if="loading" class="loading-wrap">

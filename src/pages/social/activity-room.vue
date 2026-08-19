@@ -7,7 +7,10 @@
       class="scroll"
       scroll-y
       :scroll-into-view="scrollTarget"
+      :lower-threshold="120"
       :style="{ height: scrollHeight + 'px' }"
+      @scroll="onRoomScroll"
+      @scrolltolower="onRoomScrollToLower"
     >
       <view v-if="loading" class="content">
         <Skeleton :width="'72%'" :height="44" :margin-bottom="20" />
@@ -59,7 +62,7 @@
         <view class="participants">
           <view v-for="participant in room.participants" :key="participant.id" class="participant">
             <view class="participant-avatar">
-              <image v-if="participant.avatar" :src="participant.avatar" mode="aspectFill" />
+              <image v-if="participant.avatar" :src="resolveAvatarUrl(participant.avatar)" mode="aspectFill" />
               <text v-else>{{ participant.name.slice(0, 1) }}</text>
             </view>
             <view class="participant-copy">
@@ -132,10 +135,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import Skeleton from '@/components/Skeleton.vue'
+import { usePolling } from '@/composables/usePolling'
 import {
   completeActivityRoom,
   getActivityRoom,
@@ -143,6 +147,11 @@ import {
   sendMessage,
 } from '@/services/api/social'
 import type { ActivityRoom, Message } from '@/services/api/social'
+import { decodeQueryParam } from '@/utils/query'
+import { resolveAvatarUrl } from '@/utils/avatar'
+import { clearActiveMatchId, setActiveMatchId } from '@/utils/active-session'
+import { mergeMessagesById } from '@/utils/message-merge'
+import { CHAT_POLL_INTERVAL_MS, CHAT_POLL_MAX_INTERVAL_MS } from '@/utils/polling'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -153,8 +162,11 @@ const loading = ref(true)
 const messageText = ref('')
 const sending = ref(false)
 const scrollTarget = ref('')
+const stickToBottom = ref(true)
+const lastScrollTop = ref(0)
 const cachedUser = uni.getStorageSync('currentUser') || {}
 const currentUserId = String(cachedUser.id || '')
+let initialLoadDone = false
 
 const timeText = computed(() => {
   if (!room.value?.timeWindow?.startAt) return room.value?.timeWindow?.label || '时间待双方确认'
@@ -172,30 +184,73 @@ const budgetText = computed(() => {
 })
 
 onLoad((options: any) => {
-  matchId.value = options?.matchId || ''
+  matchId.value = decodeQueryParam(options?.matchId)
+  if (matchId.value) setActiveMatchId(matchId.value)
 })
 
-onMounted(async () => {
+onShow(() => {
+  if (matchId.value) setActiveMatchId(matchId.value)
+})
+
+onHide(() => {
+  clearActiveMatchId()
+})
+
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   navHeight.value = Math.max(info.statusBarHeight ?? 0, info.uniPlatform === 'web' ? 36 : 20) + 44
   scrollHeight.value = info.windowHeight - navHeight.value - 72
-  await loadRoom()
 })
 
-async function loadRoom() {
-  try {
-    const [roomData, messageData] = await Promise.all([
-      getActivityRoom(matchId.value),
-      getMessages(matchId.value),
-    ])
-    room.value = roomData
-    messages.value = messageData
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '活动房间加载失败', icon: 'none' })
-  } finally {
-    loading.value = false
+function onRoomScroll(e: { detail?: { scrollTop?: number } }) {
+  const top = Number(e?.detail?.scrollTop || 0)
+  if (top + 12 < lastScrollTop.value) {
+    stickToBottom.value = false
+  }
+  lastScrollTop.value = top
+}
+
+function onRoomScrollToLower() {
+  stickToBottom.value = true
+}
+
+function applyIncoming(incoming: Message[], forceScroll = false) {
+  const result = mergeMessagesById(messages.value, incoming)
+  if (result.added.length === 0) return
+  messages.value = result.items
+  if (forceScroll || stickToBottom.value) {
+    scrollToBottom()
   }
 }
+
+const polling = usePolling({
+  intervalMs: CHAT_POLL_INTERVAL_MS,
+  maxIntervalMs: CHAT_POLL_MAX_INTERVAL_MS,
+  isEnabled: () => Boolean(matchId.value),
+  onError(error, failures) {
+    console.warn('[activity-room] poll failed', failures, error)
+  },
+  async run() {
+    if (!matchId.value) return
+    try {
+      const [roomData, messageData] = await Promise.all([
+        getActivityRoom(matchId.value),
+        getMessages(matchId.value),
+      ])
+      if (!polling.active) return
+      room.value = roomData
+      applyIncoming(messageData, !initialLoadDone)
+      initialLoadDone = true
+    } catch (error: any) {
+      if (!initialLoadDone) {
+        uni.showToast({ title: error?.message || '活动房间加载失败', icon: 'none' })
+      }
+      throw error
+    } finally {
+      loading.value = false
+    }
+  },
+})
 
 function senderName(userId: string) {
   if (userId === currentUserId) return '我'
@@ -215,9 +270,9 @@ async function sendCurrentMessage() {
   sending.value = true
   try {
     const message = await sendMessage(matchId.value, text)
-    messages.value.push(message)
     messageText.value = ''
-    scrollToBottom()
+    stickToBottom.value = true
+    applyIncoming([message], true)
   } catch (error: any) {
     uni.showToast({ title: error?.message || '消息发送失败', icon: 'none' })
   } finally {

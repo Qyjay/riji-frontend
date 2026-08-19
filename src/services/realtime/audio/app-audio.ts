@@ -4,13 +4,15 @@
  * 与 H5 版（AudioWorklet）能力对等，底层换成 avalin-realtime-audio UTS 插件的
  * AudioRecord / AudioTrack。插件只做非阻塞的设备读写，节奏由这里的定时器掌控：
  *   - 采集：每 20ms 把 AudioRecord 缓冲区排空，转成 PCM16 交给上层
- *   - 播放：写入后若有未写完的尾巴，靠同一个定时器持续写出
+ *   - 播放：PCM 先进入 JS FIFO / 起播缓冲，再按顺序写入 AudioTrack；
+ *     原生写不满时绝不覆盖未完成的尾巴，由定时器继续泵出
  *
  * 插件未编译进基座时（比如用的是标准基座），requestPermission 会抛出可读错误，
  * 由语音通话页展示提示，而不是让整个页面崩掉。
  */
 
 import type { RealtimeAudioAdapter } from './types'
+import { AppPlaybackPump } from './playback-buffer'
 import { calculateRms } from './pcm'
 
 // #ifdef APP-PLUS
@@ -27,6 +29,10 @@ const PLAYBACK_RATE = 24000
 const TICK_MS = 20
 /** 单次 tick 最多读取的帧数，防止异常情况下死循环 */
 const MAX_FRAMES_PER_TICK = 8
+/** 与 H5 AudioWorklet 一致：先攒 100ms 再起播，吸收网络抖动 */
+const PLAYBACK_PREBUFFER_MS = 100
+/** 下行队列上限，超出则丢最旧数据以免延迟无限堆积 */
+const PLAYBACK_MAX_BUFFER_MS = 3000
 
 const ERROR_MESSAGES: Record<string, string> = {
   NO_PERMISSION: '请允许麦克风权限后重试',
@@ -38,6 +44,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 function describeError(code: string): string {
   return ERROR_MESSAGES[code] || `音频设备异常（${code}）`
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return uni.arrayBufferToBase64(copy.buffer)
 }
 
 /** 申请 Android 运行时麦克风权限 */
@@ -83,6 +95,7 @@ export class AppRealtimeAudioAdapter implements RealtimeAudioAdapter {
   private micEnabled = true
   private speakerEnabled = true
   private disposed = false
+  private pump: AppPlaybackPump | null = null
 
   async requestPermission(): Promise<void> {
     if (this.disposed) throw new Error('音频适配器已释放')
@@ -145,24 +158,28 @@ export class AppRealtimeAudioAdapter implements RealtimeAudioAdapter {
   }
 
   enqueuePlayback(pcm24: ArrayBuffer): void {
-    if (this.disposed || !pcm24.byteLength) return
+    if (this.disposed || !this.speakerEnabled || !pcm24.byteLength) return
 
     // #ifdef APP-PLUS
-    if (!this.playbackStarted) {
-      const code = nativeAudio.startPlayback(PLAYBACK_RATE)
-      if (code) return
-      this.playbackStarted = true
-      nativeAudio.setPlaybackMuted(!this.speakerEnabled)
-    }
-    nativeAudio.writePlayback(uni.arrayBufferToBase64(pcm24))
+    if (!this.ensurePlaybackStarted()) return
+    this.ensurePump().enqueue(pcm24)
     // #endif
 
-    // 可能残留写不进去的尾巴，需要定时器继续写出
+    // 原生写不满时尾巴仍在 JS 队列或插件 pending 里，需要定时器继续泵出
     this.ensureTicking()
+  }
+
+  flushPlayback(): void {
+    if (this.disposed) return
+    this.pump?.flush()
   }
 
   interruptPlayback(): void {
     if (this.disposed) return
+    if (this.pump) {
+      this.pump.interrupt()
+      return
+    }
     // #ifdef APP-PLUS
     if (this.playbackStarted) nativeAudio.clearPlayback()
     // #endif
@@ -175,6 +192,7 @@ export class AppRealtimeAudioAdapter implements RealtimeAudioAdapter {
 
   setSpeakerEnabled(value: boolean): void {
     this.speakerEnabled = value
+    if (!value) this.pump?.clearBuffer()
     // #ifdef APP-PLUS
     if (this.playbackStarted) nativeAudio.setPlaybackMuted(!value)
     // #endif
@@ -185,6 +203,8 @@ export class AppRealtimeAudioAdapter implements RealtimeAudioAdapter {
     this.disposed = true
     this.onFrame = null
     this.stopTicking()
+    this.pump?.clearBuffer()
+    this.pump = null
 
     // #ifdef APP-PLUS
     if (this.capturing) {
@@ -205,12 +225,43 @@ export class AppRealtimeAudioAdapter implements RealtimeAudioAdapter {
     this.tickTimer = setInterval(() => this.tick(), TICK_MS)
   }
 
+  // #ifdef APP-PLUS
+  private ensurePlaybackStarted(): boolean {
+    if (this.playbackStarted) return true
+    const code = nativeAudio.startPlayback(PLAYBACK_RATE)
+    if (code) return false
+    this.playbackStarted = true
+    nativeAudio.setPlaybackMuted(!this.speakerEnabled)
+    return true
+  }
+
+  private ensurePump(): AppPlaybackPump {
+    if (!this.pump) {
+      this.pump = new AppPlaybackPump({
+        native: nativeAudio,
+        toBase64: uint8ToBase64,
+        sampleRate: PLAYBACK_RATE,
+        prebufferMs: PLAYBACK_PREBUFFER_MS,
+        maxBufferMs: PLAYBACK_MAX_BUFFER_MS,
+        onEvent: (event) => {
+          if (event.type === 'underrun') {
+            console.warn('[avalin-audio] 播放欠载，正在重新起播缓冲', event)
+          } else if (event.type === 'overflow') {
+            console.warn('[avalin-audio] 播放队列溢出，已丢弃旧数据', event)
+          }
+        },
+      })
+    }
+    return this.pump
+  }
+  // #endif
+
   /** 采集停止且播放无积压时收掉定时器，避免空转耗电 */
   private syncTicking(): void {
     if (this.capturing) return
-    let pending = false
+    let pending = this.pump?.hasWork() ?? false
     // #ifdef APP-PLUS
-    pending = this.playbackStarted && nativeAudio.hasPendingPlayback()
+    pending = pending || (this.playbackStarted && nativeAudio.hasPendingPlayback())
     // #endif
     if (!pending) this.stopTicking()
   }
@@ -225,7 +276,7 @@ export class AppRealtimeAudioAdapter implements RealtimeAudioAdapter {
     if (this.disposed) return
 
     // #ifdef APP-PLUS
-    if (this.playbackStarted) nativeAudio.flushPending()
+    this.pump?.pump()
 
     if (this.capturing) {
       for (let index = 0; index < MAX_FRAMES_PER_TICK; index += 1) {

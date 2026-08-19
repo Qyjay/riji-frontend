@@ -55,6 +55,8 @@ class AvalinPcmPlaybackProcessor extends AudioWorkletProcessor {
     } else if (message.type === 'clear') {
       this.clear()
       this.report()
+    } else if (message.type === 'flush') {
+      if (this.queuedSamples > 0) this.started = true
     } else if (message.type === 'mute') {
       this.muted = Boolean(message.value)
     }

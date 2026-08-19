@@ -2,6 +2,7 @@
 // API — 广场（帖子 / 评论 / 推荐）
 // ══════════════════════════════════════════════════════════════════
 
+import { withQuery } from '@/utils/query'
 import { USE_MOCK } from '../config'
 import { request } from '../request'
 import * as mock from '../mock/plaza'
@@ -91,12 +92,14 @@ export async function getPlazaPosts(
   keyword?: string,
 ): Promise<{ items: PlazaPost[]; total: number }> {
   if (USE_MOCK) return mock.getPlazaPosts(channel, page, pageSize, keyword)
-  const params = new URLSearchParams()
-  if (channel) params.set('channel', channel)
-  if (keyword) params.set('q', keyword)
-  params.set('page', String(page))
-  params.set('page_size', String(pageSize))
-  const res = await request<{ items: PlazaPost[]; total: number }>({ url: `/plaza/posts?${params}` })
+  const res = await request<{ items: PlazaPost[]; total: number }>({
+    url: withQuery('/plaza/posts', {
+      channel,
+      q: keyword,
+      page,
+      page_size: pageSize,
+    }),
+  })
   return res
 }
 

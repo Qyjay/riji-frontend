@@ -4,6 +4,8 @@ import * as mock from '../mock/social'
 
 export interface Match {
   id: string
+  /** 对方用户 id；旧版本后端不返回，此时只能按昵称关联 */
+  userId?: string
   nickname: string
   avatar: string
   school: string

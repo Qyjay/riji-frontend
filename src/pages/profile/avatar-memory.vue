@@ -165,7 +165,7 @@
                 <view class="fact-actions">
                   <view class="fact-action" @click="togglePinned(item)"><text class="fact-action-text">{{ item.isPinned ? '取消' : '置顶' }}</text></view>
                   <view class="fact-action" @click="startEdit(item)"><text class="fact-action-text">编辑</text></view>
-                  <view class="fact-action danger-action" @click="removeFact(item.id)"><text class="fact-action-text danger-text">删除</text></view>
+                  <view class="fact-action danger-action" @click="removeFact(item)"><text class="fact-action-text danger-text">删除</text></view>
                 </view>
               </view>
             </view>
@@ -304,6 +304,13 @@ import {
   updateMemoryFact,
 } from '@/services/api/memory'
 import type { MemoryDocument, MemoryFact } from '@/services/api/memory'
+import { haptics, notify } from '@/platform'
+import {
+  buildMemoryNotifyCopy,
+  claimNotifyKey,
+  memoryNotifyLink,
+  type MemoryNotifyAction,
+} from '@/utils/action-notify'
 
 interface FactGroup {
   label: string
@@ -430,15 +437,78 @@ async function confirmAddFact() {
 }
 function startEdit(item: MemoryFact) { editingId.value = item.id; editingContent.value = item.content; editingCategory.value = item.category }
 function cancelEdit() { editingId.value = null; editingContent.value = '' }
+function emitMemoryNotify(action: MemoryNotifyAction, content: string, id: string) {
+  if (action === 'delete') haptics.heavy()
+  else haptics.medium()
+  const copy = buildMemoryNotifyCopy({ action, content })
+  if (!claimNotifyKey(`memory:${action}:${id}:${content}`)) return
+  // 应用内提示不依赖通知权限，H5 与通知被关掉的真机都要看得到结果
+  uni.showToast({ title: copy.content, icon: 'none', duration: 2000 })
+  notify({
+    title: copy.title,
+    content: copy.content,
+    payload: memoryNotifyLink(),
+    inAppFallback: false,
+  })
+}
 async function saveEdit(item: MemoryFact) {
   const content = editingContent.value.trim()
   if (!content) { uni.showToast({ title: '记忆不能为空', icon: 'none' }); return }
-  replaceFact(await updateMemoryFact(item.id, { category: editingCategory.value, content, object: stripMarkdown(content).slice(0, 80) }))
-  cancelEdit()
+  try {
+    replaceFact(await updateMemoryFact(item.id, { category: editingCategory.value, content, object: stripMarkdown(content).slice(0, 80) }))
+    cancelEdit()
+    emitMemoryNotify('edit', content, item.id)
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '保存失败', icon: 'none' })
+  }
 }
-async function togglePinned(item: MemoryFact) { replaceFact(await updateMemoryFact(item.id, { isPinned: !item.isPinned })) }
-async function disableFact(item: MemoryFact) { const updated = await updateMemoryFact(item.id, { isActive: false }); memoryFacts.value = memoryFacts.value.filter(fact => fact.id !== updated.id) }
-function removeFact(id: string) { uni.showModal({ title: '删除结构化记忆', content: '删除后这条侧写不会再参与分身画像和匹配。确定继续吗？', confirmColor: '#B55248', success: async (res) => { if (!res.confirm) return; await deleteMemoryFact(id); memoryFacts.value = memoryFacts.value.filter(item => item.id !== id) } }) }
+async function togglePinned(item: MemoryFact) {
+  try {
+    const next = await updateMemoryFact(item.id, { isPinned: !item.isPinned })
+    replaceFact(next)
+    emitMemoryNotify(next.isPinned ? 'pin' : 'unpin', next.content, next.id)
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '更新失败', icon: 'none' })
+  }
+}
+function disableFact(item: MemoryFact) {
+  uni.showModal({
+    title: '停用记忆',
+    content: '停用后这条记忆会从列表里移出，分身也不再据此判断。确定停用吗？',
+    confirmText: '停用',
+    cancelText: '取消',
+    confirmColor: '#B55248',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        const updated = await updateMemoryFact(item.id, { isActive: false })
+        memoryFacts.value = memoryFacts.value.filter(fact => fact.id !== updated.id)
+        emitMemoryNotify('disable', item.content, item.id)
+      } catch (e: any) {
+        uni.showToast({ title: e?.message || '停用失败', icon: 'none' })
+      }
+    },
+  })
+}
+function removeFact(item: MemoryFact) {
+  uni.showModal({
+    title: '删除记忆',
+    content: '删除后这条记忆不再参与分身的判断和推荐，确定删除吗？',
+    confirmText: '删除',
+    cancelText: '取消',
+    confirmColor: '#B55248',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await deleteMemoryFact(item.id)
+        memoryFacts.value = memoryFacts.value.filter(fact => fact.id !== item.id)
+        emitMemoryNotify('delete', item.content, item.id)
+      } catch (e: any) {
+        uni.showToast({ title: e?.message || '删除失败', icon: 'none' })
+      }
+    },
+  })
+}
 function replaceFact(next: MemoryFact) { const index = memoryFacts.value.findIndex(item => item.id === next.id); if (index >= 0) memoryFacts.value[index] = next }
 async function onRegenerate() {
   if (isRegenerating.value) return
@@ -450,7 +520,27 @@ async function onRegenerate() {
 async function onApproveAction(actionId: string) { try { await approveAgentAction(actionId); draftActions.value = draftActions.value.filter(item => item.id !== actionId); await loadMemoryDocuments(); uni.showToast({ title: '已发布', icon: 'success' }) } catch (e: any) { uni.showToast({ title: e?.message || '发布失败', icon: 'none' }) } }
 async function onRejectAction(actionId: string) { try { await rejectAgentAction(actionId) } finally { draftActions.value = draftActions.value.filter(item => item.id !== actionId) } }
 async function onExportMemory() { try { const payload = await exportMemory(); console.log('memory export', payload); uni.showToast({ title: `已导出 ${payload.documents.length} 条`, icon: 'success' }) } catch (e: any) { uni.showToast({ title: e?.message || '导出失败', icon: 'none' }) } }
-function onDeleteAllMemory() { uni.showModal({ title: '清空全部记忆', content: '这会删除长期记忆、结构化侧写、分身名片、草稿行动和旧分身记忆。确定继续吗？', confirmColor: '#B55248', success: async (res) => { if (!res.confirm) return; await deleteAllMemory(); memoryFacts.value = []; memoryDocs.value = []; draftActions.value = []; memoryDocCount.value = 0; avatarProfile.value = { summary: '', diaryCount: 0, chatCount: 0, generatedAt: 0 }; uni.showToast({ title: '已清空', icon: 'success' }) } }) }
+function onDeleteAllMemory() {
+  uni.showModal({
+    title: '清空全部记忆',
+    content: '这会删除长期记忆、结构化侧写、分身名片、草稿行动和旧分身记忆。确定继续吗？',
+    confirmColor: '#B55248',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await deleteAllMemory()
+        memoryFacts.value = []
+        memoryDocs.value = []
+        draftActions.value = []
+        memoryDocCount.value = 0
+        avatarProfile.value = { summary: '', diaryCount: 0, chatCount: 0, generatedAt: 0 }
+        uni.showToast({ title: '已清空', icon: 'success' })
+      } catch (e: any) {
+        uni.showToast({ title: e?.message || '清空失败', icon: 'none' })
+      }
+    },
+  })
+}
 function handleAvatarActiveChange(event: any) { return updateStatusField('isActive', Boolean(event?.detail?.value)) }
 async function updateStatusField(field: keyof AvatarStatus, value: any) { if (!avatarStatus.value) return; avatarStatus.value = { ...avatarStatus.value, [field]: value }; await updateAvatarStatus({ [field]: value }) }
 function isChannelEnabled(key: string) { return avatarStatus.value?.enabledChannels?.includes(key) ?? false }

@@ -279,12 +279,14 @@ import TabBar from '@/components/TabBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { getDiaries, generateDiary, getTodaySummary, deleteDiary } from '@/services/api/diary'
+import { withQuery } from '@/utils/query'
 import type { Diary, TodaySummary, WeatherPeriod } from '@/services/api/diary'
 import { getTodayAnniversaries } from '@/services/api/anniversary'
 import type { Anniversary } from '@/services/api/anniversary'
 import { getIpLocationContext, getLocationContext } from '@/services/api/location'
 import type { LocationContext } from '@/services/api/location'
 import { getAssistantPreview } from '@/utils/chat-message'
+import { haptics } from '@/platform'
 import { toLocalDateYmd } from '@/utils/date'
 
 const diaries = ref<Diary[]>([])
@@ -721,9 +723,11 @@ async function generateDiaryInBackground(pendingId: string) {
     await loadAnniversaryData(today)
     currentDateKey.value = today
     uni.showToast({ title: '日记已生成', icon: 'success' })
+    haptics.medium()
   } catch {
     removePendingDiary(pendingId)
     uni.showToast({ title: '生成失败，请重试', icon: 'none' })
+    haptics.heavy()
   } finally {
     generatingDiary.value = false
   }
@@ -892,7 +896,7 @@ function getTimelinePreview(mat: TodaySummary['materials'][number]): string {
 
 // ── 跳转 ──
 function goDetail(id: string) {
-  uni.navigateTo({ url: `/pages/diary/detail?id=${id}` })
+  uni.navigateTo({ url: withQuery('/pages/diary/detail', { id }) })
 }
 
 function goWrite() {
@@ -921,7 +925,7 @@ function onTagClick(tag: string) {
 
 function onActionClick(payload: { action: string; diaryId: string }) {
   if (payload.action === 'share') {
-    uni.navigateTo({ url: `/pages/diary/share-card?id=${payload.diaryId}` })
+    uni.navigateTo({ url: withQuery('/pages/diary/share-card', { id: payload.diaryId }) })
   }
 }
 </script>

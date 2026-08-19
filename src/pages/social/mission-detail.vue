@@ -99,7 +99,7 @@
             @keyup.enter="openCandidate(candidate)"
           >
             <view class="candidate-avatar">
-              <image v-if="candidate.targetUser?.avatar" :src="candidate.targetUser.avatar" mode="aspectFill" />
+              <image v-if="candidate.targetUser?.avatar" :src="resolveAvatarUrl(candidate.targetUser.avatar)" mode="aspectFill" />
               <text v-else class="avatar-letter">{{ candidateName(candidate).slice(0, 1) }}</text>
             </view>
             <view class="candidate-main">
@@ -247,6 +247,10 @@ import {
   missionStatusHint,
   missionStatusLabel,
 } from '@/utils/mission'
+import { decodeQueryParam, withQuery } from '@/utils/query'
+import { resolveAvatarUrl } from '@/utils/avatar'
+import { haptics, notify } from '@/platform'
+import { buildPlazaNotifyCopy, claimNotifyKey, plazaPostNotifyLink } from '@/utils/action-notify'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -280,7 +284,7 @@ const emptySuggestion = computed(() => lastSuggestion.value || (
 ))
 
 onLoad((options: any) => {
-  missionId.value = options?.id || ''
+  missionId.value = decodeQueryParam(options?.id)
 })
 
 onMounted(() => {
@@ -327,14 +331,19 @@ function candidateStatus(candidate: MissionCandidate) {
 
 function openCandidates() {
   uni.navigateTo({
-    url: `/pages/social/candidates?missionId=${encodeURIComponent(missionId.value)}`,
+    url: withQuery('/pages/social/candidates', { missionId: missionId.value }),
   })
 }
 
 function openCandidate(candidate: MissionCandidate) {
   if (candidate.interactionId && mission.value?.atoaSessionId) {
     uni.navigateTo({
-      url: `/pages/social/atoa-detail?id=${encodeURIComponent(candidate.interactionId)}&sessionId=${encodeURIComponent(mission.value.atoaSessionId)}&missionId=${encodeURIComponent(missionId.value)}&missionMode=${encodeURIComponent(mission.value.mode)}`,
+      url: withQuery('/pages/social/atoa-detail', {
+        id: candidate.interactionId,
+        sessionId: mission.value.atoaSessionId,
+        missionId: missionId.value,
+        missionMode: mission.value.mode,
+      }),
     })
     return
   }
@@ -377,8 +386,23 @@ async function publishPost() {
   try {
     const post = await publishMissionPost(mission.value.id, postDraft.value)
     mission.value = await getMission(mission.value.id)
+    const publishedContent = post?.content || postDraft.value.content
+    const publishedType = post?.type || 'buddy'
     postDraft.value = null
-    uni.showToast({ title: '招募帖已发布', icon: 'success' })
+    haptics.medium()
+    const copy = buildPlazaNotifyCopy({
+      type: publishedType,
+      content: publishedContent,
+    })
+    if (claimNotifyKey(`plaza:publish:${post?.id || copy.content}`)) {
+      notify({
+        title: copy.title,
+        content: copy.content,
+        payload: plazaPostNotifyLink(post?.id),
+        inAppFallback: false,
+      })
+    }
+    uni.showToast({ title: '招募帖已发布，正在打开帖子', icon: 'success' })
     setTimeout(() => {
       uni.navigateTo({ url: `/pages/plaza/detail?id=${encodeURIComponent(post.id)}` })
     }, 700)

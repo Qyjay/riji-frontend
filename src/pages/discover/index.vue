@@ -4,7 +4,7 @@
     <CustomNavBar title="广场" left-icon="back">
       <template #right>
         <view class="nav-right-icons">
-          <text class="nav-icon" @click="go('/pages/messages/notifications')">🔔</text>
+          <text class="nav-icon" @click="go('/pages/messages/index')">🔔</text>
         </view>
       </template>
     </CustomNavBar>
@@ -153,7 +153,7 @@
           >
             <!-- 作者信息 -->
             <view class="post-author-row">
-              <image class="post-avatar" :src="item.authorAvatar" mode="aspectFill" />
+              <image class="post-avatar" :src="displayAvatarUrl(item.authorAvatar)" mode="aspectFill" @error="onDisplayMediaError(item.authorAvatar, true)" />
               <view class="post-author-info">
                 <view class="post-author-name-row">
                   <text class="post-author-name">{{ item.authorName }}</text>
@@ -178,8 +178,9 @@
                 v-for="(img, ii) in safeSlice(item.images, 3)"
                 :key="ii"
                 class="post-image"
-                :src="img"
+                :src="displayMediaUrl(img)"
                 mode="aspectFill"
+                @error="onDisplayMediaError(img, false)"
               />
             </view>
 
@@ -237,6 +238,10 @@ import TabBar from '@/components/TabBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { getPlazaPosts, getAgentMatches, dismissMatch, acceptMatch, likePost, type PlazaPost, type AgentMatch } from '@/services/api/plaza'
 import { getAvatarStatus, type AvatarStatus } from '@/services/api/avatar'
+import { getDiaries } from '@/services/api/diary'
+import { haptics } from '@/platform'
+import { withQuery } from '@/utils/query'
+import { displayAvatarUrl, displayMediaUrl, onDisplayMediaError } from '@/utils/media-display'
 
 // ── 导航栏高度 ──────────────────────────────────────────────────
 const navHeight = ref(64)
@@ -407,6 +412,7 @@ async function dismissMatchItem(matchId: string) {
 async function acceptMatchItem(matchId: string, postId: string) {
   try {
     await acceptMatch(matchId)
+    haptics.heavy()
     uni.navigateTo({ url: `/pages/chat/index?postId=${postId}` })
   } catch (e) {
     uni.showToast({ title: '操作失败，请重试', icon: 'none' })
@@ -439,13 +445,37 @@ const toolboxRoutes: Record<string, string> = {
   novel:          '/pages/novel/index',
 }
 
-function handleToolClick(key: string, toast?: string) {
+async function handleToolClick(key: string, toast?: string) {
   if (toast) {
     uni.showToast({ title: toast, icon: 'none' })
     return
   }
+  if (key === 'comic' || key === 'share-card') {
+    await openDiaryBoundTool(key)
+    return
+  }
   const path = toolboxRoutes[key]
   if (path) uni.navigateTo({ url: path })
+}
+
+/** 漫画/分享卡必须带日记 id；工具箱入口自动带上最近一篇，避免空页报错 */
+async function openDiaryBoundTool(key: string) {
+  const path = toolboxRoutes[key]
+  if (!path) return
+  try {
+    uni.showLoading({ title: '加载中', mask: true })
+    const { list } = await getDiaries(1, 1)
+    const diaryId = list[0]?.id
+    if (!diaryId) {
+      uni.showToast({ title: '还没有日记，先去写一篇吧', icon: 'none' })
+      return
+    }
+    uni.navigateTo({ url: withQuery(path, { id: diaryId }) })
+  } catch {
+    uni.showToast({ title: '日记加载失败，请稍后重试', icon: 'none' })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 // ── 工具函数 ─────────────────────────────────────────────────────

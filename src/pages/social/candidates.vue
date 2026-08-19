@@ -53,7 +53,7 @@
         >
           <view class="candidate-head">
             <view class="avatar">
-              <image v-if="candidate.targetUser?.avatar" :src="candidate.targetUser.avatar" mode="aspectFill" />
+              <image v-if="candidate.targetUser?.avatar" :src="resolveAvatarUrl(candidate.targetUser.avatar)" mode="aspectFill" />
               <text v-else>{{ candidateName(candidate).slice(0, 1) }}</text>
             </view>
             <view class="identity">
@@ -148,6 +148,8 @@ import {
 } from '@/services/api/mission'
 import type { MissionCandidate, SocialMission } from '@/services/api/mission'
 import { missionAccent, missionModeLabel } from '@/utils/mission'
+import { decodeQueryParam, withQuery } from '@/utils/query'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -176,7 +178,7 @@ const filteredCandidates = computed(() => {
 })
 
 onLoad((options: any) => {
-  missionId.value = options?.missionId || ''
+  missionId.value = decodeQueryParam(options?.missionId)
 })
 
 onMounted(() => {
@@ -260,7 +262,12 @@ async function probeOrOpen(candidate: MissionCandidate) {
 
 function openProbe(interactionId: string, sessionId: string) {
   uni.navigateTo({
-    url: `/pages/social/atoa-detail?id=${encodeURIComponent(interactionId)}&sessionId=${encodeURIComponent(sessionId)}&missionId=${encodeURIComponent(missionId.value)}&missionMode=${encodeURIComponent(mission.value?.mode || '')}`,
+    url: withQuery('/pages/social/atoa-detail', {
+      id: interactionId,
+      sessionId,
+      missionId: missionId.value,
+      missionMode: mission.value?.mode || '',
+    }),
   })
 }
 

@@ -26,7 +26,7 @@
         <view class="post-section">
           <!-- 作者信息 -->
           <view class="author-row">
-            <image :src="post.authorAvatar" class="avatar" mode="aspectFill" />
+            <image :src="displayAvatarUrl(post.authorAvatar)" class="avatar" mode="aspectFill" @error="onDisplayMediaError(post.authorAvatar, true)" />
             <view class="author-info">
               <view class="author-name-row">
                 <text class="author-name">{{ post.authorName }}</text>
@@ -89,10 +89,11 @@
             <image
               v-for="(img, idx) in post.images"
               :key="idx"
-              :src="img"
+              :src="displayMediaUrl(img)"
               class="grid-image"
               mode="aspectFill"
               @click="previewImage(post.images, idx)"
+              @error="onDisplayMediaError(img, false)"
             />
           </view>
 
@@ -156,7 +157,7 @@
             class="comment-item"
             :class="{ 'comment-item--agent': comment.isAgent, 'comment-item--mine': isMyComment(comment) }"
           >
-            <image :src="comment.authorAvatar" class="comment-avatar" mode="aspectFill" />
+            <image :src="displayAvatarUrl(comment.authorAvatar)" class="comment-avatar" mode="aspectFill" @error="onDisplayMediaError(comment.authorAvatar, true)" />
             <view class="comment-body">
               <view class="comment-header">
                 <text class="comment-name">{{ comment.authorName }}</text>
@@ -253,12 +254,15 @@ import { approveAgentAction, rejectAgentAction } from '@/services/api/avatar'
 import type { AgentAction } from '@/services/api/avatar'
 import type { MissionDraft } from '@/services/api/mission'
 import { saveMissionDraft } from '@/utils/mission'
+import { decodeQueryParam } from '@/utils/query'
+import { resolveMediaUrls } from '@/utils/avatar'
+import { displayAvatarUrl, displayMediaUrl, onDisplayMediaError } from '@/utils/media-display'
 
 const navBarHeight = ref(64)
 const postId = ref('')
 
 onLoad((options: any) => {
-  postId.value = options?.id || ''
+  postId.value = decodeQueryParam(options?.id)
 })
 
 onMounted(async () => {
@@ -544,9 +548,10 @@ function isMyComment(comment: PlazaComment): boolean {
 
 // 预览图片
 function previewImage(urls: string[], current: number) {
+  const abs = resolveMediaUrls(urls)
   uni.previewImage({
-    urls,
-    current: String(current),
+    urls: abs,
+    current: abs[current] || abs[0],
   })
 }
 

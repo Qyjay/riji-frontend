@@ -2,6 +2,7 @@
 // API — 统一记忆系统
 // ══════════════════════════════════════════════════════════════════
 
+import { withQuery } from '@/utils/query'
 import { request } from '../request'
 
 export interface MemoryDocument {
@@ -55,20 +56,22 @@ export interface MemoryExportPayload {
 }
 
 export async function getMemoryDocuments(params: { sourceType?: string; limit?: number; offset?: number } = {}) {
-  const search = new URLSearchParams()
-  if (params.sourceType) search.set('sourceType', params.sourceType)
-  if (params.limit) search.set('limit', String(params.limit))
-  if (params.offset) search.set('offset', String(params.offset))
-  const suffix = search.toString() ? `?${search}` : ''
-  return request<{ items: MemoryDocument[] }>({ url: `/memory/documents${suffix}` })
+  return request<{ items: MemoryDocument[] }>({
+    url: withQuery('/memory/documents', {
+      sourceType: params.sourceType,
+      limit: params.limit,
+      offset: params.offset,
+    }),
+  })
 }
 
 export async function getMemoryFacts(params: { category?: string; activeOnly?: boolean } = {}) {
-  const search = new URLSearchParams()
-  if (params.category) search.set('category', params.category)
-  if (typeof params.activeOnly === 'boolean') search.set('activeOnly', String(params.activeOnly))
-  const suffix = search.toString() ? `?${search}` : ''
-  return request<{ items: MemoryFact[] }>({ url: `/memory/facts${suffix}` })
+  return request<{ items: MemoryFact[] }>({
+    url: withQuery('/memory/facts', {
+      category: params.category,
+      activeOnly: typeof params.activeOnly === 'boolean' ? String(params.activeOnly) : undefined,
+    }),
+  })
 }
 
 export async function createMemoryFact(data: MemoryFactInput) {

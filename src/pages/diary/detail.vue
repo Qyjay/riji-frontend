@@ -228,6 +228,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import {
   getDerivativeTask,
   getDerivatives,
@@ -241,7 +242,9 @@ import {
 import type { Diary, DiaryDerivative, DiaryDerivativeTask, EmotionTrendPoint, WeatherPeriod } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
-import { API_BASE_URL } from '@/services/config'
+import { decodeQueryParam, withQuery } from '@/utils/query'
+import { resolveMediaUrl } from '@/utils/avatar'
+import { isFallbackComicUrl } from '@/utils/comic'
 
 const diary = ref<Diary | null>(null)
 const loading = ref(true)
@@ -292,7 +295,11 @@ const trendWeatherSummary = computed(() => {
 })
 
 const comicHistory = computed(() => {
-  return derivativeHistory.value.filter(item => item.type === 'comic' && item.mediaUrl)
+  return derivativeHistory.value.filter(item => (
+    item.type === 'comic'
+    && item.mediaUrl
+    && !isFallbackComicUrl(item.mediaUrl)
+  ))
 })
 
 const hasHistoryCreation = computed(() => {
@@ -322,17 +329,8 @@ interface ContentBlock {
   src?: string
 }
 
-// 辅助函数：将相对路径转换为完整 URL
 function toFullUrl(path: string): string {
-  if (path && path.startsWith('/')) {
-    // /uploads/ 路径不走 /api，直接用 host
-    if (path.startsWith('/uploads/')) {
-      const host = API_BASE_URL.replace(/\/api$/, '')
-      return `${host}${path}`
-    }
-    return `${API_BASE_URL}${path}`
-  }
-  return path
+  return resolveMediaUrl(path)
 }
 
 function readComicTasks(): Record<string, DiaryDerivativeTask> {
@@ -473,7 +471,12 @@ async function refreshComicTask() {
       clearComicTask(latest.diaryId)
       stopComicTaskPolling()
       await loadDerivativeHistory(latest.diaryId)
-      uni.showToast({ title: '漫画生成完成', icon: 'success' })
+      const created = derivativeHistory.value.find(item => item.id === latest.derivativeId)
+      if (!created?.mediaUrl || isFallbackComicUrl(created.mediaUrl)) {
+        uni.showToast({ title: '漫画没有画出来，请稍后重试', icon: 'none' })
+      } else {
+        uni.showToast({ title: '漫画生成完成', icon: 'success' })
+      }
     } else if (latest.status === 'failed') {
       clearComicTask(latest.diaryId)
       stopComicTaskPolling()
@@ -643,26 +646,32 @@ async function generateAiCommentStream() {
   }
 }
 
-onMounted(async () => {
+onLoad((options) => {
+  const id = decodeQueryParam(options?.id)
+  if (!id) {
+    loading.value = false
+    return
+  }
+  void loadDiary(id)
+})
+
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
   scrollHeight.value = info.windowHeight - statusBarHeight.value - 44
+})
 
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1]
-  const options = (current as any)?.options ?? {}
-  const id = options.id ?? '1'
-
+async function loadDiary(id: string) {
   loading.value = true
   try {
     diary.value = await getDiaryDetail(id)
   } catch {
+    diary.value = null
     loading.value = false
     uni.showToast({ title: '日记加载失败', icon: 'none' })
     return
   }
 
-  // Load emotion trend
   if (diary.value) {
     await loadDerivativeHistory(diary.value.id)
     restoreComicTask(diary.value.id)
@@ -677,7 +686,7 @@ onMounted(async () => {
   }
 
   loading.value = false
-})
+}
 
 onUnmounted(() => {
   stopComicTaskPolling()
@@ -719,17 +728,22 @@ async function handleGenerateDerivative(type: 'comic' | 'novel' | 'share_card') 
     const derivative = await generateDerivative(diary.value.id, type)
     uni.hideLoading()
     const labels: Record<string, string> = { comic: '漫画', novel: '小说', share_card: '分享卡片' }
+    if (type === 'comic' && isFallbackComicUrl(derivative.mediaUrl)) {
+      uni.showToast({ title: '漫画没有画出来，请稍后重试', icon: 'none' })
+      return
+    }
     uni.showToast({ title: `${labels[type]}生成成功 ✨`, icon: 'success' })
     if (type === 'comic') {
-      uni.navigateTo({ url: `/pages/diary/comic?id=${diary.value.id}&derivativeId=${derivative.id}` })
+      uni.navigateTo({ url: withQuery('/pages/diary/comic', { id: diary.value.id, derivativeId: derivative.id }) })
       return
     }
     if (type === 'novel') {
-      uni.navigateTo({ url: `/pages/novel/reader?diaryId=${diary.value.id}&derivativeId=${derivative.id}` })
+      uni.navigateTo({ url: withQuery('/pages/novel/reader', { diaryId: diary.value.id, derivativeId: derivative.id }) })
       return
     }
     if (type === 'share_card') {
-      uni.navigateTo({ url: `/pages/diary/share-card?id=${diary.value.id}` })
+      uni.navigateTo({ url: withQuery('/pages/diary/share-card', { id: diary.value.id }) })
+      return
     }
   } catch {
     uni.hideLoading()

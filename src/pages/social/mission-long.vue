@@ -15,6 +15,7 @@ import CustomNavBar from '@/components/CustomNavBar.vue'
 import MissionEditor from '@/components/social/MissionEditor.vue'
 import { getMission } from '@/services/api/mission'
 import { saveMissionDraft } from '@/utils/mission'
+import { decodeQueryParam } from '@/utils/query'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -22,7 +23,7 @@ const editId = ref('')
 const ready = ref(true)
 
 onLoad(async (options: any) => {
-  editId.value = options?.editId || ''
+  editId.value = decodeQueryParam(options?.editId)
   if (!editId.value) return
   ready.value = false
   try {

@@ -5,6 +5,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import type { UiChatMessage } from '@/stores/chat'
 import { parseAssistantContent } from '@/utils/chat-message'
+import { resolveMediaUrl } from '@/utils/avatar'
 
 type DisplayItem =
   | { type: 'time'; id: string; label: string }
@@ -171,7 +172,7 @@ function formatDuration(seconds: number) {
                   >
                     <image
                       v-if="attachment.type === 'image'"
-                      :src="attachment.thumbnailUrl || attachment.url"
+                      :src="resolveMediaUrl(attachment.thumbnailUrl || attachment.url)"
                       class="att-image-thumb"
                       mode="aspectFill"
                     />

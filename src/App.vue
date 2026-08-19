@@ -1,13 +1,26 @@
 <script setup lang="ts">
 // 全局启动 — 登录检查由 login 页面自身处理
 // 如需在其他页面拦截未登录，可在对应页面 onLoad 中检查
-import { onLaunch } from '@dcloudio/uni-app'
-import { initDeepLink, initHaptics } from '@/platform'
+import { onHide, onLaunch, onShow } from '@dcloudio/uni-app'
+import { initDeepLink, initHaptics, initNotifications, setNotifyAppForeground } from '@/platform'
+import { onInboxAppHide, onInboxAppShow, startInboxWatch } from '@/services/inbox-watch'
 
 onLaunch(() => {
   initHaptics()
   // 未登录时会把目标暂存，由登录页在登录成功后消费
   initDeepLink()
+  initNotifications()
+  startInboxWatch()
+})
+
+onShow(() => {
+  setNotifyAppForeground(true)
+  onInboxAppShow()
+})
+
+onHide(() => {
+  setNotifyAppForeground(false)
+  onInboxAppHide()
 })
 </script>
 

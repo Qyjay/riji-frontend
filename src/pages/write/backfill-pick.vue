@@ -72,6 +72,7 @@ import { useBackfillStore, type BackfillPhotoItem } from '@/stores/backfill'
 import { uploadDiaryImage } from '@/services/api/material'
 import { extractTakenAt, extractTakenAtFromPath, formatDate, formatTime, detectPeriod } from '@/utils/exif'
 import type { PhotoTakenMeta } from '@/utils/exif'
+import { decodeQueryParam } from '@/utils/query'
 
 const MAX_PHOTOS = 9
 const navPlaceholderHeight = ref(64)
@@ -83,7 +84,7 @@ const uploading = ref(false)
 const presetDate = ref('')
 
 onLoad((options: any) => {
-  const date = (options?.date || '').trim()
+  const date = decodeQueryParam(options?.date).trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     presetDate.value = date
   }

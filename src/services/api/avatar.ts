@@ -2,6 +2,7 @@
 // API — AI 分身（记忆 / 状态 / 侧写）
 // ══════════════════════════════════════════════════════════════════
 
+import { withQuery } from '@/utils/query'
 import { USE_MOCK } from '../config'
 import { request } from '../request'
 import * as mock from '../mock/avatar'
@@ -205,11 +206,12 @@ export async function updateAvatarStatus(fields: Partial<AvatarStatus>): Promise
 
 export async function getAtoaProbes(outcome?: string, sessionId?: string): Promise<AtoaProbe[]> {
   if (USE_MOCK) return mock.getAtoaProbes(outcome)
-  const params = new URLSearchParams()
-  if (outcome) params.set('outcome', outcome)
-  if (sessionId) params.set('session_id', sessionId)
-  const query = params.toString() ? `?${params}` : ''
-  return request<AtoaProbe[]>({ url: `/avatar/probe-log${query}` })
+  return request<AtoaProbe[]>({
+    url: withQuery('/avatar/probe-log', {
+      outcome,
+      session_id: sessionId,
+    }),
+  })
 }
 
 export async function getAtoaSessions(): Promise<AtoaSession[]> {

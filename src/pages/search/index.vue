@@ -183,6 +183,7 @@ import { searchDiaries } from '@/services/api/diary'
 import type { Diary } from '@/services/api/diary'
 import { mockDiaries } from '@/services/mock/diary'
 import { toLocalDateYmd, shiftLocalDateYmd } from '@/utils/date'
+import { withQuery } from '@/utils/query'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -445,7 +446,7 @@ function goBack() {
 }
 
 function goDetail(id: string) {
-  uni.navigateTo({ url: `/pages/diary/detail?id=${id}` })
+  uni.navigateTo({ url: withQuery('/pages/diary/detail', { id }) })
 }
 </script>
 

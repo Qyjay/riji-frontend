@@ -242,6 +242,7 @@ export const useRealtimeVoiceStore = defineStore('realtime-voice', () => {
         break
       }
       case 'assistant.audio.done':
+        audio?.flushPlayback()
         audioQueueSize.value = 0
         outputLevel.value = 0
         setPhase('listening')

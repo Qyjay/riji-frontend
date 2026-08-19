@@ -128,8 +128,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { updateDiary, generateDerivative, getDiaryDetail, getEmotionTrend } from '@/services/api/diary'
+import { decodeQueryParam, withQuery } from '@/utils/query'
+import { isFallbackComicUrl } from '@/utils/comic'
 
 const statusBarHeight = ref(20)
 const scrollHeight = ref(600)
@@ -191,25 +194,25 @@ function normalizedBarHeight(score: number): number {
   return Math.round(8 + (clamped / 100) * 72)
 }
 
-onMounted(async () => {
+onLoad((options: any) => {
+  const id = decodeQueryParam(options?.id)
+  if (id) diaryId.value = id
+  if (options?.title) title.value = decodeQueryParam(options.title)
+  if (options?.content) content.value = decodeQueryParam(options.content)
+  if (options?.editCount) editCount.value = Number(options.editCount)
+  if (options?.maxEdits) maxEdits.value = Number(options.maxEdits)
+  if (diaryId.value) void loadPreview(diaryId.value)
+})
+
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   statusBarHeight.value = info.statusBarHeight ?? 20
   scrollHeight.value = info.windowHeight - statusBarHeight.value - 44
+})
 
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1]
-  const options = (current as any)?.options ?? {}
-
-  if (options.id) diaryId.value = options.id
-  if (options.title) title.value = decodeURIComponent(options.title)
-  if (options.content) content.value = decodeURIComponent(options.content)
-  if (options.editCount) editCount.value = Number(options.editCount)
-  if (options.maxEdits) maxEdits.value = Number(options.maxEdits)
-
-  if (!diaryId.value) return
-
+async function loadPreview(id: string) {
   try {
-    const diary = await getDiaryDetail(diaryId.value)
+    const diary = await getDiaryDetail(id)
     title.value = diary.title || title.value
     content.value = diary.content || content.value
     weatherText.value = diary.weather || '未记录天气'
@@ -221,13 +224,13 @@ onMounted(async () => {
   }
 
   try {
-    const emotion = await getEmotionTrend(diaryId.value)
+    const emotion = await getEmotionTrend(id)
     trend.value = emotion.trend || []
     dominant.value = emotion.dominant || ''
   } catch {
     trend.value = []
   }
-})
+}
 
 function startEditTitle() {
   editTitle.value = title.value
@@ -273,14 +276,18 @@ async function handleDerivative(type: 'comic' | 'novel' | 'share_card') {
     const derivative = await generateDerivative(diaryId.value, type)
     uni.hideLoading()
     const labels: Record<string, string> = { comic: '漫画', novel: '小说', share_card: '分享卡片' }
+    if (type === 'comic' && isFallbackComicUrl(derivative.mediaUrl)) {
+      uni.showToast({ title: '漫画没有画出来，请稍后重试', icon: 'none' })
+      return
+    }
     uni.showToast({ title: `${labels[type]}生成成功 ✨`, icon: 'success' })
 
     if (type === 'comic') {
-      uni.navigateTo({ url: `/pages/diary/comic?id=${diaryId.value}&derivativeId=${derivative.id}` })
+      uni.navigateTo({ url: withQuery('/pages/diary/comic', { id: diaryId.value, derivativeId: derivative.id }) })
     } else if (type === 'novel') {
-      uni.navigateTo({ url: `/pages/novel/reader?diaryId=${diaryId.value}&derivativeId=${derivative.id}` })
+      uni.navigateTo({ url: withQuery('/pages/novel/reader', { diaryId: diaryId.value, derivativeId: derivative.id }) })
     } else if (type === 'share_card') {
-      uni.navigateTo({ url: `/pages/diary/share-card?id=${diaryId.value}` })
+      uni.navigateTo({ url: withQuery('/pages/diary/share-card', { id: diaryId.value }) })
     }
   } catch {
     uni.hideLoading()

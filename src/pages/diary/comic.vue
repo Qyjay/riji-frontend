@@ -6,6 +6,10 @@
     <view class="nav-placeholder" :style="{ height: navPlaceholderHeight + 'px' }" />
 
     <scroll-view scroll-y class="page-scroll" :style="{ height: scrollHeight + 'px' }">
+      <view v-if="bannerMessage" class="hint-banner">
+        <text class="hint-banner-text">{{ bannerMessage }}</text>
+      </view>
+
       <!-- 原始日记 -->
       <view class="section-label">原始日记</view>
       <view class="diary-card">
@@ -46,7 +50,7 @@
           <!-- Loading -->
           <view v-if="isGenerating" class="loading-wrap">
             <view class="loading-spinner" />
-            <text class="loading-text">正在生成漫画...</text>
+            <text class="loading-text">正在生成漫画，大约需要半分钟...</text>
           </view>
           <!-- 结果 -->
           <view v-else class="comic-grid">
@@ -59,6 +63,7 @@
                 class="panel-img"
                 :src="panel.image"
                 mode="aspectFill"
+                @error="handlePanelImageError"
               />
               <view class="panel-caption">
                 <text class="panel-caption-text">{{ panel.caption }}</text>
@@ -89,11 +94,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import { getDiaryDetail, generateDerivative, getDerivatives } from '@/services/api/diary'
 import type { Diary, DiaryDerivative } from '@/services/api/diary'
 import DoodleIcon from '@/components/DoodleIcon.vue'
-import { API_BASE_URL } from '@/services/config'
+import { decodeQueryParam } from '@/utils/query'
+import { resolveMediaUrl } from '@/utils/avatar'
+import { describeComicRequestError, isFallbackComicUrl } from '@/utils/comic'
 
 const comicStyles = [
   { id: 'jp-fresh',   iconName: 'sparkle',  iconColor: '#E8A4B8', name: '日漫清新', desc: '治愈系少女风' },
@@ -108,6 +116,7 @@ const selectedStyle = ref('jp-fresh')
 const diary = ref<Diary | null>(null)
 const isGenerating = ref(false)
 const hasGenerated = ref(false)
+const bannerMessage = ref('')
 
 interface ComicPanel {
   image: string
@@ -141,24 +150,20 @@ function generateCaptions(content: string): string[] {
 }
 
 function toFullMediaUrl(path: string): string {
-  if (!path) return ''
-  if (path.startsWith('/')) {
-    if (path.startsWith('/uploads/')) {
-      const host = API_BASE_URL.replace(/\/api$/, '')
-      return `${host}${path}`
-    }
-    return `${API_BASE_URL}${path}`
-  }
-  return path
+  return resolveMediaUrl(path)
 }
 
 function applyComicDerivative(derivative: DiaryDerivative): boolean {
-  const imageUrl = toFullMediaUrl(derivative.mediaUrl || '')
-  if (!imageUrl) return false
+  const rawUrl = derivative.mediaUrl || ''
+  if (isFallbackComicUrl(rawUrl)) return false
+
+  const imageUrl = toFullMediaUrl(rawUrl)
+  if (!imageUrl || isFallbackComicUrl(imageUrl)) return false
 
   const caption = derivative.content?.trim() || diary.value?.title || 'AI 漫画分镜'
   comicPanels.value = [{ image: imageUrl, caption }]
   hasGenerated.value = true
+  bannerMessage.value = ''
   return true
 }
 
@@ -172,31 +177,45 @@ async function loadExistingComicDerivative(diaryId: string, derivativeId?: strin
     }
   }
 
-  const latestComic = derivatives.find(item => item.type === 'comic')
+  const latestComic = derivatives.find(item => item.type === 'comic' && !isFallbackComicUrl(item.mediaUrl))
   if (latestComic) {
     applyComicDerivative(latestComic)
   }
 }
 
+function handlePanelImageError() {
+  comicPanels.value = []
+  hasGenerated.value = false
+  bannerMessage.value = '漫画图片加载失败，请重新生成'
+  uni.showToast({ title: '漫画图片加载失败，请重新生成', icon: 'none' })
+}
+
 async function handleGenerate() {
   if (isGenerating.value) return
   if (!diary.value) {
-    uni.showToast({ title: '日记未加载完成', icon: 'none' })
+    const tip = bannerMessage.value || '请先打开一篇日记再生成漫画'
+    uni.showToast({ title: tip, icon: 'none' })
     return
   }
 
   isGenerating.value = true
   hasGenerated.value = false
   comicPanels.value = []
+  bannerMessage.value = ''
 
   try {
-    const derivative = await generateDerivative(diary.value.id, 'comic')
+    const derivative = await generateDerivative(diary.value.id, 'comic', selectedStyle.value)
     if (!applyComicDerivative(derivative)) {
       // 兼容后端异步写入延迟：补查一次列表
       await loadExistingComicDerivative(diary.value.id, derivative.id)
     }
-  } catch {
-    uni.showToast({ title: '生成失败，请重试', icon: 'none' })
+    if (!hasGenerated.value) {
+      bannerMessage.value = '漫画没有画出来，画图服务暂时不可用，请稍后重试'
+      uni.showToast({ title: bannerMessage.value, icon: 'none' })
+    }
+  } catch (error) {
+    bannerMessage.value = describeComicRequestError(error, '漫画生成失败，请稍后重试')
+    uni.showToast({ title: bannerMessage.value, icon: 'none' })
   } finally {
     isGenerating.value = false
   }
@@ -210,33 +229,143 @@ function handleShare() {
   uni.showToast({ title: '分享功能开发中', icon: 'none' })
 }
 
-function handleSave() {
-  uni.showToast({ title: '已保存到相册', icon: 'success' })
+function isRemoteImageUrl(src: string): boolean {
+  return /^https?:\/\//i.test(src)
 }
 
-function handleSaveLocal() {
-  uni.showToast({ title: '已保存到相册', icon: 'success' })
+function downloadImageToTemp(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    uni.downloadFile({
+      url,
+      success: (res) => {
+        if (res.statusCode === 200 && res.tempFilePath) {
+          resolve(res.tempFilePath)
+          return
+        }
+        reject(new Error('download failed'))
+      },
+      fail: reject,
+    })
+  })
+}
+
+function saveLocalPathToAlbum(filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!uni.saveImageToPhotosAlbum) {
+      reject(new Error('unsupported'))
+      return
+    }
+    uni.saveImageToPhotosAlbum({
+      filePath,
+      success: () => resolve(),
+      fail: reject,
+    })
+  })
+}
+
+function isAlbumAuthDenied(error: unknown): boolean {
+  const msg = String((error as { errMsg?: string; message?: string })?.errMsg
+    || (error as { message?: string })?.message
+    || error
+    || '')
+  return /auth|permission|authorize|denied|权限/i.test(msg)
+}
+
+function promptOpenAlbumSetting(): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      title: '需要相册权限',
+      content: '保存漫画到相册需要相册权限，请在设置中允许。',
+      confirmText: '去设置',
+      success: (res) => {
+        if (!res.confirm) {
+          resolve(false)
+          return
+        }
+        uni.openSetting({
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        })
+      },
+      fail: () => resolve(false),
+    })
+  })
+}
+
+async function saveImageUrlToAlbum(imageUrl: string): Promise<void> {
+  const localPath = isRemoteImageUrl(imageUrl)
+    ? await downloadImageToTemp(imageUrl)
+    : imageUrl
+  try {
+    await saveLocalPathToAlbum(localPath)
+  } catch (error) {
+    if (!isAlbumAuthDenied(error)) throw error
+    const opened = await promptOpenAlbumSetting()
+    if (!opened) throw error
+    await saveLocalPathToAlbum(localPath)
+  }
+}
+
+function handleSave() {
+  void handleSaveLocal()
+}
+
+async function handleSaveLocal() {
+  const urls = comicPanels.value.map(panel => panel.image).filter(Boolean)
+  if (!urls.length) {
+    uni.showToast({ title: '请先生成漫画', icon: 'none' })
+    return
+  }
+  if (!uni.saveImageToPhotosAlbum) {
+    uni.showToast({ title: '当前环境请长按图片保存', icon: 'none' })
+    return
+  }
+
+  uni.showLoading({ title: '保存中...', mask: true })
+  try {
+    for (const url of urls) {
+      await saveImageUrlToAlbum(url)
+    }
+    uni.showToast({ title: '已保存到相册', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '保存失败，请检查相册权限', icon: 'none' })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
 
-onMounted(async () => {
+onLoad((options) => {
+  const id = decodeQueryParam(options?.id)
+  const derivativeId = decodeQueryParam(options?.derivativeId) || undefined
+  if (!id) {
+    bannerMessage.value = '还没有指定日记，请先打开一篇日记再生成漫画'
+    uni.showToast({ title: bannerMessage.value, icon: 'none' })
+    return
+  }
+  void loadComicPage(id, derivativeId)
+})
+
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   navPlaceholderHeight.value = (info.statusBarHeight ?? 20) + 44
   scrollHeight.value = info.windowHeight - navPlaceholderHeight.value - 0
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  const options = current?.$page?.options ?? current?.options ?? {}
-  const id = (options as any).id ?? '1'
-  const derivativeId = (options as any).derivativeId as string | undefined
+})
+
+async function loadComicPage(id: string, derivativeId?: string) {
   try {
     diary.value = await getDiaryDetail(id)
     await loadExistingComicDerivative(diary.value.id, derivativeId)
-  } catch {
-    uni.showToast({ title: '加载失败', icon: 'none' })
+    if (!hasGenerated.value) {
+      bannerMessage.value = ''
+    }
+  } catch (error) {
+    bannerMessage.value = describeComicRequestError(error, '日记加载失败，请稍后重试')
+    uni.showToast({ title: bannerMessage.value, icon: 'none' })
   }
-})
+}
 </script>
 
 <style lang="scss" scoped>
@@ -249,6 +378,19 @@ onMounted(async () => {
 
 .page-scroll {
   padding: 32rpx 32rpx 64rpx;
+}
+
+.hint-banner {
+  background: #FDF0E8;
+  border-radius: 20rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 8rpx;
+}
+
+.hint-banner-text {
+  font-size: 26rpx;
+  color: #C45C38;
+  line-height: 1.6;
 }
 
 .section-label {

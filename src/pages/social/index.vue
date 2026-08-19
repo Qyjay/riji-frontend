@@ -163,7 +163,7 @@
           @click="openLegacyProbe(probe)"
         >
           <view class="probe-avatar">
-            <image v-if="probe.userBAvatar" :src="probe.userBAvatar" mode="aspectFill" />
+            <image v-if="probe.userBAvatar" :src="resolveAvatarUrl(probe.userBAvatar)" mode="aspectFill" />
             <text v-else>{{ probe.userBName.slice(0, 1) }}</text>
           </view>
           <view class="probe-main">
@@ -251,6 +251,8 @@ import {
   missionStatusHint,
   missionStatusLabel,
 } from '@/utils/mission'
+import { withQuery } from '@/utils/query'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -321,19 +323,22 @@ function go(path: string) {
 
 function openMission(mission: SocialMission) {
   uni.navigateTo({
-    url: `/pages/social/mission-detail?id=${encodeURIComponent(mission.id)}`,
+    url: withQuery('/pages/social/mission-detail', { id: mission.id }),
   })
 }
 
 function openCandidates(mission: SocialMission) {
   uni.navigateTo({
-    url: `/pages/social/candidates?missionId=${encodeURIComponent(mission.id)}`,
+    url: withQuery('/pages/social/candidates', { missionId: mission.id }),
   })
 }
 
 function openLegacyProbe(probe: AtoaProbe) {
   uni.navigateTo({
-    url: `/pages/social/atoa-detail?id=${encodeURIComponent(probe.id)}&sessionId=${encodeURIComponent(probe.sessionId || '')}`,
+    url: withQuery('/pages/social/atoa-detail', {
+      id: probe.id,
+      sessionId: probe.sessionId || '',
+    }),
   })
 }
 

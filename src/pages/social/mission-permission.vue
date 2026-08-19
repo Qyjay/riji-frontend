@@ -154,6 +154,7 @@ import {
   readMissionDraft,
   saveMissionDraft,
 } from '@/utils/mission'
+import { decodeQueryParam, withQuery } from '@/utils/query'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -166,8 +167,8 @@ const softColor = computed(() => missionSoftBackground(mode.value))
 const timeLabel = computed(() => draft.value ? formatMissionTime(draft.value as any) : '')
 
 onLoad((options: any) => {
-  mode.value = options?.mode === 'long_term' ? 'long_term' : 'short_term'
-  editId.value = options?.editId || ''
+  mode.value = decodeQueryParam(options?.mode) === 'long_term' ? 'long_term' : 'short_term'
+  editId.value = decodeQueryParam(options?.editId)
   draft.value = readMissionDraft(mode.value)
 })
 
@@ -213,7 +214,7 @@ async function confirmAndStart() {
       ? await searchMission(mission.id)
       : await startMission(mission.id)
     uni.redirectTo({
-      url: `/pages/social/mission-detail?id=${encodeURIComponent(result.mission.id)}&created=1`,
+      url: withQuery('/pages/social/mission-detail', { id: result.mission.id, created: 1 }),
     })
   } catch (error: any) {
     if (missionId) {
@@ -224,7 +225,7 @@ async function confirmAndStart() {
       })
       setTimeout(() => {
         uni.redirectTo({
-          url: `/pages/social/mission-detail?id=${encodeURIComponent(missionId)}`,
+          url: withQuery('/pages/social/mission-detail', { id: missionId }),
         })
       }, 800)
     } else {

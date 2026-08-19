@@ -51,7 +51,7 @@
           <view class="cover-card">
             <image
               v-if="coverImage"
-              :src="coverImage"
+              :src="resolveMediaUrl(coverImage)"
               class="cover-bg"
               mode="aspectFill"
             />
@@ -110,7 +110,7 @@
             >
               <image
                 v-if="chapter.coverImageUrl"
-                :src="chapter.coverImageUrl"
+                :src="resolveMediaUrl(chapter.coverImageUrl)"
                 class="chapter-thumb"
                 mode="aspectFill"
               />
@@ -154,7 +154,7 @@
         <!-- 章节封面 -->
         <image
           v-if="currentChapter.coverImageUrl"
-          :src="currentChapter.coverImageUrl"
+          :src="resolveMediaUrl(currentChapter.coverImageUrl)"
           class="reader-cover"
           mode="aspectFill"
         />
@@ -174,7 +174,7 @@
             <!-- 插图：锚定在对应段落之后 -->
             <image
               v-if="illustrationAt(i)"
-              :src="illustrationAt(i)"
+              :src="resolveMediaUrl(illustrationAt(i))"
               class="reader-illustration"
               mode="widthFix"
               @click="previewIllustration(illustrationAt(i))"
@@ -271,6 +271,7 @@ import {
   type BiographyChapter,
   type BiographyProgress,
 } from '@/services/api/biography'
+import { resolveMediaUrl } from '@/utils/avatar'
 
 const CACHE_KEY = 'biography_cache'
 const SETTINGS_KEY = 'biography_reader_settings'
@@ -478,8 +479,9 @@ function onScroll(e: any) {
 }
 
 function previewIllustration(url: string) {
-  if (!url) return
-  uni.previewImage({ urls: [url], current: url })
+  const abs = resolveMediaUrl(url)
+  if (!abs) return
+  uni.previewImage({ urls: [abs], current: abs })
 }
 
 // ─── 设置持久化 ───

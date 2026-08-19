@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DraftChatAttachment } from '@/stores/chat'
+import { resolveMediaUrl } from '@/utils/avatar'
 
 const props = defineProps<{
   attachments: DraftChatAttachment[]
@@ -10,7 +11,7 @@ const emit = defineEmits<{
 }>()
 
 function previewUrl(attachment: DraftChatAttachment) {
-  return attachment.thumbnailUrl || attachment.url || attachment.localPath || ''
+  return resolveMediaUrl(attachment.thumbnailUrl || attachment.url || attachment.localPath || '')
 }
 
 function statusText(attachment: DraftChatAttachment) {

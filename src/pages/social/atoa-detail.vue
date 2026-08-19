@@ -14,7 +14,7 @@
       <view v-else-if="probe" class="content">
         <view class="identity">
           <view class="identity-avatar">
-            <image v-if="probe.userBAvatar" :src="probe.userBAvatar" mode="aspectFill" />
+            <image v-if="probe.userBAvatar" :src="resolveAvatarUrl(probe.userBAvatar)" mode="aspectFill" />
             <text v-else class="identity-letter">{{ probe.userBName.slice(0, 1) }}</text>
           </view>
           <view class="identity-copy">
@@ -106,12 +106,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { continueAtoaConversation, decideAtoa, getAtoaProbes } from '@/services/api/avatar'
 import type { AtoaProbe } from '@/services/api/avatar'
+import { haptics } from '@/platform'
+import { decodeQueryParam, withQuery } from '@/utils/query'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const navHeight = ref(64)
 const scrollHeight = ref(600)
@@ -145,29 +148,36 @@ const resultDescription = computed(() => {
 const resultColor = computed(() => probe.value?.outcome === 'connect_confirmed' ? '#4D9A71' : '#B56A45')
 
 onLoad((options: any) => {
-  interactionId.value = options?.id || ''
-  sessionId.value = options?.sessionId || ''
-  missionId.value = options?.missionId || ''
-  missionMode.value = options?.missionMode || ''
+  interactionId.value = decodeQueryParam(options?.id)
+  sessionId.value = decodeQueryParam(options?.sessionId)
+  missionId.value = decodeQueryParam(options?.missionId)
+  missionMode.value = decodeQueryParam(options?.missionMode)
 })
 
-onMounted(async () => {
+onMounted(() => {
   const info = uni.getSystemInfoSync()
   navHeight.value = Math.max(
     info.statusBarHeight ?? 0,
     info.uniPlatform === 'web' ? 36 : 20,
   ) + 44
   scrollHeight.value = info.windowHeight - navHeight.value - 96
-  await loadProbe()
 })
 
-async function loadProbe() {
-  loading.value = true
+onShow(() => {
+  if (!interactionId.value || acting.value) return
+  void loadProbe(Boolean(probe.value))
+})
+
+async function loadProbe(isRefresh = false) {
+  if (!isRefresh) loading.value = true
   try {
     const probes = await getAtoaProbes(undefined, sessionId.value || undefined)
-    probe.value = probes.find((item) => item.id === interactionId.value) || null
+    if (acting.value) return
+    probe.value = probes.find((item) => item.id === interactionId.value) || (isRefresh ? probe.value : null)
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '对话加载失败', icon: 'none' })
+    if (!isRefresh) {
+      uni.showToast({ title: error?.message || '对话加载失败', icon: 'none' })
+    }
   } finally {
     loading.value = false
   }
@@ -232,6 +242,7 @@ async function connect() {
       readableOutcome: '已发出结交申请',
       triggeredMatchId: result.socialMatchId,
     }
+    haptics.heavy()
   } catch (error: any) {
     uni.showToast({ title: error?.message || '申请发送失败', icon: 'none' })
   } finally {
@@ -243,19 +254,22 @@ function openChat() {
   if (!probe.value?.triggeredMatchId) return
   if (missionId.value && missionMode.value === 'short_term') {
     uni.navigateTo({
-      url: `/pages/social/activity-room?matchId=${encodeURIComponent(probe.value.triggeredMatchId)}`,
+      url: withQuery('/pages/social/activity-room', { matchId: probe.value.triggeredMatchId }),
     })
     return
   }
   uni.navigateTo({
-    url: `/pages/social/chat?matchId=${encodeURIComponent(probe.value.triggeredMatchId)}&nickname=${encodeURIComponent(probe.value.userBName)}`,
+    url: withQuery('/pages/social/chat', {
+      matchId: probe.value.triggeredMatchId,
+      nickname: probe.value.userBName,
+    }),
   })
 }
 
 function openMission() {
   if (!missionId.value) return
   uni.navigateTo({
-    url: `/pages/social/mission-detail?id=${encodeURIComponent(missionId.value)}`,
+    url: withQuery('/pages/social/mission-detail', { id: missionId.value }),
   })
 }
 </script>

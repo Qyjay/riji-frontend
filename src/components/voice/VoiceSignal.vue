@@ -33,8 +33,7 @@ const props = defineProps<{
 
 const reducedMotion = ref(false)
 const visualLevel = ref(0.08)
-let frameId = 0
-let lastFrameAt = 0
+let frameTimer: ReturnType<typeof setTimeout> | null = null
 
 const statusText = computed(() => {
   const labels: Record<VoicePhase, string> = {
@@ -66,15 +65,19 @@ const bars = computed(() => {
   })
 })
 
+function clearFrameTimer() {
+  if (!frameTimer) return
+  clearTimeout(frameTimer)
+  frameTimer = null
+}
+
 function scheduleLevel() {
-  if (frameId) return
-  frameId = requestAnimationFrame((timestamp) => {
-    frameId = 0
-    if (timestamp - lastFrameAt < 33) return
-    lastFrameAt = timestamp
+  if (frameTimer) return
+  frameTimer = setTimeout(() => {
+    frameTimer = null
     const next = props.phase === 'speaking' ? props.outputLevel : props.inputLevel
     visualLevel.value = Math.max(0.06, Math.min(1, next))
-  })
+  }, 33)
 }
 
 watch(
@@ -83,13 +86,16 @@ watch(
 )
 
 onMounted(() => {
-  if (typeof window !== 'undefined' && window.matchMedia) {
+  // App 端没有 window.matchMedia，减少动效只在 H5 读取系统偏好
+  // #ifdef H5
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     reducedMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   }
+  // #endif
 })
 
 onBeforeUnmount(() => {
-  if (frameId) cancelAnimationFrame(frameId)
+  clearFrameTimer()
 })
 </script>
 

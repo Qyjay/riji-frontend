@@ -19,6 +19,7 @@ import {
   primeRealtimeAudio,
 } from '@/services/realtime/audio'
 import { getRealtimeVoiceHealth } from '@/services/realtime/voice-api'
+import { haptics } from '@/platform'
 import { useChatStore, type DraftChatAttachment } from '@/stores/chat'
 
 const chatStore = useChatStore()
@@ -193,6 +194,7 @@ async function handleSend() {
   try {
     await refreshQueueStatusSilently()
     await chatStore.sendMessage()
+    haptics.medium()
     await refreshQueueStatusSilently()
     jumpBottom()
   } catch (error) {

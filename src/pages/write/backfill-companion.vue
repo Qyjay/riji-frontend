@@ -66,6 +66,7 @@ import {
   startBackfillTask,
   getBackfillTask,
 } from '@/services/api/backfill'
+import { withQuery } from '@/utils/query'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(500)
@@ -316,7 +317,7 @@ function pollTask(taskId: string) {
           const diaryId = task.diaryId || results[0]?.diaryId
           uni.showToast({ title: '日记已生成', icon: 'success' })
           setTimeout(() => {
-            if (diaryId) uni.redirectTo({ url: `/pages/diary/detail?id=${diaryId}` })
+            if (diaryId) uni.redirectTo({ url: withQuery('/pages/diary/detail', { id: diaryId }) })
             else uni.redirectTo({ url: '/pages/diary/emotion-calendar' })
           }, 800)
         }

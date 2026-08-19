@@ -271,6 +271,10 @@ export class H5RealtimeAudioAdapter implements RealtimeAudioAdapter {
     this.captureSink = null
   }
 
+  flushPlayback(): void {
+    this.playbackNode?.port.postMessage({ type: 'flush' })
+  }
+
   enqueuePlayback(pcm24: ArrayBuffer): void {
     if (
       this.disposed

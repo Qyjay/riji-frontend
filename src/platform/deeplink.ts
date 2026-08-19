@@ -55,10 +55,16 @@ const STATIC_ROUTES: Record<string, DeepLinkTarget> = {
   // 社交与消息
   'social': { url: '/pages/social/index', mode: 'reLaunch' },
   'social/find': { url: '/pages/social/find', mode: 'navigateTo' },
+  'social/requests': { url: '/pages/social/request-status?filter=pending', mode: 'navigateTo' },
+  'social/request-status': { url: '/pages/social/request-status', mode: 'navigateTo' },
+  'social/chat': { url: '/pages/social/chat', mode: 'navigateTo' },
+  'social/activity-room': { url: '/pages/social/activity-room', mode: 'navigateTo' },
   'plaza': { url: '/pages/discover/index', mode: 'reLaunch' },
   'messages': { url: '/pages/messages/index', mode: 'reLaunch' },
   'profile': { url: '/pages/profile/index', mode: 'reLaunch' },
   'me': { url: '/pages/profile/index', mode: 'reLaunch' },
+  'profile/memory': { url: '/pages/profile/avatar-memory', mode: 'navigateTo' },
+  'profile/avatar-memory': { url: '/pages/profile/avatar-memory', mode: 'navigateTo' },
 }
 
 /** 带 id 的动态入口 */
@@ -91,7 +97,7 @@ export function resolveDeepLink(link: string): DeepLinkTarget | null {
   if (!matched) return null
 
   const scheme = matched[1].toLowerCase()
-  // https 形态保留给未来的 Android App Link（https://avalin.cn/app/xxx）
+  // https 形态保留给未来的 Android App Link（https://www.avalin.cn/app/xxx）
   if (scheme !== SCHEME && scheme !== 'http' && scheme !== 'https') return null
 
   let path = (matched[2] || '').replace(/^\/+|\/+$/g, '').toLowerCase()

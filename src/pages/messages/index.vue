@@ -112,6 +112,7 @@ import { useChatStore } from '@/stores/chat'
 import { getAssistantPreview } from '@/utils/chat-message'
 import { getMatches } from '@/services/api/social'
 import type { Match } from '@/services/api/social'
+import { withQuery } from '@/utils/query'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -216,12 +217,16 @@ function openSocial() {
 function openBuddy(buddy: any) {
   if (buddy.missionMode === 'short_term' && buddy.missionId) {
     uni.navigateTo({
-      url: `/pages/social/activity-room?matchId=${encodeURIComponent(buddy.matchId)}`,
+      url: withQuery('/pages/social/activity-room', { matchId: buddy.matchId }),
     })
     return
   }
   uni.navigateTo({
-    url: `/pages/social/chat?matchId=${encodeURIComponent(buddy.matchId)}&nickname=${encodeURIComponent(buddy.name)}&avatar=${encodeURIComponent(buddy.avatar || '')}`,
+    url: withQuery('/pages/social/chat', {
+      matchId: buddy.matchId,
+      nickname: buddy.name,
+      avatar: buddy.avatar || '',
+    }),
   })
 }
 

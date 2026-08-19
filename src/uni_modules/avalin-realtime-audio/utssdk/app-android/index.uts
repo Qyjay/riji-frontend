@@ -33,10 +33,12 @@ let captureBuffer: ByteArray | null = null
 let track: AudioTrack | null = null
 let playing = false
 let muted = false
-// 一次 write 没写完的尾巴，由后续 flushPending 继续写出，保证音频顺序
-let pendingBytes: ByteArray | null = null
+// 待写出的 FIFO。旧实现只保留「一个尾巴」，新数据进来会覆盖未写完的 PCM，造成丢帧断续。
+let pendingQueue: Array<ByteArray> = []
 // 必须是 Int：会传给 AudioTrack.write 的 offsetInBytes，number 在 Kotlin 里对不上
 let pendingOffset: Int = 0
+let pendingByteCount: Int = 0
+let maxPendingBytes: Int = 144000
 
 /** 供 JS 侧探测插件是否真的编译进了基座 */
 export function isAvailable(): boolean {
@@ -153,6 +155,27 @@ export function stopCapture(): void {
   }
 }
 
+function clearPendingQueue(): void {
+  pendingQueue = []
+  pendingOffset = 0
+  pendingByteCount = 0
+}
+
+function dropHeadChunk(): void {
+  if (pendingQueue.length == 0) {
+    return
+  }
+  const dropped = pendingQueue.shift()
+  if (dropped != null) {
+    const leftover: Int = dropped.size - pendingOffset
+    pendingByteCount = pendingByteCount - leftover
+  }
+  pendingOffset = 0
+  if (pendingByteCount < 0) {
+    pendingByteCount = 0
+  }
+}
+
 /**
  * 开始播放。
  * @param sampleRate 采样率，实时语音下行固定 24000
@@ -174,7 +197,12 @@ export function startPlayback(sampleRate: number): string {
     return 'UNSUPPORTED_SAMPLE_RATE'
   }
 
-  const bufferSize: Int = minBuffer * 4
+  // 至少 200ms：24kHz/16bit/mono 约 9600 字节，降低 JS 定时器抖动造成的欠载
+  let bufferSize: Int = minBuffer * 4
+  const wanted: Int = sampleRateHz * 2 / 5
+  if (bufferSize < wanted) {
+    bufferSize = wanted
+  }
 
   try {
     // 用 STREAM_MUSIC 走扬声器，保证免手持时能听清。
@@ -198,8 +226,8 @@ export function startPlayback(sampleRate: number): string {
     track = instance
     playing = true
     muted = false
-    pendingBytes = null
-    pendingOffset = 0
+    clearPendingQueue()
+    maxPendingBytes = sampleRateHz * 6
     return ''
   } catch (error) {
     return 'START_FAILED'
@@ -208,8 +236,9 @@ export function startPlayback(sampleRate: number): string {
 
 /**
  * 写入一段待播放音频。
+ * 新数据先入 FIFO，再尽力写出；写不完的块按顺序留在队列里，绝不会覆盖上一块的尾巴。
  * @param base64 Base64 编码的 PCM16 数据
- * @returns 本次写入的字节数；未写完的部分会缓存，由 flushPending 继续写出
+ * @returns 本次实际写入 AudioTrack 的字节数
  */
 export function writePlayback(base64: string): number {
   const instance = track
@@ -217,58 +246,73 @@ export function writePlayback(base64: string): number {
     return 0
   }
 
-  // 先把上一次的尾巴写完，保证音频顺序不乱
-  flushPending()
-
   const decoded = Base64.decode(base64, Base64.NO_WRAP)
   if (muted) {
     // 静音时丢弃数据而不是排队，避免解除静音后播放一大段过期语音
     return Number.from(decoded.size)
   }
 
-  const offset: Int = 0
-  const written = instance.write(decoded, offset, decoded.size, AudioTrack.WRITE_NON_BLOCKING)
-  if (written < decoded.size) {
-    pendingBytes = decoded
-    pendingOffset = written > 0 ? written : 0
+  // 积压超过上限时丢掉最旧的块，保持实时性
+  while (pendingQueue.length > 0 && pendingByteCount + decoded.size > maxPendingBytes) {
+    dropHeadChunk()
   }
-  return Number.from(written > 0 ? written : 0)
+
+  pendingQueue.push(decoded)
+  pendingByteCount = pendingByteCount + decoded.size
+  return flushPending()
 }
 
 /**
- * 继续写出缓存中未写完的数据。JS 侧应在轮询里调用，避免尾巴滞留。
+ * 继续写出 FIFO 中未写完的数据。JS 侧应在轮询里调用，避免尾巴滞留。
  * @returns 本次写出的字节数
  */
 export function flushPending(): number {
   const instance = track
-  const buffer = pendingBytes
-  if (!playing || instance == null || buffer == null) {
+  if (!playing || instance == null || pendingQueue.length == 0) {
     return 0
   }
 
-  const remaining: Int = buffer.size - pendingOffset
-  if (remaining <= 0) {
-    pendingBytes = null
-    pendingOffset = 0
-    return 0
-  }
+  let total: Int = 0
+  while (pendingQueue.length > 0) {
+    const index: Int = 0
+    const buffer = pendingQueue[index]
+    if (buffer == null) {
+      pendingQueue.shift()
+      pendingOffset = 0
+      continue
+    }
 
-  const written = instance.write(buffer, pendingOffset, remaining, AudioTrack.WRITE_NON_BLOCKING)
-  if (written <= 0) {
-    return 0
-  }
+    const remaining: Int = buffer.size - pendingOffset
+    if (remaining <= 0) {
+      pendingQueue.shift()
+      pendingOffset = 0
+      continue
+    }
 
-  pendingOffset = pendingOffset + written
-  if (pendingOffset >= buffer.size) {
-    pendingBytes = null
-    pendingOffset = 0
+    const written = instance.write(buffer, pendingOffset, remaining, AudioTrack.WRITE_NON_BLOCKING)
+    if (written <= 0) {
+      break
+    }
+
+    total = total + written
+    pendingOffset = pendingOffset + written
+    pendingByteCount = pendingByteCount - written
+    if (pendingByteCount < 0) {
+      pendingByteCount = 0
+    }
+    if (pendingOffset >= buffer.size) {
+      pendingQueue.shift()
+      pendingOffset = 0
+    } else {
+      break
+    }
   }
-  return Number.from(written)
+  return Number.from(total)
 }
 
 /** 是否还有未写出的缓存数据 */
 export function hasPendingPlayback(): boolean {
-  return pendingBytes != null
+  return pendingQueue.length > 0
 }
 
 /**
@@ -277,8 +321,7 @@ export function hasPendingPlayback(): boolean {
  */
 export function clearPlayback(): void {
   const instance = track
-  pendingBytes = null
-  pendingOffset = 0
+  clearPendingQueue()
   if (!playing || instance == null) {
     return
   }
@@ -302,8 +345,7 @@ export function stopPlayback(): void {
   const instance = track
   playing = false
   muted = false
-  pendingBytes = null
-  pendingOffset = 0
+  clearPendingQueue()
   track = null
   if (instance == null) {
     return

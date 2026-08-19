@@ -141,6 +141,7 @@ import DiaryCard from '@/components/DiaryCard.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import type { Diary } from '@/services/api/diary'
 import { getDiaries } from '@/services/api/diary'
+import { withQuery } from '@/utils/query'
 
 const navPlaceholderHeight = ref(64)
 const scrollHeight = ref(600)
@@ -297,7 +298,7 @@ const avgScore = computed(() => {
 })
 
 function onDiaryClick(id: string) {
-  uni.navigateTo({ url: `/pages/diary/detail?id=${id}` })
+  uni.navigateTo({ url: withQuery('/pages/diary/detail', { id }) })
 }
 </script>
 

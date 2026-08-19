@@ -8,6 +8,7 @@ export class FakeRealtimeAudioAdapter implements RealtimeAudioAdapter {
   speakerEnabled = true
   playbackQueue: ArrayBuffer[] = []
   interruptCount = 0
+  flushCount = 0
   private onFrame: ((pcm16: ArrayBuffer, level: number) => void) | null = null
 
   async requestPermission(): Promise<void> {
@@ -42,6 +43,10 @@ export class FakeRealtimeAudioAdapter implements RealtimeAudioAdapter {
   enqueuePlayback(pcm24: ArrayBuffer): void {
     if (this.disposed || !this.speakerEnabled) return
     this.playbackQueue.push(pcm24.slice(0))
+  }
+
+  flushPlayback(): void {
+    this.flushCount += 1
   }
 
   interruptPlayback(): void {

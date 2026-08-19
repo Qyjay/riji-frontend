@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev:custom": "uni -p",
-    "test": "node scripts/test-units.js && node scripts/test-realtime-voice.js && node scripts/test-exif-parser.js",
+    "test": "node scripts/test-units.js && node scripts/test-realtime-voice.js && node scripts/test-exif-parser.js && node scripts/test-query.js && node scripts/test-media-url.js && node scripts/test-comic.js && node scripts/test-polling.js && node scripts/test-inbox-notify.js && node scripts/test-action-notify.js && node scripts/test-buddy-post-notify.js",
     "dev:app": "uni -p app",
     "build:app": "uni build -p app",
     "dev:h5": "uni",

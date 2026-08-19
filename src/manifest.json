@@ -1,9 +1,9 @@
 {
-    "name" : "Avalin，你的AI日记和社交分身",
-    "appid" : "__UNI__6F10F80",
+    "name" : "Avalin",
+    "appid" : "__UNI__1B008E3",
     "description" : "大学生 AI 生活伙伴——记录生活、创作内容、精准社交、助力成长",
-    "versionName" : "1.0.0",
-    "versionCode" : "100",
+    "versionName" : "1.0.3",
+    "versionCode" : 103,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -21,7 +21,9 @@
             "Camera" : {},
             "Record" : {},
             "VideoPlayer" : {},
-            "Share" : {}
+            "Share" : {},
+            /* plus.push.createMessage 创建本地通知栏消息，不接厂商推送通道 */
+            "Push" : {}
         },
         /* 应用发布信息 */
         "distribute" : {
@@ -61,7 +63,16 @@
                 "dSYMs" : false
             },
             /* SDK配置 */
-            "sdkConfigs" : {}
+            "sdkConfigs" : {},
+            /* 桌面图标：路径相对项目根目录（不是相对本文件）；换图标用 scripts/gen-app-icons.py 重新生成 */
+            "icons" : {
+                "android" : {
+                    "hdpi" : "unpackage/res/icons/72x72.png",
+                    "xhdpi" : "unpackage/res/icons/96x96.png",
+                    "xxhdpi" : "unpackage/res/icons/144x144.png",
+                    "xxxhdpi" : "unpackage/res/icons/192x192.png"
+                }
+            }
         }
     },
     "uniStatistics" : {

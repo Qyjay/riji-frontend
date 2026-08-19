@@ -30,3 +30,10 @@ export {
   resolveDeepLink,
   type DeepLinkTarget,
 } from './deeplink'
+
+export {
+  initNotifications,
+  notify,
+  setNotifyAppForeground,
+  type NotifyOptions,
+} from './notification'

@@ -100,7 +100,7 @@ export async function getDiaries(page = 1, pageSize = 10): Promise<{ list: Diary
 
 export async function getDiaryDetail(id: string): Promise<Diary> {
   if (USE_MOCK) return mock.getDiaryDetail(id)
-  return request<Diary>({ url: `/diaries/${id}` })
+  return request<Diary>({ url: `/diaries/${encodeURIComponent(id)}` })
 }
 
 export async function generateDiaryAiComment(id: string): Promise<{ aiComment: string }> {
@@ -173,13 +173,20 @@ export async function extractInfo(id: string): Promise<{ anniversaries: any[]; r
   return request<{ anniversaries: any[]; relations: any[]; preferences: any[] }>({ url: `/diaries/${id}/extract`, method: 'POST' })
 }
 
-export async function generateDerivative(id: string, type: 'comic' | 'novel' | 'share_card'): Promise<DiaryDerivative> {
+export async function generateDerivative(
+  id: string,
+  type: 'comic' | 'novel' | 'share_card',
+  style?: string,
+): Promise<DiaryDerivative> {
   if (USE_MOCK) return mock.generateDerivative(id, type)
+  const data: { type: string; style?: string } = { type }
+  const normalizedStyle = String(style || '').trim()
+  if (normalizedStyle) data.style = normalizedStyle
   return request<DiaryDerivative>({
     url: `/diaries/${id}/derivative`,
     method: 'POST',
-    data: { type },
-    timeout: 120000,
+    data,
+    timeout: 180000,
   })
 }
 

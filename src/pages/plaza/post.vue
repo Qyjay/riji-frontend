@@ -118,9 +118,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
+import { haptics, notify } from '@/platform'
 import { createPost } from '@/services/api/plaza'
 import { uploadDiaryImage } from '@/services/api/material'
 import type { PlazaPost } from '@/services/api/plaza'
+import { buildPlazaNotifyCopy, claimNotifyKey, plazaPostNotifyLink } from '@/utils/action-notify'
 
 // 导航栏高度
 const navBarHeight = ref(64)
@@ -233,7 +235,7 @@ async function handlePublish() {
     isPublishing.value = true
     uni.showLoading({ title: '发布中...' })
     const uploadedImages = await uploadPostImages()
-    await createPost({
+    const post = await createPost({
       type: selectedType.value,
       content: content.value,
       images: uploadedImages,
@@ -243,7 +245,20 @@ async function handlePublish() {
       schoolOnly: schoolOnly.value,
     })
     uni.hideLoading()
-    uni.showToast({ title: '发布成功', icon: 'success' })
+    haptics.medium()
+    const copy = buildPlazaNotifyCopy({
+      type: selectedType.value,
+      content: post?.content || content.value,
+    })
+    if (claimNotifyKey(`plaza:publish:${post?.id || copy.content}`)) {
+      notify({
+        title: copy.title,
+        content: copy.content,
+        payload: plazaPostNotifyLink(post?.id),
+        inAppFallback: false,
+      })
+    }
+    uni.showToast({ title: '帖子已发布，去广场看看', icon: 'success' })
     setTimeout(() => {
       uni.navigateBack()
     }, 1000)

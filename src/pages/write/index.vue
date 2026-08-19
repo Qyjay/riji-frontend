@@ -213,8 +213,8 @@ import { ref, computed, onMounted } from 'vue'
 import CustomNavBar from '@/components/CustomNavBar.vue'
 import DoodleIcon from '@/components/DoodleIcon.vue'
 import { createMaterial, getMaterials, extractEmotion, uploadDiaryImage, deleteMaterial } from '@/services/api/material'
-import { API_BASE_URL } from '@/services/config'
 import type { RawMaterial } from '@/services/api/material'
+import { resolveMediaUrl } from '@/utils/avatar'
 import { speechToText, speechToTextFile } from '@/services/api/ai'
 import { getSessionMessages, type SessionMessagesResult } from '@/services/api/chat'
 import { getIpLocationContext, getLocationContext } from '@/services/api/location'
@@ -747,17 +747,8 @@ function typeIcon(type: string): string {
   return '📝'
 }
 
-// 辅助函数：将相对路径转换为完整 URL
 function toFullUrl(path: string): string {
-  if (path && path.startsWith('/')) {
-    // /uploads/ 路径不走 /api，直接用 host
-    if (path.startsWith('/uploads/')) {
-      const host = API_BASE_URL.replace(/\/api$/, '')
-      return `${host}${path}`
-    }
-    return `${API_BASE_URL}${path}`
-  }
-  return path
+  return resolveMediaUrl(path)
 }
 
 // ── 删除素材 ──
